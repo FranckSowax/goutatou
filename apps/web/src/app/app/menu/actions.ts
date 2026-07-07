@@ -27,7 +27,8 @@ export async function createItem(formData: FormData) {
   let photoUrl: string | null = null
   const photo = formData.get('photo') as File | null
   if (photo && photo.size > 0) {
-    const path = `${restaurantId}/${Date.now()}-${photo.name}`
+    const safeName = photo.name.replace(/^.*[\\/]/, '').replace(/[^a-zA-Z0-9._-]/g, '_')
+    const path = `${restaurantId}/${Date.now()}-${safeName}`
     const { error: upErr } = await supabase.storage.from('menu-photos').upload(path, photo)
     if (upErr) throw new Error(upErr.message)
     photoUrl = supabase.storage.from('menu-photos').getPublicUrl(path).data.publicUrl
