@@ -1,5 +1,5 @@
 import 'server-only'
-import { createServiceClient } from '@goutatou/db'
+import { createServiceClient } from '@goutatou/db/client'
 
 /** Client service_role — servers actions admin uniquement. Ne JAMAIS importer côté client. */
 export function createAdminClient() {

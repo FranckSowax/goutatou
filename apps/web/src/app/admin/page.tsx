@@ -1,4 +1,4 @@
-import { decryptToken } from '@goutatou/db'
+import { decryptToken } from '@goutatou/db/crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { configureWebhook, createRestaurant } from './actions'
 

@@ -1,6 +1,6 @@
 'use server'
 import { revalidatePath } from 'next/cache'
-import { encryptToken } from '@goutatou/db'
+import { encryptToken } from '@goutatou/db/crypto'
 import { WhapiClient } from '@goutatou/whapi'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createSupabaseServer } from '@/lib/supabase/server'
