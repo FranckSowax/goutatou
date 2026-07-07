@@ -2,8 +2,17 @@
   "mcpServers": {
     "whapi": {
       "command": "npx",
-      "args": ["-y", "whapi-mcp@latest"],
-      "env": { "API_TOKEN": "${WHAPI_API_TOKEN}" }
+      "args": [
+        "-y",
+        "whapi-mcp@latest"
+      ],
+      "env": {
+        "API_TOKEN": "${WHAPI_API_TOKEN}"
+      }
+    },
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp?project_ref=vaowvldazfcmietacctz"
     }
   }
 }
