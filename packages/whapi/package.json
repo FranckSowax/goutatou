@@ -1,0 +1,8 @@
+{
+  "name": "@goutatou/whapi",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "src/client.ts",
+  "scripts": { "test": "vitest run", "typecheck": "tsc --noEmit" },
+  "devDependencies": { "typescript": "^5.6.0", "vitest": "^2.1.0" }
+}
