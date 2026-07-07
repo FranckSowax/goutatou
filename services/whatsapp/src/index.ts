@@ -4,10 +4,12 @@ import { loadConfig } from './config.js'
 import { createApp } from './app.js'
 import { createRepo } from './repo.js'
 import { createProcessor } from './processor.js'
+import { startNotifier } from './notifier.js'
 
 const config = loadConfig()
 const db = createServiceClient(config.supabaseUrl, config.serviceRoleKey)
 const repo = createRepo(db, config.tokenKey)
+startNotifier(db, config.tokenKey)
 const processWebhook = createProcessor(repo, (token) => new WhapiClient(token))
 
 const app = createApp({ processWebhook })
