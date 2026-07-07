@@ -47,12 +47,21 @@ Appliquer les 4 migrations dans l'ordre sur le projet `vaowvldazfcmietacctz` (vi
 
 Vérifier ensuite : les 13 tables existent, RLS activée, puis lancer `get_advisors` (security) et corriger tout avis bloquant.
 
-## 2. Service bot sur Railway — [credentials]
+## 2. Service bot sur Railway — [FAIT]
 
-1. Créer le projet Railway `goutatou`, service `whatsapp-bot` connecté au dépôt GitHub (racine `/`, `Dockerfile` = `services/whatsapp/Dockerfile`).
-2. Configurer les variables : `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `TOKEN_ENCRYPTION_KEY`, `PORT=8080`.
-3. Générer le domaine public → le noter comme `PUBLIC_WEBHOOK_BASE_URL` (à reporter sur Railway et Netlify).
-4. Vérifier : `curl https://<domaine-railway>/health` → `{"ok":true}`.
+Déployé le 2026-07-07.
+
+- **Projet** : `goutatou` (`5c5dce1a-1534-45ab-958d-099fb48a721d`), workspace `francksowax's Projects`.
+- **Service** : `whatsapp-bot`, build via `RAILWAY_DOCKERFILE_PATH=services/whatsapp/Dockerfile`.
+- **URL publique** : `https://whatsapp-bot-production-3585.up.railway.app` (port cible 8080). C'est la valeur de `PUBLIC_WEBHOOK_BASE_URL` à reporter sur Netlify.
+- **Variables posées** : `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `TOKEN_ENCRYPTION_KEY`, `PORT=8080`, `RAILWAY_DOCKERFILE_PATH`.
+- **Vérifié** : `GET /health` → `{"ok":true}` ; logs `écoute sur :8080` + `notifier realtime: SUBSCRIBED`.
+
+Notes de build (leçons de la mise en prod) :
+- **Node 22 requis** : `@supabase/supabase-js` a besoin d'un WebSocket natif (Realtime) → image `node:22-slim`.
+- Les paquets du monorepo sont consommés en **TS source** (pas de dist) ; le service tourne via **tsx** (`CMD ["pnpm", "--filter", "@goutatou/service-whatsapp", "exec", "tsx", "src/index.ts"]`).
+
+Redéploiement : `railway up --detach --service whatsapp-bot` depuis la racine du repo (ou push GitHub si la source GitHub est connectée ultérieurement).
 
 ## 3. Dashboard + admin sur Netlify — [credentials]
 
