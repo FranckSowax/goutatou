@@ -83,4 +83,20 @@ describe('processor', () => {
     expect(repo.saveConversation).toHaveBeenCalledWith('resto-1', 'cust-1', 'ACCUEIL',
       expect.objectContaining({ items: [] }))
   })
+
+  it('erreur de traitement d’un message → message de secours envoyé, pas de crash', async () => {
+    repo.upsertCustomer = vi.fn().mockRejectedValue(new Error('db down'))
+    const process = createProcessor(repo, () => ({ sendText }))
+    await expect(process('chan-uuid', webhookPayload('menu'))).resolves.toBeUndefined()
+    expect(sendText).toHaveBeenCalledWith('24177000001@s.whatsapp.net', expect.stringContaining('souci technique'))
+  })
+
+  it('échec d’envoi Whapi → loggé en message_logs, pas de crash', async () => {
+    sendText = vi.fn().mockRejectedValue(new Error('whapi 500'))
+    const process = createProcessor(repo, () => ({ sendText }))
+    await expect(process('chan-uuid', webhookPayload('menu'))).resolves.toBeUndefined()
+    expect(repo.logMessage).toHaveBeenCalledWith(
+      expect.anything(), 'out', expect.any(String), expect.any(String), undefined, expect.any(String),
+    )
+  })
 })
