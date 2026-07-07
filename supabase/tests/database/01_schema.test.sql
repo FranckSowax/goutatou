@@ -1,0 +1,18 @@
+begin;
+select plan(14);
+select has_table('public', 'restaurants', 'restaurants existe');
+select has_table('public', 'platform_admins', 'platform_admins existe');
+select has_table('public', 'restaurant_members', 'restaurant_members existe');
+select has_table('public', 'whapi_channels', 'whapi_channels existe');
+select has_table('public', 'menu_categories', 'menu_categories existe');
+select has_table('public', 'menu_items', 'menu_items existe');
+select has_table('public', 'customers', 'customers existe');
+select has_table('public', 'conversations', 'conversations existe');
+select has_table('public', 'orders', 'orders existe');
+select has_table('public', 'order_items', 'order_items existe');
+select has_table('public', 'drive_slots', 'drive_slots existe');
+select has_table('public', 'message_logs', 'message_logs existe');
+select has_table('public', 'subscriptions', 'subscriptions existe');
+select has_type('order_status', 'enum order_status existe');
+select * from finish();
+rollback;
