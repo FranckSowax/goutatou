@@ -66,6 +66,14 @@ Différences clés avec le repo d'exemple :
 - **Statuts WhatsApp** : publication programmée (table `statuses`, cron dans le service).
 - **Campagnes broadcast (premium)** : file d'envoi avec rate-limit configurable (protection anti-ban), opt-out respecté (`customers.opted_out`).
 
+### 3.2bis Rôle du MCP Whapi vs API REST
+
+Deux couches distinctes, à ne pas confondre :
+
+- **Runtime (production)** : `services/whatsapp` parle à l'**API REST Whapi directement** (envois) et reçoit les **webhooks** entrants. Le MCP n'intervient jamais dans le chemin d'une commande client.
+- **Ops/onboarding (agent)** : le serveur **`whapi-mcp`** (npx `whapi-mcp@latest`, un `API_TOKEN` = un canal) sert à l'équipe Goutatou — via Claude Code — pour provisionner et tester un canal resto : `checkHealth`, envois de test, configuration du webhook vers le service Railway. Config projet : `.mcp.json` (token via env `WHAPI_API_TOKEN`, à pointer sur le canal en cours d'onboarding).
+- **Référence dev** : l'Agent Skill officiel `whapi` est installé dans `.agents/skills/whapi` (formats Chat ID `@s.whatsapp.net`, choix des types de messages, setup webhook, groupes/canaux/communautés) — source de vérité pendant l'implémentation du bot.
+
 ### 3.3 Dashboard restaurant (`/app`)
 
 - Kanban commandes temps réel (Supabase Realtime).
