@@ -1,0 +1,9 @@
+{
+  "name": "@goutatou/db",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": { "test": "vitest run", "typecheck": "tsc --noEmit" },
+  "dependencies": { "@supabase/supabase-js": "^2.47.0" },
+  "devDependencies": { "typescript": "^5.6.0", "vitest": "^2.1.0", "@types/node": "^22.10.0" }
+}
