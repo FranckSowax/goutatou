@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
-import { formatFcfa } from '@goutatou/db'
+import { formatFcfa } from '@goutatou/db/types'
 import { groupByStatus, KANBAN_COLUMNS, nextStatus, type OrderCard } from '@/lib/orders'
 import { cancelOrder, updateOrderStatus } from './actions'
 
