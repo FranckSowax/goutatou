@@ -4,5 +4,7 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.local.example
 supabase/.temp/
 .DS_Store
+*.tsbuildinfo
