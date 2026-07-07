@@ -21,12 +21,14 @@ export interface MenuForBot {
   categories: { name: string; items: { id: string; name: string; price: number }[] }[]
 }
 
-export const EMPTY_CART: Cart = { items: [] }
+export const EMPTY_CART: Cart = Object.freeze({
+  items: Object.freeze([]) as unknown as CartItem[],
+})
 
 export function cartTotal(cart: Cart): number {
   return cart.items.reduce((sum, it) => sum + it.unitPrice * it.qty, 0)
 }
 
 export function formatFcfa(amount: number): string {
-  return `${amount.toLocaleString('fr-FR').replace(/ /g, ' ')} FCFA`
+  return `${amount.toLocaleString('fr-FR').replace(/[  ]/g, ' ')} FCFA`
 }
