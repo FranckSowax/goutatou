@@ -1,0 +1,10 @@
+[build]
+  base = "."
+  command = "pnpm install && pnpm --filter @goutatou/web build"
+  publish = "apps/web/.next"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
