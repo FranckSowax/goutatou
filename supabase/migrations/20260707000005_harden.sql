@@ -10,6 +10,13 @@ revoke execute on function public.create_order(uuid, uuid, order_source, order_m
 grant execute on function public.create_order(uuid, uuid, order_source, order_mode, jsonb, uuid, text) to service_role;
 
 -- Gap 2: migration 0004's tenant-scoped storage policies on storage.objects
--- rely on RLS being enabled by Supabase's default project setup. Make the
--- migration self-contained by asserting it explicitly (idempotent).
-alter table storage.objects enable row level security;
+-- rely on RLS being enabled by Supabase's default project setup. Assert it
+-- explicitly where we can. On hosted Supabase the migration role does not own
+-- storage.objects (RLS is already enabled there by default), so guard the
+-- statement: it enables RLS locally (superuser) and no-ops on hosted prod.
+do $$
+begin
+  alter table storage.objects enable row level security;
+exception when insufficient_privilege then
+  null; -- already enabled by default on hosted Supabase; role isn't owner
+end $$;
