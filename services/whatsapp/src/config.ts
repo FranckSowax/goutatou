@@ -17,6 +17,7 @@ export function loadConfig() {
     sendDelayMaxMs: Number(process.env.CAMPAIGN_SEND_DELAY_MAX_MS ?? 8000),
     dailyCap: Number(process.env.CAMPAIGN_DAILY_CAP ?? 500),
     batchSize: Number(process.env.CAMPAIGN_BATCH_SIZE ?? 50),
+    statusPollMs: Number(process.env.STATUS_POLL_MS ?? 30000),
   }
 }
 export type Config = ReturnType<typeof loadConfig>

@@ -7,6 +7,8 @@ import { createProcessor } from './processor.js'
 import { startNotifier } from './notifier.js'
 import { createCampaignRepo } from './campaigns/repo.js'
 import { startCampaignWorker } from './campaigns/worker.js'
+import { createStatusRepo } from './statuses/repo.js'
+import { startStatusWorker } from './statuses/worker.js'
 
 const config = loadConfig()
 const db = createServiceClient(config.supabaseUrl, config.serviceRoleKey)
@@ -22,6 +24,12 @@ startCampaignWorker({
   sendDelayMaxMs: config.sendDelayMaxMs,
   batchSize: config.batchSize,
   pollMs: config.campaignPollMs,
+})
+const statusRepo = createStatusRepo(db, config.tokenKey)
+startStatusWorker({
+  repo: statusRepo,
+  makeWhapi: (token) => new WhapiClient(token),
+  pollMs: config.statusPollMs,
 })
 const processWebhook = createProcessor(repo, (token) => new WhapiClient(token))
 
