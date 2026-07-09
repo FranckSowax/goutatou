@@ -1,11 +1,14 @@
 'use client'
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { formatFcfa } from '@goutatou/db/types'
 import { useCart } from './CartProvider'
 
 export function CartBar() {
   const { count, total, slug } = useCart()
-  if (count === 0) return null
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+  if (!mounted || count === 0) return null
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 p-3">
       <Link href={`/r/${slug}/commander`}
