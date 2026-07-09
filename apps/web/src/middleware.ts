@@ -1,6 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import { resolveHostSlug } from '@/lib/lp/host'
+import { isProtectedPath, resolveHostSlug } from '@/lib/lp/host'
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
@@ -12,7 +12,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.rewrite(url)
   }
 
-  const isProtected = pathname.startsWith('/app') || pathname.startsWith('/admin')
+  const isProtected = isProtectedPath(pathname)
   if (!isProtected) {
     return NextResponse.next()
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveHostSlug } from '../src/lib/lp/host'
+import { isProtectedPath, resolveHostSlug } from '../src/lib/lp/host'
 
 describe('resolveHostSlug', () => {
   it('extrait le slug du sous-domaine du domaine racine', () => {
@@ -13,5 +13,21 @@ describe('resolveHostSlug', () => {
     expect(resolveHostSlug('evil.com', 'goutatou.com')).toBeNull()
     expect(resolveHostSlug('a.b.goutatou.com', 'goutatou.com')).toBeNull()
     expect(resolveHostSlug('chez-mama.goutatou.com', '')).toBeNull()
+  })
+})
+
+describe('isProtectedPath', () => {
+  it('true pour /app, /admin et leurs sous-chemins', () => {
+    expect(isProtectedPath('/app')).toBe(true)
+    expect(isProtectedPath('/app/commandes')).toBe(true)
+    expect(isProtectedPath('/admin')).toBe(true)
+    expect(isProtectedPath('/admin/lp/x')).toBe(true)
+  })
+  it('false pour les chemins qui commencent seulement par les mêmes lettres', () => {
+    expect(isProtectedPath('/apple-touch-icon.png')).toBe(false)
+    expect(isProtectedPath('/appointments')).toBe(false)
+    expect(isProtectedPath('/administrator')).toBe(false)
+    expect(isProtectedPath('/r/x')).toBe(false)
+    expect(isProtectedPath('/')).toBe(false)
   })
 })
