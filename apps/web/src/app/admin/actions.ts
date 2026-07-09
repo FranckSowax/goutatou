@@ -5,7 +5,7 @@ import { WhapiClient } from '@goutatou/whapi'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createSupabaseServer } from '@/lib/supabase/server'
 
-async function assertPlatformAdmin() {
+export async function assertPlatformAdmin() {
   const supabase = await createSupabaseServer()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Non connecté')

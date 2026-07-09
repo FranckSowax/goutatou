@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { decryptToken } from '@goutatou/db/crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { configureWebhook, createRestaurant } from './actions'
@@ -38,12 +39,15 @@ export default async function AdminPage() {
                   <span className="font-semibold">{r.name}</span>
                   <span className="ml-2 text-sm text-neutral-500">/{r.slug}</span>
                 </div>
-                {chan && (
-                  <form action={configureWebhook.bind(null, chan.id,
-                    decryptToken(chan.token_encrypted, process.env.TOKEN_ENCRYPTION_KEY!))}>
-                    <button className="rounded border px-3 py-1 text-sm">Configurer le webhook</button>
-                  </form>
-                )}
+                <div className="flex items-center gap-2">
+                  {chan && (
+                    <form action={configureWebhook.bind(null, chan.id,
+                      decryptToken(chan.token_encrypted, process.env.TOKEN_ENCRYPTION_KEY!))}>
+                      <button className="rounded border px-3 py-1 text-sm">Configurer le webhook</button>
+                    </form>
+                  )}
+                  <Link href={'/admin/lp/' + r.id} className="rounded border px-3 py-1 text-sm">Configurer la LP</Link>
+                </div>
               </div>
               {chan && (
                 <p className="mt-1 text-xs text-neutral-500">
