@@ -5,6 +5,7 @@ import { WhapiClient } from '@goutatou/whapi'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { parseLpConfig } from '@/lib/lp/config'
 import { validateWebOrder } from '@/lib/lp/order-validation'
+import { clientIp, orderRateKeys, enforceRateLimit } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -16,6 +17,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
   const p = v.payload
 
   const db = createAdminClient()
+
+  // Rate-limit avant toute écriture (customer / create_order / WhatsApp).
+  const rl = await enforceRateLimit(db, orderRateKeys(slug, p.phone, clientIp(req.headers)))
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: `Trop de commandes. Réessayez dans ${Math.ceil(rl.retryAfter / 60)} min.` },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } },
+    )
+  }
+
   const { data: resto } = await db
     .from('restaurants')
     .select('id, name, lp_config, drive_enabled, whapi_channels(token_encrypted, status)')
