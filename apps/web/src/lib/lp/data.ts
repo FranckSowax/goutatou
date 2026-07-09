@@ -1,4 +1,5 @@
 import 'server-only'
+import { cache } from 'react'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { parseLpConfig, type LpConfig } from './config'
 
@@ -22,7 +23,9 @@ export interface LpData {
   whatsappPhone: string | null
 }
 
-export async function getLpData(slug: string): Promise<LpData | null> {
+// Mémoïsé par requête (React cache) : layout, page et generateMetadata appellent
+// tous getLpData(slug) — sans cache ça ferait 3× les requêtes par rendu.
+export const getLpData = cache(async (slug: string): Promise<LpData | null> => {
   const db = createAdminClient()
   const { data: resto } = await db
     .from('restaurants')
@@ -74,4 +77,4 @@ export async function getLpData(slug: string): Promise<LpData | null> {
     driveEnabled: resto.drive_enabled,
     whatsappPhone: channel?.phone ?? config.whatsappPhone,
   }
-}
+})
