@@ -46,3 +46,21 @@ export interface CampaignProgress {
 export function campaignProgress(total: number, sent: number, failed: number): CampaignProgress {
   return { total, sent, failed, pending: Math.max(0, total - sent - failed) }
 }
+
+export interface WheelPrize {
+  id: string
+  label: string
+  weight: number
+  stock: number
+  active: boolean
+}
+
+export interface WheelSpinResult {
+  prizeId: string
+  label: string
+  code: string
+}
+
+export function shouldOfferSpin(recuperatedCount: number, triggerN: number): boolean {
+  return triggerN >= 1 && recuperatedCount > 0 && recuperatedCount % triggerN === 0
+}
