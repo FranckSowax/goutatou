@@ -133,6 +133,16 @@ Après N commandes récupérées, le client reçoit un lien de roue WhatsApp ; l
 - **Migrations** : `20260709000010_loyalty.sql` (prizes, wheel_spins, colonnes roue, RLS) et `20260709000011_spin_wheel_fn.sql` (fonction atomique) — appliquées en prod.
 - **Écritures `restaurants`** : la table `restaurants` n'a pas de policy RLS UPDATE pour les membres ; `updateWheelSettings` passe par le client admin (service-role) après la garde Pro + résolution serveur du resto.
 
+## Rate-limiting API commande web
+
+L'endpoint public `POST /api/lp/[slug]/order` (crée une commande **et** envoie un WhatsApp via le canal du resto) est protégé par un rate-limiter durable en Postgres, à appliquer **avant de publier une première LP publique** (sinon risque de flood WhatsApp → ban du canal).
+
+- **Migration** : `20260709000013_rate_limit.sql` (table `rate_limit_hits` + fonction atomique `hit_rate_limit(key, limit, window_seconds)` fenêtre fixe, `service_role`-only, auto-purge opportuniste) — appliquée en prod.
+- **Trois couches** vérifiées avant toute écriture : par numéro (3/10 min), par IP (12/10 min), par resto (60/h = plafond dur des envois WhatsApp, anti-ban). Dépassement → `429` + header `Retry-After`. Seuils en constantes dans `apps/web/src/lib/rate-limit.ts` (pas de config en base).
+- **IP** : lue via `x-nf-client-connection-ip` (injectée par Netlify, non forgeable), fallback 1er hop de `x-forwarded-for`.
+- **Fail-open** : si `hit_rate_limit` échoue (indispo DB), la commande passe quand même (le checkout ne doit pas tomber sur un incident du sous-système ; le plafond resto reste le garde-fou WhatsApp principal).
+- **Variables** : aucune nouvelle.
+
 ## Dépannage
 
 - **Canal `error` dans `/admin`** : token Whapi invalide/expiré → recréer le canal, mettre à jour le token.
