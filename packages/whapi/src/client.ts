@@ -60,6 +60,20 @@ export class WhapiClient {
     return { id: res.message?.id }
   }
 
+  async postStatusText(caption: string): Promise<{ id?: string }> {
+    const res = (await this.request('POST', '/messages/story/text', { caption })) as {
+      message?: { id?: string }
+    }
+    return { id: res.message?.id }
+  }
+
+  async postStatusMedia(mediaUrl: string, caption?: string): Promise<{ id?: string }> {
+    const res = (await this.request('POST', '/messages/story/media', { media: mediaUrl, caption })) as {
+      message?: { id?: string }
+    }
+    return { id: res.message?.id }
+  }
+
   async setWebhook(url: string): Promise<void> {
     await this.request('PATCH', '/settings', {
       webhooks: [{ mode: 'body', events: [{ type: 'messages', method: 'post' }], url }],
