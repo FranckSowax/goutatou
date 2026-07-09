@@ -100,6 +100,16 @@ Depuis un vrai WhatsApp, sur le numéro du canal :
 
 Le cycle complet doit passer sans intervention manuelle en base.
 
+## Landing pages cinématiques (phase 2)
+
+Chaque restaurant publié a une LP publique, générée depuis un template unique paramétré en base (`restaurants.lp_config`).
+
+- **URL canonique** : `https://goutatou.netlify.app/r/<slug>` (toujours accessible). Une LP ne s'affiche que si elle est **publiée** (`published` coché dans l'éditeur) ; sinon 404.
+- **Configuration** : `/admin/lp/<restaurantId>` (bouton « Configurer la LP » sur chaque fiche resto) — thème (4 couleurs + police), hero (titre/sous-titre + upload média image ou vidéo → bucket `lp-media`), section « à propos », infos pratiques (adresse, horaires, itinéraire), plats vedettes (jusqu'à 4), numéro WhatsApp, et le toggle de publication. Les changements se reflètent sur la LP après revalidation (immédiate sur l'action, ou dans les 120 s en ISR).
+- **Commande web** : la LP a un panier (persisté localStorage) → tunnel `/r/<slug>/commander` → crée la commande dans le **même kanban** `/app/commandes` que le bot (source `web`), avec confirmation WhatsApp best-effort. Paiement à la remise.
+- **Domaine wildcard (optionnel)** : pour servir `chez-mama.goutatou.com` → `/r/chez-mama`, acheter le domaine, le rattacher à Netlify (DNS + domain alias `*.goutatou.com`), poser la variable `NEXT_PUBLIC_ROOT_DOMAIN=goutatou.com` et **redéployer**. Sans cette variable, seul le chemin `/r/<slug>` est utilisé (comportement par défaut sur netlify.app).
+- **Migration** : le bucket `lp-media` (migration `20260707000007_lp_media.sql`) est appliqué en prod, policies scopées par tenant (comme `menu-photos`), sans listing public.
+
 ## Dépannage
 
 - **Canal `error` dans `/admin`** : token Whapi invalide/expiré → recréer le canal, mettre à jour le token.
