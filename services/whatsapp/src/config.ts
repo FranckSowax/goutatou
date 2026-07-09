@@ -10,6 +10,11 @@ export function loadConfig() {
     supabaseUrl: required('SUPABASE_URL'),
     serviceRoleKey: required('SUPABASE_SERVICE_ROLE_KEY'),
     tokenKey: required('TOKEN_ENCRYPTION_KEY'),
+    campaignPollMs: Number(process.env.CAMPAIGN_POLL_MS ?? 15000),
+    sendDelayMinMs: Number(process.env.CAMPAIGN_SEND_DELAY_MIN_MS ?? 4000),
+    sendDelayMaxMs: Number(process.env.CAMPAIGN_SEND_DELAY_MAX_MS ?? 8000),
+    dailyCap: Number(process.env.CAMPAIGN_DAILY_CAP ?? 500),
+    batchSize: Number(process.env.CAMPAIGN_BATCH_SIZE ?? 50),
   }
 }
 export type Config = ReturnType<typeof loadConfig>

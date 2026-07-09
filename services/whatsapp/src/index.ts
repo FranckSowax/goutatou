@@ -5,11 +5,24 @@ import { createApp } from './app.js'
 import { createRepo } from './repo.js'
 import { createProcessor } from './processor.js'
 import { startNotifier } from './notifier.js'
+import { createCampaignRepo } from './campaigns/repo.js'
+import { startCampaignWorker } from './campaigns/worker.js'
 
 const config = loadConfig()
 const db = createServiceClient(config.supabaseUrl, config.serviceRoleKey)
 const repo = createRepo(db, config.tokenKey)
 startNotifier(db, config.tokenKey)
+const campaignRepo = createCampaignRepo(db, config.tokenKey)
+startCampaignWorker({
+  repo: campaignRepo,
+  makeWhapi: (token) => new WhapiClient(token),
+  sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+  dailyCap: config.dailyCap,
+  sendDelayMinMs: config.sendDelayMinMs,
+  sendDelayMaxMs: config.sendDelayMaxMs,
+  batchSize: config.batchSize,
+  pollMs: config.campaignPollMs,
+})
 const processWebhook = createProcessor(repo, (token) => new WhapiClient(token))
 
 const app = createApp({ processWebhook })
