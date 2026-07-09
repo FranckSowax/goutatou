@@ -16,6 +16,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         <span className="font-bold">Goutatou</span>
         <Link href="/app/commandes" className="text-sm hover:underline">Commandes</Link>
         <Link href="/app/menu" className="text-sm hover:underline">Menu</Link>
+        <Link href="/app/campagnes" className="text-sm hover:underline">Campagnes</Link>
       </nav>
       <main className="flex-1 p-6">{children}</main>
     </div>
