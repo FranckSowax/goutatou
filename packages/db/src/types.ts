@@ -64,3 +64,19 @@ export interface WheelSpinResult {
 export function shouldOfferSpin(recuperatedCount: number, triggerN: number): boolean {
   return triggerN >= 1 && recuperatedCount > 0 && recuperatedCount % triggerN === 0
 }
+
+export type StatusState = 'draft' | 'scheduled' | 'posting' | 'posted' | 'failed' | 'canceled'
+export type StatusKind = 'text' | 'image'
+
+const STATUS_LABELS: Record<StatusState, string> = {
+  draft: 'Brouillon',
+  scheduled: 'Programmé',
+  posting: 'Publication…',
+  posted: 'Publié',
+  failed: 'Échec',
+  canceled: 'Annulé',
+}
+
+export function statusStateLabel(s: StatusState): string {
+  return STATUS_LABELS[s]
+}
