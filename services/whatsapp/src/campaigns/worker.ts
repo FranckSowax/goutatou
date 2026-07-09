@@ -41,7 +41,7 @@ export function startCampaignWorker(deps: WorkerDeps & { pollMs: number }): void
     try {
       const due = await deps.repo.claimScheduledDue(new Date().toISOString())
       for (const c of due) {
-        // snapshot idempotent si pas encore fait
+        // snapshot exécuté une seule fois : audience figée au lancement de la campagne
         await deps.repo.snapshotRecipients(c.id, c.restaurantId)
         await processCampaignOnce(c, deps)
       }

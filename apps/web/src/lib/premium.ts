@@ -2,8 +2,8 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 export async function isPremium(supabase: SupabaseClient, restaurantId: string): Promise<boolean> {
-  const { data } = await supabase.from('subscriptions').select('plan').eq('restaurant_id', restaurantId).maybeSingle()
-  return data?.plan === 'premium'
+  const { data } = await supabase.from('subscriptions').select('plan, status').eq('restaurant_id', restaurantId).maybeSingle()
+  return data?.plan === 'premium' && data?.status === 'active'
 }
 
 export async function assertPremium(supabase: SupabaseClient, restaurantId: string): Promise<void> {

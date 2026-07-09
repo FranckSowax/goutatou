@@ -27,6 +27,12 @@ export function createCampaignRepo(db: SupabaseClient, tokenKey: string): Campai
       return (data ?? []).map((c) => ({ id: c.id, restaurantId: c.restaurant_id, body: c.body, mediaUrl: c.media_url }))
     },
     async snapshotRecipients(campaignId, restaurantId) {
+      // Audience figée au lancement : si déjà snapshoté, on ne recalcule plus jamais
+      // total_recipients (sinon dérive de l'audience en cours d'envoi et la campagne
+      // ne finalise jamais si des opt-outs surviennent en cours de route).
+      const { count: existing } = await db.from('campaign_recipients')
+        .select('id', { count: 'exact', head: true }).eq('campaign_id', campaignId)
+      if ((existing ?? 0) > 0) return existing ?? 0
       const { data: custs } = await db.from('customers').select('id')
         .eq('restaurant_id', restaurantId).eq('opted_out', false)
       const rows = (custs ?? []).map((c) => ({
@@ -38,8 +44,13 @@ export function createCampaignRepo(db: SupabaseClient, tokenKey: string): Campai
       return total
     },
     async nextPendingBatch(campaignId, limit) {
+      // Re-filtre opted_out à l'envoi : un client qui envoie STOP en cours de
+      // campagne ne doit plus recevoir aucun message des lots suivants.
       const { data } = await db.from('campaign_recipients')
-        .select('id, customers(chat_id)').eq('campaign_id', campaignId).eq('status', 'pending').limit(limit)
+        .select('id, customers!inner(chat_id, opted_out)')
+        .eq('campaign_id', campaignId).eq('status', 'pending')
+        .eq('customers.opted_out', false)
+        .limit(limit)
       return (data ?? []).map((r) => ({
         recipientId: r.id, chatId: (r.customers as unknown as { chat_id: string }).chat_id,
       }))
