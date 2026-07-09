@@ -29,6 +29,9 @@ begin
   -- Décrément atomique si stock fini
   if v_prize.stock > 0 then
     update prizes set stock = stock - 1 where id = v_prize.id and stock > 0;
+    if not found then
+      raise exception 'no_prize';   -- dernier exemplaire pris par un tour concurrent
+    end if;
   end if;
 
   v_code := upper(substr(md5(gen_random_uuid()::text), 1, 6));
