@@ -6,7 +6,11 @@ export const dynamic = 'force-dynamic'
 
 export default async function RouePage({ searchParams }: { searchParams: Promise<{ t?: string }> }) {
   const { t } = await searchParams
-  const claims = t ? verifyWheelToken(t, process.env.WHEEL_JWT_SECRET!, Math.floor(Date.now() / 1000)) : null
+  if (!process.env.WHEEL_JWT_SECRET) {
+    console.error('[roue] WHEEL_JWT_SECRET manquant')
+    return <main className="flex min-h-screen items-center justify-center p-8 text-center"><p className="opacity-70">Ce lien de roue est invalide ou expiré.</p></main>
+  }
+  const claims = t ? verifyWheelToken(t, process.env.WHEEL_JWT_SECRET, Math.floor(Date.now() / 1000)) : null
   if (!t || !claims) {
     return <main className="flex min-h-screen items-center justify-center p-8 text-center"><p className="opacity-70">Ce lien de roue est invalide ou expiré.</p></main>
   }

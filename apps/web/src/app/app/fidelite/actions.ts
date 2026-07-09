@@ -11,6 +11,12 @@ async function myRestaurantId() {
   return { supabase, restaurantId: data.restaurant_id as string }
 }
 
+// Un champ stock vide/absent signifie "illimité" (-1), pas 0 (lot immédiatement épuisé).
+function parseStock(formData: FormData): number {
+  const raw = formData.get('stock')
+  return raw === '' || raw == null ? -1 : Number(raw)
+}
+
 export async function createPrize(formData: FormData) {
   const { supabase, restaurantId } = await myRestaurantId()
   await assertPlan(supabase, restaurantId, ['pro', 'premium'])
@@ -18,7 +24,7 @@ export async function createPrize(formData: FormData) {
     restaurant_id: restaurantId,
     label: String(formData.get('label')),
     weight: Math.max(1, Number(formData.get('weight') ?? 1)),
-    stock: Number(formData.get('stock') ?? -1),
+    stock: parseStock(formData),
     active: true,
   })
   if (error) throw new Error(error.message)
@@ -30,7 +36,7 @@ export async function updatePrize(id: string, formData: FormData) {
   await assertPlan(supabase, restaurantId, ['pro', 'premium'])
   const { error } = await supabase.from('prizes').update({
     weight: Math.max(1, Number(formData.get('weight') ?? 1)),
-    stock: Number(formData.get('stock') ?? -1),
+    stock: parseStock(formData),
   }).eq('id', id)
   if (error) throw new Error(error.message)
   revalidatePath('/app/fidelite')

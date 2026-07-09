@@ -10,7 +10,11 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null)
   const token = (body as { t?: string })?.t
   if (!token) return NextResponse.json({ error: 'Lien invalide.' }, { status: 400 })
-  const claims = verifyWheelToken(token, process.env.WHEEL_JWT_SECRET!, Math.floor(Date.now() / 1000))
+  if (!process.env.WHEEL_JWT_SECRET) {
+    console.error('[roue] WHEEL_JWT_SECRET manquant')
+    return NextResponse.json({ error: 'Configuration manquante.' }, { status: 500 })
+  }
+  const claims = verifyWheelToken(token, process.env.WHEEL_JWT_SECRET, Math.floor(Date.now() / 1000))
   if (!claims) return NextResponse.json({ error: 'Lien invalide ou expiré.' }, { status: 400 })
 
   const db = createAdminClient()

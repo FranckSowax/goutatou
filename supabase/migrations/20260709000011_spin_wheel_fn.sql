@@ -5,6 +5,7 @@ declare
   v_prize prizes%rowtype;
   v_total bigint;
   v_code text;
+  v_r numeric;
 begin
   -- Verrou advisory transactionnel sur le jti : sérialise les appels concurrents
   -- partageant le même jti (relâché automatiquement à la fin de la transaction),
@@ -22,12 +23,16 @@ begin
     raise exception 'no_prize';
   end if;
 
-  -- Tirage pondéré : premier lot dont le poids cumulé franchit le seuil aléatoire
+  -- Tirage pondéré : seuil aléatoire tiré une seule fois, puis premier lot dont
+  -- le poids cumulé le franchit (random() est VOLATILE : le tirer par ligne
+  -- biaiserait la distribution par rapport aux poids configurés).
+  v_r := random() * v_total;
+
   select p.* into v_prize from (
     select *, sum(weight) over (order by position, id) as cum
     from prizes where restaurant_id = p_restaurant_id and active and stock <> 0
   ) p
-  where p.cum >= random() * v_total
+  where p.cum >= v_r
   order by p.cum
   limit 1;
 

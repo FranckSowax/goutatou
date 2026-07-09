@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { decryptToken, type OrderMode, type OrderStatus } from '@goutatou/db'
 import { signWheelToken } from '@goutatou/db/wheel'
@@ -67,8 +66,11 @@ export async function handleOrderUpdate(
         const { count: prizeCount } = await db.from('prizes').select('id', { count: 'exact', head: true })
           .eq('restaurant_id', newRow.restaurant_id).eq('active', true).neq('stock', 0)
         if (shouldOfferSpin(count ?? 0, resto.wheel_trigger_orders) && (prizeCount ?? 0) > 0) {
+          // jti déterministe (restaurant + client + jalon) : un doublon d'événement Realtime
+          // ou un aller-retour de statut sur le même jalon régénère le MÊME jti, donc le
+          // deuxième tour tombe sur already_spun (contrainte unique + verrou advisory en SQL).
           const token = signWheelToken(
-            { rid: newRow.restaurant_id, cid: newRow.customer_id, jti: randomUUID(), ttlSec: 72 * 3600 },
+            { rid: newRow.restaurant_id, cid: newRow.customer_id, jti: `${newRow.restaurant_id}:${newRow.customer_id}:${count}`, ttlSec: 72 * 3600 },
             wheelSecret, Math.floor(Date.now() / 1000))
           try {
             await whapiClient.sendText(customer.chat_id, wheelMessage(buildWheelLink(wheelBaseUrl, token)))
