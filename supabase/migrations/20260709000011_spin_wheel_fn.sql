@@ -6,6 +6,11 @@ declare
   v_total bigint;
   v_code text;
 begin
+  -- Verrou advisory transactionnel sur le jti : sérialise les appels concurrents
+  -- partageant le même jti (relâché automatiquement à la fin de la transaction),
+  -- pour que le check already_spun ci-dessous soit fiable sous concurrence.
+  perform pg_advisory_xact_lock(hashtext(p_jti));
+
   if exists (select 1 from wheel_spins where jti = p_jti) then
     raise exception 'already_spun';
   end if;
