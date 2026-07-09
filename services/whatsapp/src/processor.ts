@@ -1,6 +1,7 @@
 import { EMPTY_CART, formatFcfa } from '@goutatou/db'
 import type { WhapiClient } from '@goutatou/whapi'
 import { transition } from './bot/machine.js'
+import { isOptOutKeyword } from './campaigns/optout.js'
 import type { BotRepo } from './repo.js'
 
 interface WhapiMessage {
@@ -50,6 +51,19 @@ export function createProcessor(
 
       try {
         const customer = await repo.upsertCustomer(channel.restaurantId, msg.from, msg.chat_id, msg.from_name)
+
+        if (isOptOutKeyword(msg.text.body)) {
+          await repo.setOptedOut(channel.restaurantId, customer.id)
+          const bye = 'Vous êtes désabonné(e) des messages de ce restaurant. Tapez *menu* pour commander à nouveau quand vous voulez. 👋'
+          try {
+            const sent = await whapi.sendText(msg.chat_id, bye)
+            await repo.logMessage(channel.restaurantId, 'out', msg.chat_id, bye, sent.id)
+          } catch (err) {
+            await repo.logMessage(channel.restaurantId, 'out', msg.chat_id, bye, undefined, String(err))
+          }
+          continue
+        }
+
         const conv = await repo.loadConversation(channel.restaurantId, customer.id)
         const ctx = await repo.getBotContext(channel.restaurantId, channel.restaurantName, channel.driveEnabled)
 

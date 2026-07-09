@@ -36,6 +36,7 @@ describe('processor', () => {
         menu: { categories: [{ name: 'Plats', items: [{ id: 'i1', name: 'Bo Bun', price: 4500 }] }] },
       }),
       upsertCustomer: vi.fn().mockResolvedValue({ id: 'cust-1' }),
+      setOptedOut: vi.fn().mockResolvedValue(undefined),
       loadConversation: vi.fn().mockResolvedValue({ state: 'ACCUEIL', cart: EMPTY_CART }),
       saveConversation: vi.fn().mockResolvedValue(undefined),
       createOrder: vi.fn().mockResolvedValue({ orderNumber: 42, total: 4500 }),

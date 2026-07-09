@@ -14,6 +14,7 @@ export interface BotRepo {
   getChannel(channelUuid: string): Promise<ChannelInfo | null>
   getBotContext(restaurantId: string, restaurantName: string, driveEnabled: boolean): Promise<BotContext>
   upsertCustomer(restaurantId: string, phone: string, chatId: string, name?: string): Promise<{ id: string }>
+  setOptedOut(restaurantId: string, customerId: string): Promise<void>
   loadConversation(restaurantId: string, customerId: string): Promise<{ state: BotState; cart: Cart }>
   saveConversation(restaurantId: string, customerId: string, state: BotState, cart: Cart): Promise<void>
   createOrder(restaurantId: string, customerId: string, cart: Cart): Promise<{ orderNumber: number; total: number }>
@@ -79,6 +80,12 @@ export function createRepo(db: SupabaseClient, tokenKey: string): BotRepo {
         .single()
       if (error || !data) throw new Error(`upsertCustomer: ${error?.message}`)
       return { id: data.id }
+    },
+
+    async setOptedOut(restaurantId, customerId) {
+      const { error } = await db.from('customers').update({ opted_out: true })
+        .eq('restaurant_id', restaurantId).eq('id', customerId)
+      if (error) throw new Error(`setOptedOut: ${error.message}`)
     },
 
     async loadConversation(restaurantId, customerId) {
