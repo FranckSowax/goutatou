@@ -110,6 +110,16 @@ Chaque restaurant publié a une LP publique, générée depuis un template uniqu
 - **Domaine wildcard (optionnel)** : pour servir `chez-mama.goutatou.com` → `/r/chez-mama`, acheter le domaine, le rattacher à Netlify (DNS + domain alias `*.goutatou.com`), poser la variable `NEXT_PUBLIC_ROOT_DOMAIN=goutatou.com` et **redéployer**. Sans cette variable, seul le chemin `/r/<slug>` est utilisé (comportement par défaut sur netlify.app).
 - **Migration** : le bucket `lp-media` (migration `20260707000007_lp_media.sql`) est appliqué en prod, policies scopées par tenant (comme `menu-photos`), sans listing public.
 
+## Campagnes WhatsApp (phase 4A, premium)
+
+Broadcast rate-limité aux clients opt-in d'un restaurant, réservé au plan **premium**.
+
+- **Gating** : la section `/app/campagnes` et les actions de création/envoi ne sont accessibles qu'aux restos `subscriptions.plan = 'premium'`. Passer un resto en premium se fait en base : `update subscriptions set plan = 'premium' where restaurant_id = '<id>';`.
+- **Worker d'envoi** : hébergé dans le service bot Railway (`services/whatsapp`). Il poll les campagnes `scheduled` échues → `sending`, snapshot l'audience (clients `opted_out = false`), et envoie via Whapi avec un **délai + jitter entre chaque message** (anti-ban WhatsApp) et un **cap journalier par resto**. Variables (défauts entre parenthèses) : `CAMPAIGN_POLL_MS` (15000), `CAMPAIGN_SEND_DELAY_MIN_MS` (4000), `CAMPAIGN_SEND_DELAY_MAX_MS` (8000), `CAMPAIGN_DAILY_CAP` (500), `CAMPAIGN_BATCH_SIZE` (50). Log de démarrage : `[campaign-worker] démarré`.
+- **Opt-out** : un client qui envoie **STOP** / *désabonner* passe `opted_out = true` (géré par le bot) et est exclu de toutes les campagnes.
+- **Migrations** : `20260709000008_campaigns.sql` (tables + RLS + realtime + bucket `campaign-media`) et `20260709000009_campaign_counters.sql` (RPC `bump_campaign_counter` service_role-only), appliquées en prod.
+- **UI** : `/app/campagnes` (liste temps réel), `/nouvelle` (composer : message + média + envoyer/programmer), `/[id]` (progression live + annulation).
+
 ## Dépannage
 
 - **Canal `error` dans `/admin`** : token Whapi invalide/expiré → recréer le canal, mettre à jour le token.
