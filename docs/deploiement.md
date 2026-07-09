@@ -121,6 +121,18 @@ Broadcast rate-limité aux clients opt-in d'un restaurant, réservé au plan **p
 - **Migrations** : `20260709000008_campaigns.sql` (tables + RLS + realtime + bucket `campaign-media`) et `20260709000009_campaign_counters.sql` (RPC `bump_campaign_counter` service_role-only), appliquées en prod.
 - **UI** : `/app/campagnes` (liste temps réel), `/nouvelle` (composer : message + média + envoyer/programmer), `/[id]` (progression live + annulation).
 
+## Fidélité — roue de la fortune (phase 3A, palier Pro)
+
+Après N commandes récupérées, le client reçoit un lien de roue WhatsApp ; le tirage pondéré et le décrément de stock sont atomiques côté serveur.
+
+- **Gating** : `/app/fidelite` et les actions sont réservées aux restos `subscriptions.plan in ('pro','premium')` ET `status='active'`. Passer un resto en pro : `update subscriptions set plan='pro' where restaurant_id='<id>';`.
+- **Configuration** (`/app/fidelite`) : lots (libellé, poids de tirage, stock — `-1` = illimité), activation de la roue + N commandes déclencheur, et validation des codes gagnés au comptoir.
+- **Déclencheur** : le notifier Railway envoie le lien de roue quand une commande passe `recuperee` et que le client atteint un multiple de N (avec au moins un lot en stock). Lien signé HMAC (`WHEEL_JWT_SECRET`), usage unique, TTL 72h.
+- **Tirage** : fonction SQL `spin_wheel` (`service_role`-only) — tirage pondéré poids × stock, décrément atomique (garde NOT FOUND anti-survente), verrou advisory sur le `jti` (anti double-spin concurrent), code unique 6 caractères.
+- **Variables** : `WHEEL_JWT_SECRET` (`openssl rand -hex 32`) — **la MÊME valeur sur Railway ET Netlify** (le bot signe, le web vérifie) ; `WHEEL_BASE_URL=https://goutatou.netlify.app` (Railway). Sans elles, le bot ne démarre pas (`required()`).
+- **Migrations** : `20260709000010_loyalty.sql` (prizes, wheel_spins, colonnes roue, RLS) et `20260709000011_spin_wheel_fn.sql` (fonction atomique) — appliquées en prod.
+- **Écritures `restaurants`** : la table `restaurants` n'a pas de policy RLS UPDATE pour les membres ; `updateWheelSettings` passe par le client admin (service-role) après la garde Pro + résolution serveur du resto.
+
 ## Dépannage
 
 - **Canal `error` dans `/admin`** : token Whapi invalide/expiré → recréer le canal, mettre à jour le token.
