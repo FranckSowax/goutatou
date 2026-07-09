@@ -1,6 +1,7 @@
 'use server'
 import { revalidatePath } from 'next/cache'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { assertPlan } from '@/lib/premium'
 
 async function myRestaurantId() {
@@ -56,10 +57,17 @@ export async function updateWheelSettings(formData: FormData) {
   await assertPlan(supabase, restaurantId, ['pro', 'premium'])
   const wheelEnabled = formData.get('wheel_enabled') === 'on'
   const triggerOrders = Math.max(1, Number(formData.get('wheel_trigger_orders') ?? 1))
-  const { error } = await supabase.from('restaurants')
+  // restaurants n'a pas de policy RLS UPDATE pour les membres tenant (seulement
+  // restaurants_select et restaurants_admin_all) : le client RLS-bound matcherait
+  // 0 ligne silencieusement. On utilise le client admin (service_role) après le
+  // gate ci-dessus (myRestaurantId + assertPlan prouvent déjà l'appartenance au
+  // restaurant et le plan Pro), comme pour l'éditeur LP.
+  const admin = createAdminClient()
+  const { data, error } = await admin.from('restaurants')
     .update({ wheel_enabled: wheelEnabled, wheel_trigger_orders: triggerOrders })
     .eq('id', restaurantId)
-  if (error) throw new Error(error.message)
+    .select('id')
+  if (error || !data || data.length === 0) throw new Error('Enregistrement impossible.')
   revalidatePath('/app/fidelite')
 }
 
