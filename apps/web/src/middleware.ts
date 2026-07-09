@@ -1,7 +1,22 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { resolveHostSlug } from '@/lib/lp/host'
 
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
+
+  const slug = resolveHostSlug(request.headers.get('host') ?? '', process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? '')
+  if (slug && !pathname.startsWith('/r/') && !pathname.startsWith('/api/')) {
+    const url = request.nextUrl.clone()
+    url.pathname = `/r/${slug}${pathname === '/' ? '' : pathname}`
+    return NextResponse.rewrite(url)
+  }
+
+  const isProtected = pathname.startsWith('/app') || pathname.startsWith('/admin')
+  if (!isProtected) {
+    return NextResponse.next()
+  }
+
   let response = NextResponse.next({ request })
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,11 +33,10 @@ export async function middleware(request: NextRequest) {
     },
   )
   const { data: { user } } = await supabase.auth.getUser()
-  const isProtected = request.nextUrl.pathname.startsWith('/app') || request.nextUrl.pathname.startsWith('/admin')
-  if (isProtected && !user) {
+  if (!user) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
   return response
 }
 
-export const config = { matcher: ['/app/:path*', '/admin/:path*'] }
+export const config = { matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'] }
