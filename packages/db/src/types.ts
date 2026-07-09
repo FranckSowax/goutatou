@@ -32,3 +32,17 @@ export function cartTotal(cart: Cart): number {
 export function formatFcfa(amount: number): string {
   return `${amount.toLocaleString('fr-FR').replace(/[  ]/g, ' ')} FCFA`
 }
+
+export type CampaignStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'canceled'
+export type RecipientStatus = 'pending' | 'sent' | 'failed'
+
+export interface CampaignProgress {
+  total: number
+  sent: number
+  failed: number
+  pending: number
+}
+
+export function campaignProgress(total: number, sent: number, failed: number): CampaignProgress {
+  return { total, sent, failed, pending: Math.max(0, total - sent - failed) }
+}
