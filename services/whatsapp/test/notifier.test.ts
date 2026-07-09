@@ -36,4 +36,55 @@ describe('handleOrderUpdate', () => {
       { ...oldRow, status: 'prete' }, () => ({ sendText }), decrypt)
     expect(sendText).toHaveBeenCalledWith('24177@s.whatsapp.net', expect.stringContaining('n°7'))
   })
+
+  function fakeDbWithWheel(chatId: string, restaurant: { wheel_enabled: boolean; wheel_trigger_orders: number } | null, recupCount: number, prizeCount: number) {
+    return {
+      from: vi.fn((table: string) => {
+        if (table === 'customers') {
+          return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: { chat_id: chatId } }) }) }) }
+        }
+        if (table === 'whapi_channels') {
+          return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: { token_encrypted: 'enc', status: 'active' } }) }) }) }
+        }
+        if (table === 'restaurants') {
+          return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: restaurant }) }) }) }
+        }
+        if (table === 'orders') {
+          const builder: PromiseLike<{ count: number }> & { eq: () => typeof builder } = {
+            eq: () => builder,
+            then: (resolve) => Promise.resolve({ count: recupCount }).then(resolve),
+          }
+          return { select: () => builder }
+        }
+        if (table === 'prizes') {
+          const builder: PromiseLike<{ count: number }> & { eq: () => typeof builder; neq: () => typeof builder } = {
+            eq: () => builder,
+            neq: () => builder,
+            then: (resolve) => Promise.resolve({ count: prizeCount }).then(resolve),
+          }
+          return { select: () => builder }
+        }
+        throw new Error(`table inattendue : ${table}`)
+      }),
+    }
+  }
+
+  it('recuperee + roue activée + seuil atteint + lot dispo : envoie aussi le lien roue', async () => {
+    const sendText = vi.fn().mockResolvedValue({ id: 'x' })
+    const decrypt = vi.fn().mockReturnValue('tok')
+    const db = fakeDbWithWheel('24177@s.whatsapp.net', { wheel_enabled: true, wheel_trigger_orders: 3 }, 3, 1)
+    await handleOrderUpdate(db as never, 'k'.repeat(64), oldRow,
+      { ...oldRow, status: 'recuperee' }, () => ({ sendText }), decrypt, 's'.repeat(32), 'https://x.test')
+    expect(sendText).toHaveBeenCalledTimes(2)
+    expect(sendText).toHaveBeenNthCalledWith(2, '24177@s.whatsapp.net', expect.stringContaining('/roue?t='))
+  })
+
+  it('recuperee + roue désactivée : pas d’envoi du lien roue', async () => {
+    const sendText = vi.fn().mockResolvedValue({ id: 'x' })
+    const decrypt = vi.fn().mockReturnValue('tok')
+    const db = fakeDbWithWheel('24177@s.whatsapp.net', { wheel_enabled: false, wheel_trigger_orders: 3 }, 3, 1)
+    await handleOrderUpdate(db as never, 'k'.repeat(64), oldRow,
+      { ...oldRow, status: 'recuperee' }, () => ({ sendText }), decrypt, 's'.repeat(32), 'https://x.test')
+    expect(sendText).toHaveBeenCalledTimes(1)
+  })
 })

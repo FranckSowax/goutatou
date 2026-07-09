@@ -11,7 +11,7 @@ import { startCampaignWorker } from './campaigns/worker.js'
 const config = loadConfig()
 const db = createServiceClient(config.supabaseUrl, config.serviceRoleKey)
 const repo = createRepo(db, config.tokenKey)
-startNotifier(db, config.tokenKey)
+startNotifier(db, config.tokenKey, config.wheelSecret, config.wheelBaseUrl)
 const campaignRepo = createCampaignRepo(db, config.tokenKey)
 startCampaignWorker({
   repo: campaignRepo,

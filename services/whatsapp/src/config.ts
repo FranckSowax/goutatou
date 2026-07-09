@@ -10,6 +10,8 @@ export function loadConfig() {
     supabaseUrl: required('SUPABASE_URL'),
     serviceRoleKey: required('SUPABASE_SERVICE_ROLE_KEY'),
     tokenKey: required('TOKEN_ENCRYPTION_KEY'),
+    wheelSecret: required('WHEEL_JWT_SECRET'),
+    wheelBaseUrl: required('WHEEL_BASE_URL'),
     campaignPollMs: Number(process.env.CAMPAIGN_POLL_MS ?? 15000),
     sendDelayMinMs: Number(process.env.CAMPAIGN_SEND_DELAY_MIN_MS ?? 4000),
     sendDelayMaxMs: Number(process.env.CAMPAIGN_SEND_DELAY_MAX_MS ?? 8000),

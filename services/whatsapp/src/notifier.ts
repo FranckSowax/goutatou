@@ -1,6 +1,10 @@
+import { randomUUID } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { decryptToken, type OrderMode, type OrderStatus } from '@goutatou/db'
+import { signWheelToken } from '@goutatou/db/wheel'
+import { shouldOfferSpin } from '@goutatou/db/types'
 import { WhapiClient } from '@goutatou/whapi'
+import { buildWheelLink, wheelMessage } from './loyalty/trigger.js'
 
 export interface OrderRow {
   id: string
@@ -38,6 +42,8 @@ export async function handleOrderUpdate(
   newRow: OrderRow,
   makeWhapi: MakeWhapi = (token) => new WhapiClient(token),
   decrypt: Decrypt = decryptToken,
+  wheelSecret?: string,
+  wheelBaseUrl?: string,
 ): Promise<void> {
   if (oldRow.status === newRow.status) return
   const message = statusMessage(newRow.status, newRow.order_number, newRow.mode)
@@ -49,20 +55,49 @@ export async function handleOrderUpdate(
   if (!customer || !channel || channel.status !== 'active') return
 
   try {
-    await makeWhapi(decrypt(channel.token_encrypted, tokenKey)).sendText(customer.chat_id, message)
+    const whapiClient = makeWhapi(decrypt(channel.token_encrypted, tokenKey))
+    await whapiClient.sendText(customer.chat_id, message)
+
+    if (newRow.status === 'recuperee' && wheelSecret && wheelBaseUrl) {
+      const { data: resto } = await db.from('restaurants')
+        .select('wheel_enabled, wheel_trigger_orders').eq('id', newRow.restaurant_id).single()
+      if (resto?.wheel_enabled) {
+        const { count } = await db.from('orders').select('id', { count: 'exact', head: true })
+          .eq('restaurant_id', newRow.restaurant_id).eq('customer_id', newRow.customer_id).eq('status', 'recuperee')
+        const { count: prizeCount } = await db.from('prizes').select('id', { count: 'exact', head: true })
+          .eq('restaurant_id', newRow.restaurant_id).eq('active', true).neq('stock', 0)
+        if (shouldOfferSpin(count ?? 0, resto.wheel_trigger_orders) && (prizeCount ?? 0) > 0) {
+          const token = signWheelToken(
+            { rid: newRow.restaurant_id, cid: newRow.customer_id, jti: randomUUID(), ttlSec: 72 * 3600 },
+            wheelSecret, Math.floor(Date.now() / 1000))
+          try {
+            await whapiClient.sendText(customer.chat_id, wheelMessage(buildWheelLink(wheelBaseUrl, token)))
+          } catch (err) {
+            console.error('[notifier] envoi roue échoué', err)
+          }
+        }
+      }
+    }
   } catch (err) {
     console.error(`[notifier] envoi échoué commande ${newRow.id}`, err)
   }
 }
 
-export function startNotifier(db: SupabaseClient, tokenKey: string): void {
+export function startNotifier(
+  db: SupabaseClient,
+  tokenKey: string,
+  wheelSecret?: string,
+  wheelBaseUrl?: string,
+): void {
   db.channel('orders-status')
     .on(
       'postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'orders' },
       (payload) => {
-        handleOrderUpdate(db, tokenKey, payload.old as OrderRow, payload.new as OrderRow)
-          .catch((err) => console.error('[notifier]', err))
+        handleOrderUpdate(
+          db, tokenKey, payload.old as OrderRow, payload.new as OrderRow,
+          undefined, undefined, wheelSecret, wheelBaseUrl,
+        ).catch((err) => console.error('[notifier]', err))
       },
     )
     .subscribe((status) => console.log(`[notifier] realtime: ${status}`))
