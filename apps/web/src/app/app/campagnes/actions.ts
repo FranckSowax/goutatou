@@ -16,6 +16,9 @@ export async function createCampaign(formData: FormData) {
   await assertPremium(supabase, restaurantId)
   const action = String(formData.get('action')) // 'draft' | 'schedule' | 'now'
   const scheduledAtRaw = String(formData.get('scheduled_at') ?? '')
+  if (action === 'schedule' && !scheduledAtRaw.trim()) {
+    throw new Error('Choisissez une date et une heure d’envoi pour programmer la campagne.')
+  }
   const status = action === 'now' ? 'sending' : action === 'schedule' ? 'scheduled' : 'draft'
   const { data, error } = await supabase.from('campaigns').insert({
     restaurant_id: restaurantId,
