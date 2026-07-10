@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import type { NavItem } from '@/components/nav-links'
 
 const NAV = [
+  { href: '/app', label: 'Accueil', icon: 'Home' },
   { href: '/app/commandes', label: 'Commandes', icon: 'ClipboardList' },
   { href: '/app/menu', label: 'Menu', icon: 'UtensilsCrossed' },
   { href: '/app/campagnes', label: 'Campagnes', icon: 'Megaphone' },
@@ -28,6 +29,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     <AppShell
       items={NAV}
       title="Goutatou"
+      userEmail={user.email}
       footer={sub ? (
         <div className="flex items-center justify-between gap-2">
           <span>Offre</span>

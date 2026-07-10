@@ -2,9 +2,9 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { ClipboardList, UtensilsCrossed, Megaphone, Gift, Camera, Store, LayoutTemplate, type LucideIcon } from 'lucide-react'
+import { ClipboardList, UtensilsCrossed, Megaphone, Gift, Camera, Store, LayoutTemplate, Home, type LucideIcon } from 'lucide-react'
 
-const ICONS = { ClipboardList, UtensilsCrossed, Megaphone, Gift, Camera, Store, LayoutTemplate } satisfies Record<string, LucideIcon>
+const ICONS = { ClipboardList, UtensilsCrossed, Megaphone, Gift, Camera, Store, LayoutTemplate, Home } satisfies Record<string, LucideIcon>
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS }
 
 export function NavLinks({ items, orientation }: { items: NavItem[]; orientation: 'vertical' | 'horizontal' }) {
@@ -13,7 +13,7 @@ export function NavLinks({ items, orientation }: { items: NavItem[]; orientation
     <nav className={cn('gap-1', orientation === 'vertical' ? 'flex flex-col' : 'flex overflow-x-auto')}>
       {items.map((item) => {
         const Icon = ICONS[item.icon]
-        const active = pathname.startsWith(item.href)
+        const active = item.href === '/app' ? pathname === '/app' : pathname.startsWith(item.href)
         return (
           <Link key={item.href} href={item.href}
             className={cn(

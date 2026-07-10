@@ -15,7 +15,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const { data: admin } = await supabase.from('platform_admins').select('user_id').eq('user_id', user.id).maybeSingle()
   if (!admin) redirect('/app/commandes')
   return (
-    <AppShell items={NAV} title="Goutatou — Admin">
+    <AppShell items={NAV} title="Goutatou — Admin" userEmail={user.email}>
       {children}
     </AppShell>
   )

@@ -4,7 +4,8 @@ import { Board } from './board'
 
 export const dynamic = 'force-dynamic'
 
-export default async function CommandesPage() {
+export default async function CommandesPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  const { q } = await searchParams
   const supabase = await createSupabaseServer()
   const { data } = await supabase
     .from('orders')
@@ -31,7 +32,7 @@ export default async function CommandesPage() {
         <h1 className="font-display text-2xl font-semibold">Commandes</h1>
         <span className="text-sm text-muted-foreground">7 derniers jours</span>
       </div>
-      <Board initialOrders={orders} />
+      <Board initialOrders={orders} initialQuery={q ?? ''} />
     </div>
   )
 }

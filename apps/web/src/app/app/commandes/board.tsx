@@ -52,11 +52,11 @@ function modeLabel(o: OrderCard): { label: string; detail: string | null } {
   return { label: '🍽️ Sur place', detail: null }
 }
 
-export function Board({ initialOrders }: { initialOrders: OrderCard[] }) {
+export function Board({ initialOrders, initialQuery = '' }: { initialOrders: OrderCard[]; initialQuery?: string }) {
   const router = useRouter()
   const [orders] = useState(initialOrders)
   const [filter, setFilter] = useState<Filter>('all')
-  const [q, setQ] = useState('')
+  const [q, setQ] = useState(initialQuery)
   const [selected, setSelected] = useState<OrderCard | null>(null)
   const [pending, startTransition] = useTransition()
 
