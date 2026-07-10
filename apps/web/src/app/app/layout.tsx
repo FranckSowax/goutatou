@@ -1,7 +1,9 @@
 import { redirect } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { planOf } from '@/lib/premium'
 import { AppShell } from '@/components/app-shell'
+import { Badge } from '@/components/ui/badge'
 import type { NavItem } from '@/components/nav-links'
 
 const NAV = [
@@ -19,8 +21,20 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const { data: member } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).maybeSingle()
+  const sub = member ? await planOf(supabase, member.restaurant_id) : null
+
   return (
-    <AppShell items={NAV} title="Goutatou">
+    <AppShell
+      items={NAV}
+      title="Goutatou"
+      footer={sub ? (
+        <div className="flex items-center justify-between gap-2">
+          <span>Offre</span>
+          <Badge variant="secondary" className="capitalize">{sub.plan}</Badge>
+        </div>
+      ) : undefined}
+    >
       {children}
     </AppShell>
   )

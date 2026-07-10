@@ -7,6 +7,16 @@ import type { StatusState, StatusKind } from '@goutatou/db/types'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import { badgeVariantForStatus } from '@/lib/status-badge'
 import { cancelStatus } from './actions'
 import { StatusForm } from './form'
@@ -53,9 +63,33 @@ export function Board({ initial }: { initial: Row[] }) {
                 <p className="mt-2 text-sm text-muted-foreground">Programmé : {new Date(s.scheduled_at).toLocaleString('fr-FR')}</p>
               )}
               {(s.state === 'scheduled' || s.state === 'posting') && (
-                <form action={cancelStatus.bind(null, s.id)} className="mt-2">
-                  <Button type="submit" variant="outline" size="sm">Annuler</Button>
-                </form>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button type="button" variant="destructive" size="sm" className="mt-2">
+                      Annuler
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Annuler ce statut ?</DialogTitle>
+                      <DialogDescription>
+                        Ce statut ne sera pas publié sur WhatsApp. Cette action est irréversible.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button type="button" variant="outline">
+                          Retour
+                        </Button>
+                      </DialogClose>
+                      <form action={cancelStatus.bind(null, s.id)}>
+                        <Button type="submit" variant="destructive">
+                          Annuler le statut
+                        </Button>
+                      </form>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               )}
             </Card>
           </li>
