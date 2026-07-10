@@ -59,6 +59,10 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-tint-rose: var(--tint-rose);
+  --color-tint-peach: var(--tint-peach);
+  --color-tint-sky: var(--tint-sky);
+  --color-tint-mint: var(--tint-mint);
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
@@ -69,29 +73,64 @@
 }
 
 :root {
-  /* Chaleureux food — light uniquement */
-  --background: oklch(0.977 0.008 84);        /* crème #FAF7F2 */
-  --foreground: oklch(0.28 0.025 50);         /* brun foncé chaud */
-  --card: oklch(0.995 0.004 84);
-  --card-foreground: oklch(0.28 0.025 50);
-  --popover: oklch(0.995 0.004 84);
-  --popover-foreground: oklch(0.28 0.025 50);
-  --primary: oklch(0.58 0.155 42);            /* terracotta ~#C2410C */
-  --primary-foreground: oklch(0.985 0.005 84);
-  --secondary: oklch(0.93 0.025 100);         /* olive doux (surface) */
-  --secondary-foreground: oklch(0.35 0.05 120);
-  --muted: oklch(0.945 0.01 84);
-  --muted-foreground: oklch(0.50 0.02 60);
-  --accent: oklch(0.94 0.03 55);              /* teinte terracotta claire */
-  --accent-foreground: oklch(0.40 0.10 42);
-  --destructive: oklch(0.55 0.19 27);         /* rouge doux */
-  --destructive-foreground: oklch(0.985 0.005 84);
-  --success: oklch(0.55 0.11 140);            /* vert olive */
-  --success-foreground: oklch(0.985 0.005 84);
-  --warning: oklch(0.76 0.14 78);             /* ambre safran */
-  --warning-foreground: oklch(0.32 0.06 70);
-  --border: oklch(0.90 0.012 80);
-  --input: oklch(0.90 0.012 80);
-  --ring: oklch(0.58 0.155 42);
-  --radius: 0.75rem;
+  /* Fresh food — light */
+  --background: oklch(0.976 0.021 166);        /* menthe #ECFDF5 */
+  --foreground: oklch(0.24 0.03 175);          /* vert-noir profond */
+  --card: oklch(0.995 0.002 166);              /* blanc */
+  --card-foreground: oklch(0.24 0.03 175);
+  --popover: oklch(0.995 0.002 166);
+  --popover-foreground: oklch(0.24 0.03 175);
+  --primary: oklch(0.60 0.13 163);             /* émeraude #059669 */
+  --primary-foreground: oklch(0.985 0.005 166);
+  --secondary: oklch(0.94 0.035 166);          /* menthe teintée */
+  --secondary-foreground: oklch(0.35 0.06 170);
+  --muted: oklch(0.955 0.015 166);
+  --muted-foreground: oklch(0.51 0.025 175);
+  --accent: oklch(0.94 0.035 166);
+  --accent-foreground: oklch(0.38 0.09 168);
+  --destructive: oklch(0.58 0.20 27);
+  --destructive-foreground: oklch(0.985 0.005 166);
+  --success: oklch(0.60 0.13 163);             /* = primaire */
+  --success-foreground: oklch(0.985 0.005 166);
+  --warning: oklch(0.67 0.15 65);              /* ambre food #D97706 */
+  --warning-foreground: oklch(0.985 0.01 80);
+  --border: oklch(0.912 0.02 166);
+  --input: oklch(0.912 0.02 166);
+  --ring: oklch(0.60 0.13 163);
+  --radius: 1rem;
+  /* Teintes pastel KPI */
+  --tint-rose: oklch(0.955 0.025 10);
+  --tint-peach: oklch(0.96 0.03 65);
+  --tint-sky: oklch(0.955 0.025 240);
+  --tint-mint: oklch(0.96 0.03 166);
+}
+
+.dark {
+  --background: oklch(0.185 0.02 170);         /* vert-charbon */
+  --foreground: oklch(0.94 0.01 166);
+  --card: oklch(0.235 0.025 168);
+  --card-foreground: oklch(0.94 0.01 166);
+  --popover: oklch(0.235 0.025 168);
+  --popover-foreground: oklch(0.94 0.01 166);
+  --primary: oklch(0.72 0.14 163);             /* émeraude vif */
+  --primary-foreground: oklch(0.16 0.03 170);
+  --secondary: oklch(0.29 0.03 168);
+  --secondary-foreground: oklch(0.90 0.02 166);
+  --muted: oklch(0.27 0.025 168);
+  --muted-foreground: oklch(0.68 0.02 170);
+  --accent: oklch(0.30 0.04 168);
+  --accent-foreground: oklch(0.88 0.05 166);
+  --destructive: oklch(0.62 0.19 27);
+  --destructive-foreground: oklch(0.97 0.01 27);
+  --success: oklch(0.72 0.14 163);
+  --success-foreground: oklch(0.16 0.03 170);
+  --warning: oklch(0.75 0.14 70);
+  --warning-foreground: oklch(0.20 0.05 75);
+  --border: oklch(0.31 0.025 168);
+  --input: oklch(0.31 0.025 168);
+  --ring: oklch(0.72 0.14 163);
+  --tint-rose: oklch(0.30 0.03 10);
+  --tint-peach: oklch(0.30 0.035 65);
+  --tint-sky: oklch(0.30 0.03 240);
+  --tint-mint: oklch(0.30 0.035 166);
 }
