@@ -26,5 +26,10 @@ export default async function CommandesPage() {
     }
   })
 
-  return <Board initialOrders={orders} />
+  return (
+    <div className="flex flex-col gap-4">
+      <h1 className="font-display text-2xl font-semibold">Commandes</h1>
+      <Board initialOrders={orders} />
+    </div>
+  )
 }
