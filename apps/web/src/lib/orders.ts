@@ -11,7 +11,22 @@ export interface OrderCard {
   customer_phone: string
   drive_slot_label: string | null
   delivery_address: string | null
-  items: { name: string; qty: number }[]
+  items: { name: string; qty: number; unit_price?: number }[]
+}
+
+export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  recue: 'Reçue',
+  en_preparation: 'En préparation',
+  prete: 'Prête',
+  recuperee: 'Récupérée',
+  annulee: 'Annulée',
+}
+
+/** Libellé du bouton d'avancement vers l'état suivant. */
+export const ADVANCE_LABELS: Partial<Record<OrderStatus, string>> = {
+  recue: 'Passer en préparation',
+  en_preparation: 'Marquer prête',
+  prete: 'Marquer récupérée',
 }
 
 export const KANBAN_COLUMNS: { status: OrderStatus; title: string }[] = [
