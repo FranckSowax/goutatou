@@ -80,7 +80,7 @@
   --card-foreground: oklch(0.24 0.03 175);
   --popover: oklch(0.995 0.002 166);
   --popover-foreground: oklch(0.24 0.03 175);
-  --primary: oklch(0.60 0.13 163);             /* émeraude #059669 */
+  --primary: oklch(0.52 0.13 163);             /* émeraude #059669 */
   --primary-foreground: oklch(0.985 0.005 166);
   --secondary: oklch(0.94 0.035 166);          /* menthe teintée */
   --secondary-foreground: oklch(0.35 0.06 170);
@@ -90,13 +90,13 @@
   --accent-foreground: oklch(0.38 0.09 168);
   --destructive: oklch(0.58 0.20 27);
   --destructive-foreground: oklch(0.985 0.005 166);
-  --success: oklch(0.60 0.13 163);             /* = primaire */
+  --success: oklch(0.52 0.13 163);             /* = primaire */
   --success-foreground: oklch(0.985 0.005 166);
   --warning: oklch(0.67 0.15 65);              /* ambre food #D97706 */
-  --warning-foreground: oklch(0.985 0.01 80);
+  --warning-foreground: oklch(0.28 0.06 65);
   --border: oklch(0.912 0.02 166);
   --input: oklch(0.912 0.02 166);
-  --ring: oklch(0.60 0.13 163);
+  --ring: oklch(0.52 0.13 163);
   --radius: 1rem;
   /* Teintes pastel KPI */
   --tint-rose: oklch(0.955 0.025 10);
@@ -120,7 +120,7 @@
   --muted-foreground: oklch(0.68 0.02 170);
   --accent: oklch(0.30 0.04 168);
   --accent-foreground: oklch(0.88 0.05 166);
-  --destructive: oklch(0.62 0.19 27);
+  --destructive: oklch(0.55 0.19 27);
   --destructive-foreground: oklch(0.97 0.01 27);
   --success: oklch(0.72 0.14 163);
   --success-foreground: oklch(0.16 0.03 170);
