@@ -113,7 +113,7 @@ export default async function MenuPage() {
               </div>
             )}
 
-            <Card className="p-4">
+            <Card className="rounded-2xl p-4">
               <form action={createItem} className="grid gap-3 sm:grid-cols-2">
                 <input type="hidden" name="category_id" value={cat.id} />
                 <div className="flex flex-col gap-1.5">
@@ -152,7 +152,7 @@ export default async function MenuPage() {
         )
       })}
 
-      <Card className="p-4">
+      <Card className="rounded-2xl p-4">
         <form action={createCategory} className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex flex-1 flex-col gap-1.5">
             <Label htmlFor="new-category-name">Nouvelle catégorie</Label>
