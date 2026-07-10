@@ -18,7 +18,7 @@ export function Prizes({ prizes }: { prizes: WheelPrize[] }) {
   return (
     <section className="flex flex-col gap-4">
       <h2 className="font-display text-lg font-semibold">Lots de la roue</h2>
-      <Card className="p-4">
+      <Card className="rounded-2xl p-4">
         {prizes.length > 0 && (
           <Table>
             <TableHeader>

@@ -48,7 +48,7 @@ export default async function LpEditorPage({ params }: { params: Promise<{ resta
         </a>
       </div>
 
-      <Card className="p-4">
+      <Card className="rounded-2xl p-4">
         <CardHeader className="px-0 pt-0">
           <CardTitle className="font-display text-base">Média hero</CardTitle>
         </CardHeader>
@@ -75,7 +75,7 @@ export default async function LpEditorPage({ params }: { params: Promise<{ resta
         </CardContent>
       </Card>
 
-      <Card className="p-4">
+      <Card className="rounded-2xl p-4">
         <form action={updateLpConfig.bind(null, restaurantId)} className="flex flex-col gap-6">
           <Label className="flex w-fit items-center gap-2">
             <input type="checkbox" name="published" defaultChecked={config.published} className="size-4 accent-primary" />

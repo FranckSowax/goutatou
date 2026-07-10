@@ -18,7 +18,7 @@ export default async function FidelitePage() {
     return (
       <div className="mx-auto max-w-xl p-8 text-center">
         <h1 className="mb-6 font-display text-2xl font-semibold">Roue de la fidélité</h1>
-        <Card className="border-primary/30 bg-accent p-6 text-center">
+        <Card className="rounded-2xl border-primary/30 bg-accent p-6 text-center">
           <p className="font-display text-xl font-semibold text-accent-foreground">Fonctionnalité Pro</p>
           <p className="mt-2 text-sm text-muted-foreground">
             Fonctionnalité de l’offre <strong>Pro</strong>. Contactez Goutatou pour l’activer.
@@ -46,7 +46,7 @@ export default async function FidelitePage() {
 
       <section className="flex flex-col gap-4">
         <h2 className="font-display text-lg font-semibold">Réglages</h2>
-        <Card className="p-4">
+        <Card className="rounded-2xl p-4">
           <form action={updateWheelSettings} className="flex flex-col gap-4">
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -82,14 +82,14 @@ export default async function FidelitePage() {
 
       <section className="flex flex-col gap-4">
         <h2 className="font-display text-lg font-semibold">Valider un code</h2>
-        <Card className="p-4">
+        <Card className="rounded-2xl p-4">
           <RedeemForm />
         </Card>
       </section>
 
       <section className="flex flex-col gap-4">
         <h2 className="font-display text-lg font-semibold">Gains en attente de validation</h2>
-        <Card className="p-4">
+        <Card className="rounded-2xl p-4">
           <ul className="flex flex-col gap-2 text-sm">
             {(spins ?? []).map((s) => (
               <li key={s.code} className="flex justify-between border-b pb-2 last:border-0 last:pb-0">

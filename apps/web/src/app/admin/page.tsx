@@ -45,7 +45,7 @@ export default async function AdminPage() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8">
-      <Card className="p-4">
+      <Card className="rounded-2xl p-4">
         <CardHeader className="px-0 pt-0">
           <CardTitle className="font-display text-lg">Nouveau restaurant</CardTitle>
         </CardHeader>
@@ -86,7 +86,7 @@ export default async function AdminPage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="font-display text-lg font-semibold">Restaurants ({restos?.length ?? 0})</h2>
-        <Card className="p-4">
+        <Card className="rounded-2xl p-4">
           {(restos ?? []).length === 0 && (
             <p className="text-sm text-muted-foreground">Aucun restaurant pour l’instant.</p>
           )}
