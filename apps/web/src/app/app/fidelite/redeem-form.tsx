@@ -17,7 +17,7 @@ export function RedeemForm() {
         await redeemCode(formData)
         setResult({ ok: true, message: 'Code validé.' })
       } catch (error) {
-        setResult({ ok: false, message: error instanceof Error ? error.message : 'Erreur inattendue.' })
+        setResult({ ok: false, message: 'Code invalide ou déjà utilisé.' })
       }
     })
   }
