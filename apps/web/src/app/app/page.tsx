@@ -21,6 +21,19 @@ function heure(iso: string): string {
   return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Libreville' })
 }
 
+function jour(iso: string): string {
+  return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', timeZone: 'Africa/Libreville' })
+}
+
+function isToday(iso: string): boolean {
+  const opts: Intl.DateTimeFormatOptions = { timeZone: 'Africa/Libreville' }
+  return new Date(iso).toLocaleDateString('fr-FR', opts) === new Date().toLocaleDateString('fr-FR', opts)
+}
+
+function jourHeure(iso: string): string {
+  return isToday(iso) ? heure(iso) : `${jour(iso)} · ${heure(iso)}`
+}
+
 interface HomeOrderRow extends HomeOrderInput {
   id: string
   order_number: number
@@ -62,7 +75,7 @@ export default async function HomePage() {
       .single(),
     supabase
       .from('orders')
-      .select('id, order_number, status, mode, total, created_at, customers(name)')
+      .select('id, order_number, status, total, created_at, customers(name)')
       .gte('created_at', new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString())
       .order('created_at', { ascending: false }),
     user
@@ -102,9 +115,11 @@ export default async function HomePage() {
     )
   }
   if (!lp.published) {
-    todos.push({
-      key: 'lp', icon: LayoutTemplate, label: 'Publier votre page de commande', href: `/admin/lp/${restaurantId}`,
-    })
+    todos.push(
+      isAdmin
+        ? { key: 'lp', icon: LayoutTemplate, label: 'Publier votre page de commande', href: `/admin/lp/${restaurantId}` }
+        : { key: 'lp', icon: LayoutTemplate, label: 'Page de commande non publiée — contactez Goutatou pour l\'activer.' },
+    )
   }
   if (!restaurant?.wheel_enabled) {
     todos.push({ key: 'wheel', icon: Gift, label: 'Activer la roue de la fidélité', href: '/app/fidelite' })
@@ -142,7 +157,7 @@ export default async function HomePage() {
             <KpiCard tint="mint" label="CA du jour" value={formatFcfa(kpis.caJour)} />
             <KpiCard tint="peach" label="En cours" value={String(kpis.enCours)} />
             <KpiCard tint="sky" label="Prêtes" value={String(kpis.pretes)} />
-            <KpiCard tint="rose" label="Panier moyen" value={formatFcfa(kpis.panierMoyen)} />
+            <KpiCard tint="rose" label="Panier moyen (jour)" value={formatFcfa(kpis.panierMoyen)} />
           </div>
 
           {/* Dernières commandes */}
@@ -161,7 +176,7 @@ export default async function HomePage() {
                 <div key={o.id} className="flex items-center justify-between gap-3 py-3">
                   <div className="min-w-0">
                     <p className="truncate font-medium">n°{o.order_number} · {o.customer_name ?? 'Client'}</p>
-                    <p className="text-xs tabular-nums text-muted-foreground">{heure(o.created_at)}</p>
+                    <p className="text-xs tabular-nums text-muted-foreground">{jourHeure(o.created_at)}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
                     <span className="font-bold text-primary">{formatFcfa(o.total)}</span>

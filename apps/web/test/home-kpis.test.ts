@@ -44,4 +44,16 @@ describe('computeHomeKpis', () => {
     const kpis = computeHomeKpis([], '2026-07-10T12:00:00Z')
     expect(kpis).toEqual({ caJour: 0, enCours: 0, pretes: 0, panierMoyen: 0 })
   })
+
+  it('compte dans le CA du jour une commande UTC de la veille qui tombe déjà le jour J à Libreville (UTC+1)', () => {
+    const todayIso = '2026-07-10T12:00:00Z' // 13:00 le 10/07 à Libreville
+    const orders: HomeOrderInput[] = [
+      order('recuperee', 7000, '2026-07-09T23:30:00Z'), // 00:30 le 10/07 à Libreville → compte dans le jour J
+    ]
+
+    const kpis = computeHomeKpis(orders, todayIso)
+
+    expect(kpis.caJour).toBe(7000)
+    expect(kpis.panierMoyen).toBe(7000)
+  })
 })
