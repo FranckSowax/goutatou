@@ -32,7 +32,7 @@ export function Board({ initial }: { initial: Row[] }) {
         {initial.map((c) => (
           <li key={c.id}>
             <Link href={`/app/campagnes/${c.id}`} className="block">
-              <Card className="p-4 transition-colors hover:bg-muted/50">
+              <Card className="rounded-2xl p-4 transition-colors hover:bg-muted/50">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-display font-semibold">{c.name}</span>
                   <Badge variant={badgeVariantForCampaign(c.status)}>{statusLabel(c.status)}</Badge>

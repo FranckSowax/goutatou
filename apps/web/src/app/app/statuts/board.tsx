@@ -42,14 +42,14 @@ export function Board({ initial }: { initial: Row[] }) {
   return (
     <div className="mx-auto max-w-3xl p-6">
       <h1 className="mb-6 font-display text-2xl font-semibold">Statuts WhatsApp</h1>
-      <Card className="mb-8 p-6">
+      <Card className="mb-8 rounded-2xl p-6">
         <h2 className="mb-4 font-display text-lg font-semibold">Nouveau statut</h2>
         <StatusForm />
       </Card>
       <ul className="flex flex-col gap-3">
         {initial.map((s) => (
           <li key={s.id}>
-            <Card className="p-4">
+            <Card className="rounded-2xl p-4">
               <div className="flex items-center justify-between gap-2">
                 <span className="font-display font-semibold">{s.kind === 'image' ? 'Image' : 'Texte'}</span>
                 <Badge variant={badgeVariantForStatus(s.state)}>{statusStateLabel(s.state)}</Badge>

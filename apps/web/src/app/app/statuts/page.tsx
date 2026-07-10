@@ -13,7 +13,7 @@ export default async function StatutsPage() {
     return (
       <div className="mx-auto max-w-xl p-8 text-center">
         <h1 className="mb-6 font-display text-2xl font-semibold">Statuts WhatsApp</h1>
-        <Card className="border-primary/30 bg-accent p-6 text-center">
+        <Card className="rounded-2xl border-primary/30 bg-accent p-6 text-center">
           <p className="font-display text-xl font-semibold text-accent-foreground">Fonctionnalité Pro</p>
           <p className="mt-2 text-sm text-muted-foreground">
             Fonctionnalité de l’offre <strong>Pro</strong>. Contactez Goutatou pour l’activer.

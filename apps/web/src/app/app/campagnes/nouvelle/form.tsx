@@ -25,7 +25,7 @@ export function CampaignForm({ recipientCount }: { recipientCount: number }) {
     }
   }
   return (
-    <Card className="p-6">
+    <Card className="rounded-2xl p-6">
       <form action={createCampaign} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="campaign-name">Nom de la campagne (interne)</Label>
