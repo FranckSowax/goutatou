@@ -1,3 +1,4 @@
+import { UtensilsCrossed } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -8,8 +9,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const { error } = await searchParams
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-6">
-      <Card className="w-full max-w-sm">
+      <Card className="w-full max-w-sm rounded-2xl">
         <CardHeader className="items-center text-center">
+          <span className="flex size-10 items-center justify-center rounded-full bg-primary">
+            <UtensilsCrossed className="size-5 text-primary-foreground" />
+          </span>
           <h1 className="font-display text-3xl text-primary">Goutatou</h1>
           <p className="text-sm text-muted-foreground">Connexion</p>
         </CardHeader>

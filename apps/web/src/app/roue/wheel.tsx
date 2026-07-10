@@ -40,7 +40,7 @@ export function Wheel({ token, labels }: { token: string; labels: string[] }) {
       )}
       {error && <p className="text-destructive">{error}</p>}
       {result && (
-        <Card className="w-full max-w-sm">
+        <Card className="w-full max-w-sm rounded-2xl">
           <CardContent className="text-center">
             <p className="text-lg text-foreground">Vous avez gagné :</p>
             <p className="my-2 font-display text-lg text-foreground">{result.label}</p>
