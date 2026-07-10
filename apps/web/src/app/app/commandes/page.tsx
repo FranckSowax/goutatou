@@ -32,7 +32,7 @@ export default async function CommandesPage({ searchParams }: { searchParams: Pr
         <h1 className="font-display text-2xl font-semibold">Commandes</h1>
         <span className="text-sm text-muted-foreground">7 derniers jours</span>
       </div>
-      <Board initialOrders={orders} initialQuery={q ?? ''} />
+      <Board key={q ?? ''} initialOrders={orders} initialQuery={q ?? ''} />
     </div>
   )
 }
