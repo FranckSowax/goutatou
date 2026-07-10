@@ -9,5 +9,5 @@ export async function login(formData: FormData) {
     password: String(formData.get('password')),
   })
   if (error) redirect('/login?error=1')
-  redirect('/app/commandes')
+  redirect('/app')
 }
