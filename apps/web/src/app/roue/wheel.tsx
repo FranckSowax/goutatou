@@ -25,8 +25,8 @@ export function Wheel({ token, labels }: { token: string; labels: string[] }) {
   return (
     <div className="flex flex-col items-center gap-6">
       <div className="relative h-72 w-72">
-        <div className="absolute left-1/2 top-0 z-10 -ml-2 h-0 w-0 border-x-8 border-t-[16px] border-x-transparent border-t-yellow-400" />
-        <div className="h-full w-full rounded-full border-4 border-yellow-400 transition-transform duration-[4000ms] ease-out"
+        <div className="absolute left-1/2 top-0 z-10 -ml-2 h-0 w-0 border-x-8 border-t-16 border-x-transparent border-t-yellow-400" />
+        <div className="h-full w-full rounded-full border-4 border-yellow-400 transition-transform duration-4000 ease-out"
           style={{ transform: `rotate(${rotation}deg)`,
             background: `conic-gradient(${labels.map((_, i) => `hsl(${(i * 360) / (labels.length || 1)},70%,45%) ${i * sector}deg ${(i + 1) * sector}deg`).join(',')})` }}>
         </div>

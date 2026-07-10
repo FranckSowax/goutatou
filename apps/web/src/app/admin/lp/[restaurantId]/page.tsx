@@ -36,7 +36,7 @@ export default async function LpEditorPage({ params }: { params: Promise<{ resta
         </a>
       </div>
 
-      <section className="rounded-lg bg-white p-4 shadow-sm">
+      <section className="rounded-lg bg-white p-4 shadow-xs">
         <h3 className="mb-3 font-semibold">Média hero</h3>
         {config.hero.mediaUrl && (
           <p className="mb-2 text-xs text-neutral-500">
@@ -44,12 +44,12 @@ export default async function LpEditorPage({ params }: { params: Promise<{ resta
           </p>
         )}
         <form action={uploadHeroMedia.bind(null, restaurantId)} className="flex items-center gap-2 text-sm">
-          <input name="hero" type="file" accept="image/*,video/*" required className="rounded border p-2" />
-          <button className="rounded bg-neutral-900 px-3 py-2 text-white">Uploader le média hero</button>
+          <input name="hero" type="file" accept="image/*,video/*" required className="rounded-sm border p-2" />
+          <button className="rounded-sm bg-neutral-900 px-3 py-2 text-white">Uploader le média hero</button>
         </form>
       </section>
 
-      <form action={updateLpConfig.bind(null, restaurantId)} className="flex flex-col gap-6 rounded-lg bg-white p-4 shadow-sm text-sm">
+      <form action={updateLpConfig.bind(null, restaurantId)} className="flex flex-col gap-6 rounded-lg bg-white p-4 shadow-xs text-sm">
         <label className="flex items-center gap-2">
           <input type="checkbox" name="published" defaultChecked={config.published} />
           Publier la landing page
@@ -57,8 +57,8 @@ export default async function LpEditorPage({ params }: { params: Promise<{ resta
 
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-1 font-semibold">Hero</legend>
-          <input name="hero_title" defaultValue={config.hero.title} placeholder="Titre" className="rounded border p-2" />
-          <input name="hero_subtitle" defaultValue={config.hero.subtitle} placeholder="Sous-titre" className="rounded border p-2" />
+          <input name="hero_title" defaultValue={config.hero.title} placeholder="Titre" className="rounded-sm border p-2" />
+          <input name="hero_subtitle" defaultValue={config.hero.subtitle} placeholder="Sous-titre" className="rounded-sm border p-2" />
         </fieldset>
 
         <fieldset className="flex flex-col gap-2">
@@ -83,7 +83,7 @@ export default async function LpEditorPage({ params }: { params: Promise<{ resta
           </div>
           <label className="flex flex-col items-start gap-1">
             Police
-            <select name="theme_font" defaultValue={config.theme.font} className="rounded border p-2">
+            <select name="theme_font" defaultValue={config.theme.font} className="rounded-sm border p-2">
               <option value="sans">Sans</option>
               <option value="serif">Serif</option>
             </select>
@@ -92,16 +92,16 @@ export default async function LpEditorPage({ params }: { params: Promise<{ resta
 
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-1 font-semibold">À propos</legend>
-          <input name="about_title" defaultValue={config.about?.title ?? ''} placeholder="Titre" className="rounded border p-2" />
-          <textarea name="about_text" defaultValue={config.about?.text ?? ''} placeholder="Texte (vide = section masquée)" rows={4} className="rounded border p-2" />
+          <input name="about_title" defaultValue={config.about?.title ?? ''} placeholder="Titre" className="rounded-sm border p-2" />
+          <textarea name="about_text" defaultValue={config.about?.text ?? ''} placeholder="Texte (vide = section masquée)" rows={4} className="rounded-sm border p-2" />
         </fieldset>
 
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-1 font-semibold">Infos pratiques</legend>
-          <input name="address" defaultValue={config.infos.address ?? ''} placeholder="Adresse" className="rounded border p-2" />
-          <textarea name="hours" defaultValue={config.infos.hours.join('\n')} placeholder={'Horaires (1 par ligne)'} rows={4} className="rounded border p-2" />
-          <input name="mapsUrl" defaultValue={config.infos.mapsUrl ?? ''} placeholder="Lien Google Maps" className="rounded border p-2" />
-          <input name="whatsappPhone" defaultValue={config.whatsappPhone ?? ''} placeholder="Numéro WhatsApp (ex. 24177000000)" className="rounded border p-2" />
+          <input name="address" defaultValue={config.infos.address ?? ''} placeholder="Adresse" className="rounded-sm border p-2" />
+          <textarea name="hours" defaultValue={config.infos.hours.join('\n')} placeholder={'Horaires (1 par ligne)'} rows={4} className="rounded-sm border p-2" />
+          <input name="mapsUrl" defaultValue={config.infos.mapsUrl ?? ''} placeholder="Lien Google Maps" className="rounded-sm border p-2" />
+          <input name="whatsappPhone" defaultValue={config.whatsappPhone ?? ''} placeholder="Numéro WhatsApp (ex. 24177000000)" className="rounded-sm border p-2" />
         </fieldset>
 
         <fieldset className="flex flex-col gap-2">
@@ -115,7 +115,7 @@ export default async function LpEditorPage({ params }: { params: Promise<{ resta
           ))}
         </fieldset>
 
-        <button className="rounded bg-neutral-900 p-2 text-white">Enregistrer</button>
+        <button className="rounded-sm bg-neutral-900 p-2 text-white">Enregistrer</button>
       </form>
     </div>
   )

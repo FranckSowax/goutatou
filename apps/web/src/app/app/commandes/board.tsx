@@ -33,7 +33,7 @@ export function Board({ initialOrders }: { initialOrders: OrderCard[] }) {
             {grouped[col.status].map((o) => {
               const next = nextStatus(o.status)
               return (
-                <article key={o.id} className="rounded-lg bg-white p-3 shadow-sm">
+                <article key={o.id} className="rounded-lg bg-white p-3 shadow-xs">
                   <div className="flex justify-between font-semibold">
                     <span>n°{o.order_number}</span>
                     <span>{formatFcfa(o.total)}</span>
@@ -49,13 +49,13 @@ export function Board({ initialOrders }: { initialOrders: OrderCard[] }) {
                     {next && (
                       <button
                         onClick={() => updateOrderStatus(o.id, next)}
-                        className="rounded bg-neutral-900 px-2 py-1 text-xs text-white"
+                        className="rounded-sm bg-neutral-900 px-2 py-1 text-xs text-white"
                       >
                         → {KANBAN_COLUMNS.find((c) => c.status === next)?.title}
                       </button>
                     )}
                     {o.status === 'recue' && (
-                      <button onClick={() => cancelOrder(o.id)} className="rounded border px-2 py-1 text-xs">
+                      <button onClick={() => cancelOrder(o.id)} className="rounded-sm border px-2 py-1 text-xs">
                         Annuler
                       </button>
                     )}

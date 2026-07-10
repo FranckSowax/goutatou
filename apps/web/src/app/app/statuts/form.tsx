@@ -34,7 +34,7 @@ export function StatusForm() {
           <input type="radio" name="kind" value="image" checked={kind === 'image'} onChange={() => setKind('image')} /> Image
         </label>
       </div>
-      <textarea name="content" required rows={4} placeholder="Votre statut…" className="rounded border p-2" />
+      <textarea name="content" required rows={4} placeholder="Votre statut…" className="rounded-sm border p-2" />
       <input type="hidden" name="media_url" value={mediaUrl} />
       {kind === 'image' && (
         <>
@@ -51,16 +51,16 @@ export function StatusForm() {
           name="scheduled_at"
           value={scheduledAt}
           onChange={(e) => { setScheduledAt(e.target.value); if (e.target.value.trim()) setScheduleError(false) }}
-          className="mt-1 block rounded border p-2"
+          className="mt-1 block rounded-sm border p-2"
         />
       </label>
       {scheduleError && (
         <p className="text-sm text-red-600">Choisissez une date et une heure.</p>
       )}
       <div className="flex flex-wrap gap-2">
-        <button name="action" value="now" className="rounded bg-neutral-900 px-4 py-2 text-white">Publier maintenant</button>
-        <button name="action" value="schedule" onClick={onScheduleClick} className="rounded border px-4 py-2">Programmer</button>
-        <button name="action" value="draft" className="rounded border px-4 py-2">Brouillon</button>
+        <button name="action" value="now" className="rounded-sm bg-neutral-900 px-4 py-2 text-white">Publier maintenant</button>
+        <button name="action" value="schedule" onClick={onScheduleClick} className="rounded-sm border px-4 py-2">Programmer</button>
+        <button name="action" value="draft" className="rounded-sm border px-4 py-2">Brouillon</button>
       </div>
     </form>
   )

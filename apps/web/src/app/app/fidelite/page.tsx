@@ -34,7 +34,7 @@ export default async function FidelitePage() {
     <div className="mx-auto flex max-w-3xl flex-col gap-8">
       <h1 className="text-2xl font-bold">Roue de la fidélité</h1>
 
-      <section className="rounded-lg bg-white p-4 shadow-sm">
+      <section className="rounded-lg bg-white p-4 shadow-xs">
         <h2 className="mb-3 text-lg font-semibold">Réglages</h2>
         <form action={updateWheelSettings} className="flex flex-col gap-3 text-sm">
           <label className="flex items-center gap-2">
@@ -48,25 +48,25 @@ export default async function FidelitePage() {
               type="number"
               min="1"
               defaultValue={restaurant?.wheel_trigger_orders ?? 5}
-              className="w-20 rounded border p-1"
+              className="w-20 rounded-sm border p-1"
             />
             commande(s) récupérée(s)
           </label>
-          <button className="w-fit rounded bg-neutral-900 px-4 py-2 text-white">Enregistrer</button>
+          <button className="w-fit rounded-sm bg-neutral-900 px-4 py-2 text-white">Enregistrer</button>
         </form>
       </section>
 
       <Prizes prizes={prizes ?? []} />
 
-      <section className="rounded-lg bg-white p-4 shadow-sm">
+      <section className="rounded-lg bg-white p-4 shadow-xs">
         <h2 className="mb-3 text-lg font-semibold">Valider un code</h2>
         <form action={redeemCode} className="flex gap-2">
-          <input name="code" required placeholder="Code client" className="flex-1 rounded border p-2 uppercase" />
-          <button className="rounded bg-neutral-900 px-4 text-white">Valider</button>
+          <input name="code" required placeholder="Code client" className="flex-1 rounded-sm border p-2 uppercase" />
+          <button className="rounded-sm bg-neutral-900 px-4 text-white">Valider</button>
         </form>
       </section>
 
-      <section className="rounded-lg bg-white p-4 shadow-sm">
+      <section className="rounded-lg bg-white p-4 shadow-xs">
         <h2 className="mb-3 text-lg font-semibold">Gains en attente de validation</h2>
         <ul className="flex flex-col gap-2 text-sm">
           {(spins ?? []).map((s) => (

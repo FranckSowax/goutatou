@@ -14,15 +14,15 @@ export default async function AdminPage() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8">
-      <section className="rounded-lg bg-white p-4 shadow-sm">
+      <section className="rounded-lg bg-white p-4 shadow-xs">
         <h2 className="mb-3 text-lg font-semibold">Nouveau restaurant</h2>
         <form action={createRestaurant} className="grid grid-cols-2 gap-2 text-sm">
-          <input name="name" required placeholder="Nom du restaurant" className="rounded border p-2" />
-          <input name="slug" required placeholder="slug (ex. chez-mama)" pattern="[a-z0-9-]{2,40}" className="rounded border p-2" />
-          <input name="owner_email" required type="email" placeholder="Email du gérant" className="rounded border p-2" />
-          <input name="owner_password" required placeholder="Mot de passe initial" className="rounded border p-2" />
-          <input name="whapi_token" required placeholder="Token du canal Whapi" className="col-span-2 rounded border p-2" />
-          <button className="col-span-2 rounded bg-neutral-900 p-2 text-white">Créer le restaurant</button>
+          <input name="name" required placeholder="Nom du restaurant" className="rounded-sm border p-2" />
+          <input name="slug" required placeholder="slug (ex. chez-mama)" pattern="[a-z0-9-]{2,40}" className="rounded-sm border p-2" />
+          <input name="owner_email" required type="email" placeholder="Email du gérant" className="rounded-sm border p-2" />
+          <input name="owner_password" required placeholder="Mot de passe initial" className="rounded-sm border p-2" />
+          <input name="whapi_token" required placeholder="Token du canal Whapi" className="col-span-2 rounded-sm border p-2" />
+          <button className="col-span-2 rounded-sm bg-neutral-900 p-2 text-white">Créer le restaurant</button>
         </form>
       </section>
 
@@ -33,7 +33,7 @@ export default async function AdminPage() {
             id: string; token_encrypted: string; status: string; last_webhook_at: string | null
           } | null)
           return (
-            <article key={r.id} className="rounded-lg bg-white p-4 shadow-sm">
+            <article key={r.id} className="rounded-lg bg-white p-4 shadow-xs">
               <div className="flex items-center justify-between">
                 <div>
                   <span className="font-semibold">{r.name}</span>
@@ -43,10 +43,10 @@ export default async function AdminPage() {
                   {chan && (
                     <form action={configureWebhook.bind(null, chan.id,
                       decryptToken(chan.token_encrypted, process.env.TOKEN_ENCRYPTION_KEY!))}>
-                      <button className="rounded border px-3 py-1 text-sm">Configurer le webhook</button>
+                      <button className="rounded-sm border px-3 py-1 text-sm">Configurer le webhook</button>
                     </form>
                   )}
-                  <Link href={'/admin/lp/' + r.id} className="rounded border px-3 py-1 text-sm">Configurer la LP</Link>
+                  <Link href={'/admin/lp/' + r.id} className="rounded-sm border px-3 py-1 text-sm">Configurer la LP</Link>
                 </div>
               </div>
               {chan && (

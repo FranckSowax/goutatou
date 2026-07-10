@@ -23,11 +23,11 @@
     "server-only": "^0.0.1"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.2",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
-    "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.17",
+    "tailwindcss": "^4.3.2",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }

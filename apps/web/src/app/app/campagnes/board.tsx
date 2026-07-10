@@ -20,12 +20,12 @@ export function Board({ initial }: { initial: Row[] }) {
     <div className="mx-auto max-w-3xl p-6">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Campagnes WhatsApp</h1>
-        <Link href="/app/campagnes/nouvelle" className="rounded bg-neutral-900 px-4 py-2 text-sm text-white">Nouvelle campagne</Link>
+        <Link href="/app/campagnes/nouvelle" className="rounded-sm bg-neutral-900 px-4 py-2 text-sm text-white">Nouvelle campagne</Link>
       </div>
       <ul className="flex flex-col gap-3">
         {initial.map((c) => (
           <li key={c.id}>
-            <Link href={`/app/campagnes/${c.id}`} className="block rounded-lg bg-white p-4 shadow-sm">
+            <Link href={`/app/campagnes/${c.id}`} className="block rounded-lg bg-white p-4 shadow-xs">
               <div className="flex justify-between">
                 <span className="font-semibold">{c.name}</span>
                 <span className="text-sm opacity-60">{statusLabel(c.status)}</span>

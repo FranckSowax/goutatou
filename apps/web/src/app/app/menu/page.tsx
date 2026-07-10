@@ -16,7 +16,7 @@ export default async function MenuPage() {
       <h1 className="text-2xl font-bold">Menu</h1>
 
       {(categories ?? []).map((cat) => (
-        <section key={cat.id} className="rounded-lg bg-white p-4 shadow-sm">
+        <section key={cat.id} className="rounded-lg bg-white p-4 shadow-xs">
           <h2 className="mb-3 text-lg font-semibold">{cat.name}</h2>
           <ul className="flex flex-col gap-2">
             {(cat.menu_items as { id: string; name: string; description: string | null; price: number; available: boolean }[]).map((item) => (
@@ -27,12 +27,12 @@ export default async function MenuPage() {
                 </div>
                 <div className="flex gap-2">
                   <form action={toggleItemAvailable.bind(null, item.id, !item.available)}>
-                    <button className="rounded border px-2 py-1 text-xs">
+                    <button className="rounded-sm border px-2 py-1 text-xs">
                       {item.available ? 'Rupture' : 'Disponible'}
                     </button>
                   </form>
                   <form action={deleteItem.bind(null, item.id)}>
-                    <button className="rounded border border-red-300 px-2 py-1 text-xs text-red-600">Suppr.</button>
+                    <button className="rounded-sm border border-red-300 px-2 py-1 text-xs text-red-600">Suppr.</button>
                   </form>
                 </div>
               </li>
@@ -40,18 +40,18 @@ export default async function MenuPage() {
           </ul>
           <form action={createItem} className="mt-4 grid grid-cols-2 gap-2 text-sm">
             <input type="hidden" name="category_id" value={cat.id} />
-            <input name="name" required placeholder="Nom du plat" className="rounded border p-2" />
-            <input name="price" required type="number" min="0" placeholder="Prix (FCFA)" className="rounded border p-2" />
-            <input name="description" placeholder="Description (optionnel)" className="col-span-2 rounded border p-2" />
+            <input name="name" required placeholder="Nom du plat" className="rounded-sm border p-2" />
+            <input name="price" required type="number" min="0" placeholder="Prix (FCFA)" className="rounded-sm border p-2" />
+            <input name="description" placeholder="Description (optionnel)" className="col-span-2 rounded-sm border p-2" />
             <input name="photo" type="file" accept="image/*" className="text-xs" />
-            <button className="rounded bg-neutral-900 p-2 text-white">Ajouter le plat</button>
+            <button className="rounded-sm bg-neutral-900 p-2 text-white">Ajouter le plat</button>
           </form>
         </section>
       ))}
 
       <form action={createCategory} className="flex gap-2">
-        <input name="name" required placeholder="Nouvelle catégorie" className="flex-1 rounded border p-2" />
-        <button className="rounded bg-neutral-900 px-4 text-white">Créer</button>
+        <input name="name" required placeholder="Nouvelle catégorie" className="flex-1 rounded-sm border p-2" />
+        <button className="rounded-sm bg-neutral-900 px-4 text-white">Créer</button>
       </form>
     </div>
   )
