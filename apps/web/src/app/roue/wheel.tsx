@@ -1,5 +1,7 @@
 'use client'
 import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { targetRotationDeg } from '@/lib/wheel'
 
 export function Wheel({ token, labels }: { token: string; labels: string[] }) {
@@ -32,19 +34,20 @@ export function Wheel({ token, labels }: { token: string; labels: string[] }) {
         </div>
       </div>
       {!result && (
-        <button onClick={spin} disabled={spinning}
-          className="rounded-full bg-yellow-400 px-8 py-3 font-bold text-neutral-900 disabled:opacity-50">
+        <Button onClick={spin} disabled={spinning} size="lg" className="h-auto rounded-full px-8 py-3 text-base">
           {spinning ? 'La roue tourne…' : 'Tourner la roue !'}
-        </button>
+        </Button>
       )}
-      {error && <p className="text-red-400">{error}</p>}
+      {error && <p className="text-destructive">{error}</p>}
       {result && (
-        <div className="rounded-2xl bg-white/10 p-6 text-center">
-          <p className="text-lg">Vous avez gagné :</p>
-          <p className="my-2 text-2xl font-bold text-yellow-400">{result.label}</p>
-          <p className="opacity-80">Votre code : <span className="font-mono font-bold">{result.code}</span></p>
-          <p className="mt-2 text-sm opacity-60">Présentez ce code au restaurant. Envoyé aussi sur votre WhatsApp.</p>
-        </div>
+        <Card className="w-full max-w-sm">
+          <CardContent className="text-center">
+            <p className="text-lg text-foreground">Vous avez gagné :</p>
+            <p className="my-2 font-display text-2xl text-primary">{result.label}</p>
+            <p className="text-muted-foreground">Votre code : <span className="font-mono font-bold text-foreground">{result.code}</span></p>
+            <p className="mt-2 text-sm text-muted-foreground">Présentez ce code au restaurant. Envoyé aussi sur votre WhatsApp.</p>
+          </CardContent>
+        </Card>
       )}
     </div>
   )
