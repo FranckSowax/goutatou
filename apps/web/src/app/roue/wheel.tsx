@@ -43,8 +43,8 @@ export function Wheel({ token, labels }: { token: string; labels: string[] }) {
         <Card className="w-full max-w-sm">
           <CardContent className="text-center">
             <p className="text-lg text-foreground">Vous avez gagné :</p>
-            <p className="my-2 font-display text-2xl text-primary">{result.label}</p>
-            <p className="text-muted-foreground">Votre code : <span className="font-mono font-bold text-foreground">{result.code}</span></p>
+            <p className="my-2 font-display text-lg text-foreground">{result.label}</p>
+            <p className="text-muted-foreground">Votre code : <span className="font-mono text-2xl font-bold tracking-widest text-primary">{result.code}</span></p>
             <p className="mt-2 text-sm text-muted-foreground">Présentez ce code au restaurant. Envoyé aussi sur votre WhatsApp.</p>
           </CardContent>
         </Card>
