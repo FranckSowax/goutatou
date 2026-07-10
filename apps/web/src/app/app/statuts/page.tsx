@@ -1,5 +1,6 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { isPro } from '@/lib/premium'
+import { Card } from '@/components/ui/card'
 import { Board } from './board'
 
 export const dynamic = 'force-dynamic'
@@ -11,8 +12,13 @@ export default async function StatutsPage() {
   if (!pro) {
     return (
       <div className="mx-auto max-w-xl p-8 text-center">
-        <h1 className="text-2xl font-bold">Statuts WhatsApp</h1>
-        <p className="mt-4 opacity-70">Fonctionnalité de l’offre <strong>Pro</strong>. Contactez Goutatou pour l’activer.</p>
+        <h1 className="mb-6 font-display text-2xl font-semibold">Statuts WhatsApp</h1>
+        <Card className="border-primary/30 bg-accent p-6 text-center">
+          <p className="font-display text-xl font-semibold text-accent-foreground">Fonctionnalité Pro</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Fonctionnalité de l’offre <strong>Pro</strong>. Contactez Goutatou pour l’activer.
+          </p>
+        </Card>
       </div>
     )
   }

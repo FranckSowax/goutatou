@@ -4,6 +4,10 @@ import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { statusStateLabel } from '@goutatou/db/types'
 import type { StatusState, StatusKind } from '@goutatou/db/types'
+import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { badgeVariantForStatus } from '@/lib/status-badge'
 import { cancelStatus } from './actions'
 import { StatusForm } from './form'
 
@@ -27,34 +31,36 @@ export function Board({ initial }: { initial: Row[] }) {
   }, [router])
   return (
     <div className="mx-auto max-w-3xl p-6">
-      <h1 className="mb-6 text-2xl font-bold">Statuts WhatsApp</h1>
-      <div className="mb-8 rounded-lg bg-white p-4 shadow-xs">
-        <h2 className="mb-3 text-lg font-semibold">Nouveau statut</h2>
+      <h1 className="mb-6 font-display text-2xl font-semibold">Statuts WhatsApp</h1>
+      <Card className="mb-8 p-6">
+        <h2 className="mb-4 font-display text-lg font-semibold">Nouveau statut</h2>
         <StatusForm />
-      </div>
+      </Card>
       <ul className="flex flex-col gap-3">
         {initial.map((s) => (
-          <li key={s.id} className="rounded-lg bg-white p-4 shadow-xs">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold">{s.kind === 'image' ? 'Image' : 'Texte'}</span>
-              <span className="text-sm opacity-60">{statusStateLabel(s.state)}</span>
-            </div>
-            <p className="mt-1 whitespace-pre-wrap text-sm">{s.content}</p>
-            {s.media_url && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={s.media_url} alt="" className="mt-2 max-h-40 rounded-sm" />
-            )}
-            {s.scheduled_at && (
-              <p className="mt-1 text-sm opacity-60">Programmé : {new Date(s.scheduled_at).toLocaleString('fr-FR')}</p>
-            )}
-            {(s.state === 'scheduled' || s.state === 'posting') && (
-              <form action={cancelStatus.bind(null, s.id)} className="mt-2">
-                <button className="rounded-sm border border-red-300 px-3 py-1 text-sm text-red-600">Annuler</button>
-              </form>
-            )}
+          <li key={s.id}>
+            <Card className="p-4">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-display font-semibold">{s.kind === 'image' ? 'Image' : 'Texte'}</span>
+                <Badge variant={badgeVariantForStatus(s.state)}>{statusStateLabel(s.state)}</Badge>
+              </div>
+              <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-muted-foreground">{s.content}</p>
+              {s.media_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={s.media_url} alt="" className="mt-2 max-h-40 rounded-lg object-cover" />
+              )}
+              {s.scheduled_at && (
+                <p className="mt-2 text-sm text-muted-foreground">Programmé : {new Date(s.scheduled_at).toLocaleString('fr-FR')}</p>
+              )}
+              {(s.state === 'scheduled' || s.state === 'posting') && (
+                <form action={cancelStatus.bind(null, s.id)} className="mt-2">
+                  <Button type="submit" variant="outline" size="sm">Annuler</Button>
+                </form>
+              )}
+            </Card>
           </li>
         ))}
-        {initial.length === 0 && <p className="opacity-60">Aucun statut pour l’instant.</p>}
+        {initial.length === 0 && <p className="text-muted-foreground">Aucun statut pour l’instant.</p>}
       </ul>
     </div>
   )

@@ -1,5 +1,10 @@
 'use client'
 import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { StatusKind } from '@goutatou/db/types'
 import { createStatus, uploadStatusMedia } from './actions'
 
@@ -26,41 +31,46 @@ export function StatusForm() {
 
   return (
     <form action={createStatus} className="flex flex-col gap-4">
-      <div className="flex gap-4 text-sm">
-        <label className="flex items-center gap-1">
-          <input type="radio" name="kind" value="text" checked={kind === 'text'} onChange={() => setKind('text')} /> Texte
-        </label>
-        <label className="flex items-center gap-1">
-          <input type="radio" name="kind" value="image" checked={kind === 'image'} onChange={() => setKind('image')} /> Image
-        </label>
+      <Tabs value={kind} onValueChange={(v) => setKind(v as StatusKind)}>
+        <TabsList>
+          <TabsTrigger value="text">Texte</TabsTrigger>
+          <TabsTrigger value="image">Image</TabsTrigger>
+        </TabsList>
+      </Tabs>
+      <input type="hidden" name="kind" value={kind} />
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="status-content">Contenu</Label>
+        <Textarea id="status-content" name="content" required rows={4} placeholder="Votre statut…" />
       </div>
-      <textarea name="content" required rows={4} placeholder="Votre statut…" className="rounded-sm border p-2" />
       <input type="hidden" name="media_url" value={mediaUrl} />
       {kind === 'image' && (
-        <>
-          <label className="text-sm">Image
-            <input type="file" accept="image/*" onChange={onUpload} className="mt-1 block text-sm" />
-          </label>
-          {uploading && <p className="text-sm opacity-60">Upload…</p>}
-          {mediaUrl && <p className="text-sm text-green-700">Image jointe ✓</p>}
-        </>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="status-media">Image</Label>
+          <Input id="status-media" type="file" accept="image/*" onChange={onUpload} />
+          {uploading && <p className="text-sm text-muted-foreground">Upload…</p>}
+          {mediaUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={mediaUrl} alt="" className="mt-1 max-h-40 rounded-lg object-cover" />
+          )}
+        </div>
       )}
-      <label className="text-sm">Programmer (optionnel)
-        <input
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="status-scheduled-at">Programmer (optionnel)</Label>
+        <Input
+          id="status-scheduled-at"
           type="datetime-local"
           name="scheduled_at"
           value={scheduledAt}
           onChange={(e) => { setScheduledAt(e.target.value); if (e.target.value.trim()) setScheduleError(false) }}
-          className="mt-1 block rounded-sm border p-2"
         />
-      </label>
+      </div>
       {scheduleError && (
-        <p className="text-sm text-red-600">Choisissez une date et une heure.</p>
+        <p className="text-sm text-destructive">Choisissez une date et une heure.</p>
       )}
       <div className="flex flex-wrap gap-2">
-        <button name="action" value="now" className="rounded-sm bg-neutral-900 px-4 py-2 text-white">Publier maintenant</button>
-        <button name="action" value="schedule" onClick={onScheduleClick} className="rounded-sm border px-4 py-2">Programmer</button>
-        <button name="action" value="draft" className="rounded-sm border px-4 py-2">Brouillon</button>
+        <Button type="submit" name="action" value="now">Publier maintenant</Button>
+        <Button type="submit" name="action" value="schedule" variant="outline" onClick={onScheduleClick}>Programmer</Button>
+        <Button type="submit" name="action" value="draft" variant="ghost">Brouillon</Button>
       </div>
     </form>
   )
