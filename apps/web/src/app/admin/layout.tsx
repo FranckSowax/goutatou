@@ -1,6 +1,12 @@
 import { redirect } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { AppShell } from '@/components/app-shell'
+import type { NavItem } from '@/components/nav-links'
+
+const NAV = [
+  { href: '/admin', label: 'Restaurants', icon: 'Store' },
+] satisfies NavItem[]
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const supabase = await createSupabaseServer()
@@ -9,9 +15,8 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   const { data: admin } = await supabase.from('platform_admins').select('user_id').eq('user_id', user.id).maybeSingle()
   if (!admin) redirect('/app/commandes')
   return (
-    <div className="min-h-screen">
-      <nav className="border-b bg-neutral-900 px-6 py-3 text-white">Goutatou — Admin plateforme</nav>
-      <main className="p-6">{children}</main>
-    </div>
+    <AppShell items={NAV} title="Goutatou — Admin">
+      {children}
+    </AppShell>
   )
 }

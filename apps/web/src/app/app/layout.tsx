@@ -1,7 +1,16 @@
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { AppShell } from '@/components/app-shell'
+import type { NavItem } from '@/components/nav-links'
+
+const NAV = [
+  { href: '/app/commandes', label: 'Commandes', icon: 'ClipboardList' },
+  { href: '/app/menu', label: 'Menu', icon: 'UtensilsCrossed' },
+  { href: '/app/campagnes', label: 'Campagnes', icon: 'Megaphone' },
+  { href: '/app/fidelite', label: 'Fidélité', icon: 'Gift' },
+  { href: '/app/statuts', label: 'Statuts', icon: 'Camera' },
+] satisfies NavItem[]
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   // Garde serveur (défense en profondeur, en plus du middleware) : un utilisateur
@@ -11,16 +20,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   if (!user) redirect('/login')
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <nav className="flex items-center gap-6 border-b bg-white px-6 py-3">
-        <span className="font-bold">Goutatou</span>
-        <Link href="/app/commandes" className="text-sm hover:underline">Commandes</Link>
-        <Link href="/app/menu" className="text-sm hover:underline">Menu</Link>
-        <Link href="/app/campagnes" className="text-sm hover:underline">Campagnes</Link>
-        <Link href="/app/statuts" className="text-sm hover:underline">Statuts</Link>
-        <Link href="/app/fidelite" className="text-sm hover:underline">Fidélité</Link>
-      </nav>
-      <main className="flex-1 p-6">{children}</main>
-    </div>
+    <AppShell items={NAV} title="Goutatou">
+      {children}
+    </AppShell>
   )
 }
