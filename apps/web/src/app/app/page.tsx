@@ -133,23 +133,30 @@ export default async function HomePage() {
         {/* Colonne principale */}
         <div className="flex flex-col gap-4">
           {/* Hero */}
-          <div className="rounded-3xl bg-gradient-to-br from-primary to-primary/70 p-8 text-primary-foreground">
-            <p className="text-sm font-medium text-primary-foreground/80">Bonjour, {restaurantName}</p>
-            <div className="mt-3 flex flex-wrap items-end gap-x-10 gap-y-3">
-              <div>
-                <p className="font-display text-4xl font-semibold">{formatFcfa(kpis.caJour)}</p>
-                <p className="text-sm text-primary-foreground/80">de chiffre d&apos;affaires aujourd&apos;hui</p>
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-primary to-primary/80 p-8 text-primary-foreground shadow-lg">
+            <span aria-hidden="true" className="pointer-events-none absolute -right-16 -top-24 size-72 rounded-full bg-primary-foreground/10" />
+            <span aria-hidden="true" className="pointer-events-none absolute -bottom-28 right-24 size-56 rounded-full bg-primary-foreground/5" />
+            <div className="relative">
+              <p className="text-sm font-medium text-primary-foreground/85">Bonjour, {restaurantName} 👋</p>
+              <div className="mt-3 flex flex-wrap items-end gap-x-10 gap-y-3">
+                <div>
+                  <p className="font-display text-4xl font-bold tracking-tight">{formatFcfa(kpis.caJour)}</p>
+                  <p className="mt-1 text-sm text-primary-foreground/85">de chiffre d&apos;affaires aujourd&apos;hui</p>
+                </div>
+                <div>
+                  <p className="font-display text-4xl font-bold tracking-tight">{kpis.enCours}</p>
+                  <p className="mt-1 text-sm text-primary-foreground/85">
+                    commande{kpis.enCours > 1 ? 's' : ''} active{kpis.enCours > 1 ? 's' : ''}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="font-display text-4xl font-semibold">{kpis.enCours}</p>
-                <p className="text-sm text-primary-foreground/80">
-                  commande{kpis.enCours > 1 ? 's' : ''} active{kpis.enCours > 1 ? 's' : ''}
-                </p>
-              </div>
+              <Button
+                className="mt-6 bg-primary-foreground font-semibold text-primary shadow-md hover:bg-primary-foreground/90"
+                asChild
+              >
+                <Link href="/app/commandes">Voir les commandes</Link>
+              </Button>
             </div>
-            <Button variant="secondary" className="mt-6" asChild>
-              <Link href="/app/commandes">Voir les commandes</Link>
-            </Button>
           </div>
 
           {/* KPIs pastel */}
@@ -161,7 +168,7 @@ export default async function HomePage() {
           </div>
 
           {/* Dernières commandes */}
-          <section className="flex flex-col gap-1 rounded-xl border border-border bg-card p-4">
+          <section className="flex flex-col gap-1 rounded-2xl border border-border bg-card p-4 shadow-xs">
             <div className="mb-2 flex items-center justify-between">
               <h2 className="font-display text-lg font-semibold">Dernières commandes</h2>
               <Link href="/app/commandes" className="flex items-center gap-1 text-sm font-medium text-primary hover:underline">
@@ -190,7 +197,7 @@ export default async function HomePage() {
 
         {/* Rail droit */}
         <div className="flex flex-col gap-4">
-          <Card className="p-4">
+          <Card className="rounded-2xl p-4 shadow-xs">
             <h2 className="mb-3 font-display text-lg font-semibold">À faire</h2>
             {todos.length === 0 ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -236,7 +243,7 @@ export default async function HomePage() {
             )}
           </Card>
 
-          <Card className="p-4">
+          <Card className="rounded-2xl p-4 shadow-xs">
             <p className="flex items-center gap-1.5 font-display text-sm font-semibold">
               <Lightbulb className="size-4 text-warning" /> Astuce
             </p>

@@ -17,8 +17,10 @@ export function NavLinks({ items, orientation }: { items: NavItem[]; orientation
         return (
           <Link key={item.href} href={item.href}
             className={cn(
-              'flex items-center gap-2.5 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-              active ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              'flex items-center gap-2.5 whitespace-nowrap rounded-xl px-3.5 py-2.5 text-sm font-semibold transition-all',
+              active
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground',
             )}>
             <Icon className="size-4 shrink-0" />
             {item.label}

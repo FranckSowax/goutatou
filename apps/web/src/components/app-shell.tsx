@@ -25,13 +25,15 @@ export function AppShell({ items, title, footer, userEmail, children }: {
     <div className="min-h-screen bg-background md:h-screen md:p-3 lg:p-4">
       <div className="flex min-h-screen flex-col md:h-full md:min-h-0 md:flex-row md:overflow-hidden md:rounded-3xl md:border md:border-border md:bg-card md:shadow-sm">
         {/* Sidebar desktop */}
-        <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-card md:flex">
-          <div className="flex items-center gap-2.5 px-5 py-5">
-            <span className="size-8 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-            <span className="font-display text-xl font-semibold text-primary">{title}</span>
+        <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-card md:flex">
+          <div className="flex items-center gap-2.5 px-5 pb-4 pt-6">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary shadow-sm" aria-hidden="true">
+              <span className="font-display text-base font-bold text-primary-foreground">G</span>
+            </span>
+            <span className="font-display text-xl font-bold tracking-tight">{title}</span>
           </div>
-          <div className="flex-1 px-3"><NavLinks items={items} orientation="vertical" /></div>
-          {footer ? <div className="border-t border-border px-5 py-4 text-xs text-muted-foreground">{footer}</div> : null}
+          <div className="flex-1 px-3 pt-2"><NavLinks items={items} orientation="vertical" /></div>
+          {footer ? <div className="mx-3 mb-4 rounded-xl bg-muted/60 px-4 py-3 text-xs text-muted-foreground">{footer}</div> : null}
         </aside>
 
         {/* Topbar mobile */}
@@ -42,8 +44,10 @@ export function AppShell({ items, title, footer, userEmail, children }: {
 
         {/* Zone droite */}
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-16 items-center gap-3 border-b border-border px-4 md:gap-4 md:px-6">
-            <div className="hidden flex-1 md:block"><HeaderSearch /></div>
+          <header className="flex h-16 shrink-0 flex-nowrap items-center justify-between gap-3 border-b border-border bg-card px-4 md:px-6">
+            <div className="hidden min-w-0 flex-1 justify-center md:flex">
+              <HeaderSearch />
+            </div>
             <Link
               href="/app/commandes"
               aria-label="Rechercher une commande"
@@ -51,11 +55,11 @@ export function AppShell({ items, title, footer, userEmail, children }: {
             >
               <Search className="size-4" />
             </Link>
-            <div className="ml-auto flex items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1.5">
               <ThemeToggle />
               <NotificationsBell />
               <span
-                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-xs font-semibold text-secondary-foreground"
+                className="ml-1 flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground shadow-sm"
                 aria-hidden="true"
               >
                 {initials}

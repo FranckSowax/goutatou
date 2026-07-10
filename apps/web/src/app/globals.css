@@ -67,7 +67,7 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
   --font-sans: var(--font-jakarta), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-display: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
   /* Requis par les composants shadcn (CardTitle, DialogTitle) : alias vers la police display */
   --font-heading: var(--font-display);
 }

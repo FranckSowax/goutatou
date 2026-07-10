@@ -10,7 +10,7 @@ export function HeaderSearch() {
       router.push(q ? `/app/commandes?q=${encodeURIComponent(q)}` : '/app/commandes')
     }}>
       <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-      <input name="q" placeholder="Rechercher une commande…" className="h-10 w-full rounded-full border border-border bg-background pl-9 pr-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+      <input name="q" placeholder="Rechercher une commande…" className="h-10 w-full rounded-full border border-transparent bg-muted pl-9 pr-4 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 focus-visible:border-ring focus-visible:bg-card focus-visible:ring-2 focus-visible:ring-ring/30" />
     </form>
   )
 }
