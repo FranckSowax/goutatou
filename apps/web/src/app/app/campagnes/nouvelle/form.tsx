@@ -1,5 +1,10 @@
 'use client'
 import { useState } from 'react'
+import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { createCampaign, uploadCampaignMedia } from '../actions'
 
 export function CampaignForm({ recipientCount }: { recipientCount: number }) {
@@ -20,34 +25,44 @@ export function CampaignForm({ recipientCount }: { recipientCount: number }) {
     }
   }
   return (
-    <form action={createCampaign} className="flex flex-col gap-4">
-      <input name="name" required placeholder="Nom de la campagne (interne)" className="rounded-sm border p-2" />
-      <textarea name="body" required rows={5} placeholder="Votre message…" className="rounded-sm border p-2" />
-      <input type="hidden" name="media_url" value={mediaUrl} />
-      <label className="text-sm">Image (optionnel)
-        <input type="file" accept="image/*" onChange={onUpload} className="mt-1 block text-sm" />
-      </label>
-      {uploading && <p className="text-sm opacity-60">Upload…</p>}
-      {mediaUrl && <p className="text-sm text-green-700">Image jointe ✓</p>}
-      <p className="text-sm opacity-70">Destinataires (clients opt-in) : <strong>{recipientCount}</strong></p>
-      <label className="text-sm">Programmer (optionnel)
-        <input
-          type="datetime-local"
-          name="scheduled_at"
-          value={scheduledAt}
-          onChange={(e) => { setScheduledAt(e.target.value); if (e.target.value.trim()) setScheduleError(false) }}
-          className="mt-1 block rounded-sm border p-2"
-        />
-      </label>
-      {scheduleError && (
-        <p className="text-sm text-red-600">Choisissez une date et une heure d’envoi pour programmer la campagne.</p>
-      )}
-      <div className="flex flex-wrap gap-2">
-        <button name="action" value="now" className="rounded-sm bg-neutral-900 px-4 py-2 text-white">Envoyer maintenant</button>
-        <button name="action" value="schedule" onClick={onScheduleClick} className="rounded-sm border px-4 py-2">Programmer</button>
-        <button name="action" value="draft" className="rounded-sm border px-4 py-2">Brouillon</button>
-      </div>
-      <p className="text-xs opacity-50">Les messages partent progressivement (anti-blocage WhatsApp). Les clients désabonnés (STOP) sont automatiquement exclus.</p>
-    </form>
+    <Card className="p-6">
+      <form action={createCampaign} className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="campaign-name">Nom de la campagne (interne)</Label>
+          <Input id="campaign-name" name="name" required placeholder="Nom de la campagne (interne)" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="campaign-body">Message</Label>
+          <Textarea id="campaign-body" name="body" required rows={5} placeholder="Votre message…" />
+        </div>
+        <input type="hidden" name="media_url" value={mediaUrl} />
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="campaign-media">Image (optionnel)</Label>
+          <Input id="campaign-media" type="file" accept="image/*" onChange={onUpload} />
+        </div>
+        {uploading && <p className="text-sm text-muted-foreground">Upload…</p>}
+        {mediaUrl && <p className="text-sm text-success">Image jointe ✓</p>}
+        <p className="text-sm text-muted-foreground">Destinataires (clients opt-in) : <strong>{recipientCount}</strong></p>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="campaign-scheduled-at">Programmer (optionnel)</Label>
+          <Input
+            id="campaign-scheduled-at"
+            type="datetime-local"
+            name="scheduled_at"
+            value={scheduledAt}
+            onChange={(e) => { setScheduledAt(e.target.value); if (e.target.value.trim()) setScheduleError(false) }}
+          />
+        </div>
+        {scheduleError && (
+          <p className="text-sm text-destructive">Choisissez une date et une heure d’envoi pour programmer la campagne.</p>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" name="action" value="now">Envoyer maintenant</Button>
+          <Button type="submit" name="action" value="schedule" variant="outline" onClick={onScheduleClick}>Programmer</Button>
+          <Button type="submit" name="action" value="draft" variant="ghost">Brouillon</Button>
+        </div>
+        <p className="text-xs text-muted-foreground">Les messages partent progressivement (anti-blocage WhatsApp). Les clients désabonnés (STOP) sont automatiquement exclus.</p>
+      </form>
+    </Card>
   )
 }

@@ -1,6 +1,6 @@
-import Link from 'next/link'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { isPremium } from '@/lib/premium'
+import { Card } from '@/components/ui/card'
 import { Board } from './board'
 
 export const dynamic = 'force-dynamic'
@@ -12,8 +12,13 @@ export default async function CampagnesPage() {
   if (!premium) {
     return (
       <div className="mx-auto max-w-xl p-8 text-center">
-        <h1 className="text-2xl font-bold">Campagnes WhatsApp</h1>
-        <p className="mt-4 opacity-70">Cette fonctionnalité est réservée au plan <strong>Premium</strong>. Contactez Goutatou pour l’activer.</p>
+        <h1 className="mb-6 font-display text-2xl font-semibold">Campagnes WhatsApp</h1>
+        <Card className="border-primary/30 bg-accent p-6 text-center">
+          <p className="font-display text-xl font-semibold text-accent-foreground">Fonctionnalité Premium</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Cette fonctionnalité est réservée au plan <strong>Premium</strong>. Contactez Goutatou pour l’activer.
+          </p>
+        </Card>
       </div>
     )
   }
