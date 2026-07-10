@@ -5,6 +5,7 @@ export interface OrderCard {
   order_number: number
   status: OrderStatus
   mode: string
+  source?: string
   total: number
   created_at: string
   customer_name: string | null
@@ -27,6 +28,13 @@ export const ADVANCE_LABELS: Partial<Record<OrderStatus, string>> = {
   recue: 'Passer en préparation',
   en_preparation: 'Marquer prête',
   prete: 'Marquer récupérée',
+}
+
+/** Version courte pour le bouton en ligne (façon « Print » RushHour). */
+export const ROW_ACTION_LABELS: Partial<Record<OrderStatus, string>> = {
+  recue: 'Préparer',
+  en_preparation: 'Prête',
+  prete: 'Récupérée',
 }
 
 export const KANBAN_COLUMNS: { status: OrderStatus; title: string }[] = [

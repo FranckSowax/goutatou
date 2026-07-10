@@ -1,20 +1,20 @@
 'use client'
-import { useEffect, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
+import { Globe, MessageCircle, Search } from 'lucide-react'
 import { formatFcfa } from '@goutatou/db/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table'
+import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { badgeVariantForOrder } from '@/lib/status-badge'
 import {
-  ADVANCE_LABELS, groupByStatus, nextStatus, ORDER_STATUS_LABELS, type OrderCard,
+  ADVANCE_LABELS, groupByStatus, nextStatus, ORDER_STATUS_LABELS, ROW_ACTION_LABELS,
+  type OrderCard,
 } from '@/lib/orders'
 import { cancelOrder, updateOrderStatus } from './actions'
 
@@ -41,16 +41,22 @@ function jour(iso: string): string {
   })
 }
 
-function modeLabel(o: OrderCard): string {
-  if (o.mode === 'drive') return `🚗 Drive${o.drive_slot_label ? ` · ${o.drive_slot_label}` : ''}`
-  if (o.mode === 'livraison') return '🛵 Livraison'
-  return '🍽️ Sur place'
+function isToday(iso: string): boolean {
+  const d = new Date(iso), n = new Date()
+  return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate()
+}
+
+function modeLabel(o: OrderCard): { label: string; detail: string | null } {
+  if (o.mode === 'drive') return { label: '🚗 Drive', detail: o.drive_slot_label }
+  if (o.mode === 'livraison') return { label: '🛵 Livraison', detail: o.delivery_address }
+  return { label: '🍽️ Sur place', detail: null }
 }
 
 export function Board({ initialOrders }: { initialOrders: OrderCard[] }) {
   const router = useRouter()
   const [orders] = useState(initialOrders)
   const [filter, setFilter] = useState<Filter>('all')
+  const [q, setQ] = useState('')
   const [selected, setSelected] = useState<OrderCard | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -67,7 +73,19 @@ export function Board({ initialOrders }: { initialOrders: OrderCard[] }) {
   }, [router])
 
   const grouped = groupByStatus(orders)
-  const visible = filter === 'all' ? orders : grouped[filter]
+  const visible = useMemo(() => {
+    const byStatus = filter === 'all' ? orders : grouped[filter]
+    const needle = q.trim().toLowerCase()
+    if (!needle) return byStatus
+    return byStatus.filter((o) =>
+      String(o.order_number).includes(needle) ||
+      (o.customer_name ?? '').toLowerCase().includes(needle) ||
+      o.customer_phone.includes(needle),
+    )
+  }, [orders, grouped, filter, q])
+
+  const today = orders.filter((o) => isToday(o.created_at) && o.status !== 'annulee')
+  const todayTotal = today.reduce((s, o) => s + o.total, 0)
   const next = selected ? nextStatus(selected.status) : null
 
   function advance(o: OrderCard) {
@@ -88,7 +106,25 @@ export function Board({ initialOrders }: { initialOrders: OrderCard[] }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Rail de service : le pipeline du jour en un coup d'œil */}
+      {/* Bandeau du jour : chiffre d'affaires + recherche */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          Aujourd&apos;hui :{' '}
+          <span className="font-bold text-primary">{formatFcfa(todayTotal)}</span>
+          {' '}· {today.length} commande{today.length > 1 ? 's' : ''}
+        </p>
+        <div className="relative w-full sm:w-72">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="N°, client, téléphone…"
+            className="pl-9"
+          />
+        </div>
+      </div>
+
+      {/* Rail de service : le pipeline en un coup d'œil */}
       <div className="flex flex-wrap gap-2">
         {PILLS.map((p) => {
           const count = p.key === 'all' ? orders.length : grouped[p.key].length
@@ -117,54 +153,74 @@ export function Board({ initialOrders }: { initialOrders: OrderCard[] }) {
         })}
       </div>
 
-      <div className="rounded-xl border border-border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="w-16 pl-4 text-xs uppercase tracking-wider text-muted-foreground">N°</TableHead>
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Client</TableHead>
-              <TableHead className="hidden text-xs uppercase tracking-wider text-muted-foreground md:table-cell">Articles</TableHead>
-              <TableHead className="text-xs uppercase tracking-wider text-muted-foreground">Mode</TableHead>
-              <TableHead className="hidden text-xs uppercase tracking-wider text-muted-foreground sm:table-cell">Heure</TableHead>
-              <TableHead className="text-right text-xs uppercase tracking-wider text-muted-foreground">Total</TableHead>
-              <TableHead className="pr-4 text-right text-xs uppercase tracking-wider text-muted-foreground">Statut</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {visible.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
-                  Aucune commande ici pour l&apos;instant.
-                </TableCell>
-              </TableRow>
-            )}
-            {visible.map((o) => (
-              <TableRow
-                key={o.id}
-                tabIndex={0}
-                onClick={() => setSelected(o)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(o) } }}
-                className="cursor-pointer focus-visible:outline-2 focus-visible:outline-primary"
-              >
-                <TableCell className="pl-4 font-display text-base font-semibold">{o.order_number}</TableCell>
-                <TableCell>
-                  <span className="font-medium">{o.customer_name ?? o.customer_phone}</span>
-                </TableCell>
-                <TableCell className="hidden text-muted-foreground md:table-cell">
-                  {o.items.reduce((n, it) => n + it.qty, 0)} art.
-                </TableCell>
-                <TableCell className="whitespace-nowrap text-muted-foreground">{modeLabel(o)}</TableCell>
-                <TableCell className="hidden whitespace-nowrap text-muted-foreground sm:table-cell">
-                  {jour(o.created_at)} · {heure(o.created_at)}
-                </TableCell>
-                <TableCell className="text-right font-bold text-primary">{formatFcfa(o.total)}</TableCell>
-                <TableCell className="pr-4 text-right">
-                  <Badge variant={badgeVariantForOrder(o.status)}>{ORDER_STATUS_LABELS[o.status]}</Badge>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+      {/* Bandes commande pleine largeur */}
+      <div className="divide-y divide-border rounded-xl border border-border bg-card">
+        {visible.length === 0 && (
+          <p className="py-12 text-center text-muted-foreground">Aucune commande ici pour l&apos;instant.</p>
+        )}
+        {visible.map((o) => {
+          const m = modeLabel(o)
+          const rowAction = ROW_ACTION_LABELS[o.status]
+          return (
+            <div
+              key={o.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => setSelected(o)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(o) } }}
+              className="grid cursor-pointer grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-1 px-4 py-4 transition-colors hover:bg-accent/40 focus-visible:outline-2 focus-visible:outline-primary md:grid-cols-[7rem_7rem_1fr_1fr_7rem_8rem_auto] md:px-6"
+            >
+              {/* N° + heure */}
+              <div>
+                <p className="font-display text-xl font-semibold leading-tight">n°{o.order_number}</p>
+                <p className="text-xs tabular-nums text-muted-foreground">{jour(o.created_at)} · {heure(o.created_at)}</p>
+              </div>
+
+              {/* Source */}
+              <div className="hidden items-center gap-1.5 text-sm text-muted-foreground md:flex">
+                {o.source === 'web'
+                  ? <><Globe className="size-4 shrink-0" /> Web</>
+                  : <><MessageCircle className="size-4 shrink-0 text-success" /> WhatsApp</>}
+              </div>
+
+              {/* Client */}
+              <div className="min-w-0">
+                <p className="truncate font-medium">{o.customer_name ?? 'Client'}</p>
+                <p className="truncate font-mono text-xs text-muted-foreground">{o.customer_phone}</p>
+              </div>
+
+              {/* Mode */}
+              <div className="hidden min-w-0 md:block">
+                <p className="text-sm">{m.label}</p>
+                {m.detail && <p className="truncate text-xs text-muted-foreground">{m.detail}</p>}
+              </div>
+
+              {/* Total */}
+              <p className="text-right text-base font-bold text-primary">{formatFcfa(o.total)}</p>
+
+              {/* Statut */}
+              <div className="hidden justify-end md:flex">
+                <Badge variant={badgeVariantForOrder(o.status)}>{ORDER_STATUS_LABELS[o.status]}</Badge>
+              </div>
+
+              {/* Action rapide */}
+              <div className="col-span-3 flex justify-end gap-2 md:col-span-1">
+                <Badge className="md:hidden" variant={badgeVariantForOrder(o.status)}>
+                  {ORDER_STATUS_LABELS[o.status]}
+                </Badge>
+                {rowAction && (
+                  <Button
+                    size="sm"
+                    disabled={pending}
+                    onClick={(e) => { e.stopPropagation(); advance(o) }}
+                  >
+                    {rowAction}
+                  </Button>
+                )}
+              </div>
+            </div>
+          )
+        })}
       </div>
 
       {/* Détail commande */}
@@ -180,8 +236,9 @@ export function Board({ initialOrders }: { initialOrders: OrderCard[] }) {
                   </Badge>
                 </DialogTitle>
                 <DialogDescription>
-                  {jour(selected.created_at)} à {heure(selected.created_at)} · {modeLabel(selected)}
-                  {selected.mode === 'livraison' && selected.delivery_address ? ` · ${selected.delivery_address}` : ''}
+                  {jour(selected.created_at)} à {heure(selected.created_at)} · {modeLabel(selected).label}
+                  {modeLabel(selected).detail ? ` · ${modeLabel(selected).detail}` : ''}
+                  {' '}· {selected.source === 'web' ? 'commande web' : 'commande WhatsApp'}
                 </DialogDescription>
               </DialogHeader>
 
