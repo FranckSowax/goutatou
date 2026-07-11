@@ -7,13 +7,17 @@ import {
   type SupplementLine,
   formatFcfa,
 } from '@goutatou/db'
-import { copy } from './copy.js'
+import { copy, type BotProfile } from './copy.js'
 
 export interface BotContext {
   restaurantName: string
   menu: MenuForBot
   driveEnabled: boolean
   driveSlots: { id: string; label: string }[]
+  /** Fiche pratique restaurant (champs vides omis). Absente = fiche non renseignée. */
+  profile?: BotProfile
+  /** Message d'accueil personnalisé du restaurant. Absent/vide = accueil générique. */
+  botWelcome?: string
 }
 
 export interface TransitionResult {
@@ -93,7 +97,7 @@ export function transition(state: BotState, cart: Cart, input: string, ctx: BotC
 
   // État HUMAIN : silence total sauf "bot"
   if (state === 'HUMAIN') {
-    if (text === 'bot') return result('ACCUEIL', cart, [copy.welcome(ctx.restaurantName)])
+    if (text === 'bot') return result('ACCUEIL', cart, [copy.welcome(ctx.restaurantName, ctx.botWelcome)])
     return result('HUMAIN', cart, [])
   }
 
@@ -101,6 +105,7 @@ export function transition(state: BotState, cart: Cart, input: string, ctx: BotC
   if (text === 'menu') return result('MENU', cart, [renderMenu(ctx)])
   if (text === 'annuler') return result('ACCUEIL', EMPTY_CART, [copy.canceled])
   if (text === 'humain') return result('HUMAIN', cart, [copy.human])
+  if (text === 'infos') return result(state, cart, [copy.infos(ctx.profile)])
   if (text === 'panier') {
     return result(state === 'ACCUEIL' ? 'MENU' : state, cart,
       [cart.items.length ? copy.cartRecap(cart) : copy.emptyCart])
@@ -108,7 +113,7 @@ export function transition(state: BotState, cart: Cart, input: string, ctx: BotC
 
   switch (state) {
     case 'ACCUEIL':
-      return result('ACCUEIL', cart, [copy.welcome(ctx.restaurantName)])
+      return result('ACCUEIL', cart, [copy.welcome(ctx.restaurantName, ctx.botWelcome)])
 
     case 'MENU': {
       if (text === 'valider') {

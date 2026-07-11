@@ -7,7 +7,7 @@ import { createRepo } from '../src/repo.js'
  * Stub minimal du client Supabase pour tester createRepo().getBotContext()
  * en isolation : reproduit la chaîne `.from('menu_categories').select().eq().order()`.
  */
-function makeMenuSupabaseStub(catsData: unknown) {
+function makeMenuSupabaseStub(catsData: unknown, restoData: unknown = null) {
   const order = vi.fn().mockResolvedValue({ data: catsData })
   const eq = vi.fn().mockReturnValue({ order })
   const select = vi.fn().mockReturnValue({ eq })
@@ -15,9 +15,13 @@ function makeMenuSupabaseStub(catsData: unknown) {
   const slotsEq2 = vi.fn().mockReturnValue({ order: slotsOrder })
   const slotsEq1 = vi.fn().mockReturnValue({ eq: slotsEq2 })
   const slotsSelect = vi.fn().mockReturnValue({ eq: slotsEq1 })
+  const restoMaybeSingle = vi.fn().mockResolvedValue({ data: restoData })
+  const restoEq = vi.fn().mockReturnValue({ maybeSingle: restoMaybeSingle })
+  const restoSelect = vi.fn().mockReturnValue({ eq: restoEq })
   const from = vi.fn((table: string) => {
     if (table === 'menu_categories') return { select }
     if (table === 'drive_slots') return { select: slotsSelect }
+    if (table === 'restaurants') return { select: restoSelect }
     throw new Error(`table inattendue : ${table}`)
   })
   return { db: { from } as unknown as SupabaseClient, select }

@@ -1,6 +1,28 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { decryptToken, EMPTY_CART, type BotState, type Cart } from '@goutatou/db'
 import type { BotContext } from './bot/machine.js'
+import type { BotProfile } from './bot/copy.js'
+
+interface RestaurantProfileRow {
+  address: string | null
+  contact_phone: string | null
+  hours_text: string | null
+  delivery_info: string | null
+  bot_welcome: string | null
+  bot_info_extra: string | null
+}
+
+/** Fiche pratique (champs null/vides omis) — undefined si la fiche est entièrement vide. */
+function mapProfile(row: RestaurantProfileRow | null): BotProfile | undefined {
+  if (!row) return undefined
+  const profile: BotProfile = {}
+  if (row.address) profile.address = row.address
+  if (row.contact_phone) profile.contactPhone = row.contact_phone
+  if (row.hours_text) profile.hoursText = row.hours_text
+  if (row.delivery_info) profile.deliveryInfo = row.delivery_info
+  if (row.bot_info_extra) profile.infoExtra = row.bot_info_extra
+  return Object.keys(profile).length > 0 ? profile : undefined
+}
 
 export interface ChannelInfo {
   channelUuid: string
@@ -45,18 +67,26 @@ export function createRepo(db: SupabaseClient, tokenKey: string): BotRepo {
     },
 
     async getBotContext(restaurantId, restaurantName, driveEnabled) {
-      const [{ data: cats }, { data: slots }] = await Promise.all([
+      const [{ data: cats }, { data: slots }, { data: resto }] = await Promise.all([
         db.from('menu_categories')
           .select('name, position, menu_items(id, name, price, available, position, photo_url, menu_supplements(id, name, price, available, position))')
           .eq('restaurant_id', restaurantId)
           .order('position'),
         db.from('drive_slots').select('id, label, position')
           .eq('restaurant_id', restaurantId).eq('active', true).order('position'),
+        db.from('restaurants')
+          .select('address, contact_phone, hours_text, delivery_info, bot_welcome, bot_info_extra')
+          .eq('id', restaurantId)
+          .maybeSingle(),
       ])
+      const profile = mapProfile((resto as RestaurantProfileRow | null) ?? null)
+      const botWelcome = (resto as RestaurantProfileRow | null)?.bot_welcome?.trim() || undefined
       return {
         restaurantName,
         driveEnabled,
         driveSlots: (slots ?? []).map((s) => ({ id: s.id, label: s.label })),
+        ...(profile ? { profile } : {}),
+        ...(botWelcome ? { botWelcome } : {}),
         menu: {
           categories: (cats ?? []).map((c) => ({
             name: c.name,

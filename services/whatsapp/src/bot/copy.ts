@@ -4,9 +4,23 @@ function supplementsList(supplements: SupplementLine[]): string {
   return supplements.map((s, i) => `${i + 1}. ${s.name} +${formatFcfa(s.price)}`).join('\n')
 }
 
+/** Fiche pratique restaurant, telle qu'injectée dans le contexte machine (champs vides omis). */
+export interface BotProfile {
+  address?: string
+  contactPhone?: string
+  hoursText?: string
+  deliveryInfo?: string
+  infoExtra?: string
+}
+
 export const copy = {
-  welcome: (name: string) =>
-    `Bienvenue chez ${name} ! 👋\nTapez *menu* pour voir la carte, ou *humain* pour parler à quelqu'un.`,
+  welcome: (name: string, botWelcome?: string) => {
+    const custom = botWelcome?.trim()
+    if (custom) {
+      return `${custom}\nTapez *menu* pour commander, *infos* pour nos horaires et contacts.`
+    }
+    return `Bienvenue chez ${name} ! 👋\nTapez *menu* pour voir la carte, *infos* pour nos horaires et contacts, ou *humain* pour parler à quelqu'un.`
+  },
   menuFooter:
     `\nEnvoyez le *numéro* d'un plat pour l'ajouter (ex. *1* ou *1x2* pour 2 portions).\n` +
     `*panier* : voir votre commande · *valider* : passer commande · *annuler* : tout effacer`,
@@ -36,4 +50,16 @@ export const copy = {
   confirm: (cart: Cart, modeLabel: string, detail?: string) =>
     `${copy.cartRecap(cart)}\n\nMode : ${modeLabel}${detail ? `\n${detail}` : ''}\n\n` +
     `1. ✅ Confirmer\n2. ❌ Annuler`,
+  infos: (profile?: BotProfile) => {
+    const lines: string[] = []
+    if (profile?.address) lines.push(`📍 ${profile.address}`)
+    if (profile?.hoursText) lines.push(`🕒 ${profile.hoursText}`)
+    if (profile?.deliveryInfo) lines.push(`🛵 ${profile.deliveryInfo}`)
+    if (profile?.contactPhone) lines.push(`📞 ${profile.contactPhone}`)
+    if (profile?.infoExtra) lines.push(`ℹ️ ${profile.infoExtra}`)
+    if (lines.length === 0) {
+      return `Contactez-nous directement sur ce numéro pour toute question !`
+    }
+    return `ℹ️ *Infos pratiques*\n${lines.join('\n')}`
+  },
 }
