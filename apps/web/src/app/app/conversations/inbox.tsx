@@ -138,7 +138,9 @@ export function Inbox({ initialLogs, customers, restaurantId }: {
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate font-medium">{s.customerName}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">{relativeTime(s.lastAt)}</span>
+                  <span suppressHydrationWarning className="shrink-0 text-xs text-muted-foreground">
+                    {relativeTime(s.lastAt)}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate text-sm text-muted-foreground">{s.lastBody}</span>
