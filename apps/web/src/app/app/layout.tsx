@@ -9,6 +9,7 @@ import type { NavItem } from '@/components/nav-links'
 const NAV = [
   { href: '/app', label: 'Accueil', icon: 'Home' },
   { href: '/app/commandes', label: 'Commandes', icon: 'ClipboardList' },
+  { href: '/app/stats', label: 'Statistiques', icon: 'ChartColumn' },
   { href: '/app/menu', label: 'Menu', icon: 'UtensilsCrossed' },
   { href: '/app/campagnes', label: 'Campagnes', icon: 'Megaphone' },
   { href: '/app/fidelite', label: 'Fidélité', icon: 'Gift' },
