@@ -1,6 +1,7 @@
 'use server'
 import { revalidatePath } from 'next/cache'
-import { encryptToken } from '@goutatou/db/crypto'
+import { encryptToken, decryptToken } from '@goutatou/db/crypto'
+import { WhapiClient } from '@goutatou/whapi'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertPlatformAdmin } from '../../actions'
 
@@ -75,6 +76,53 @@ export async function updateChannelToken(id: string, formData: FormData) {
   if (error) throw new Error(error.message)
 
   revalidateFiche(id)
+}
+
+/**
+ * Décrypte le token DANS l'action (jamais en clair côté client) et instancie
+ * le client Whapi correspondant. Lève l'erreur FR fixe si le canal n'existe
+ * plus / le token est absent.
+ */
+async function whapiClientForRestaurant(id: string): Promise<WhapiClient> {
+  const admin = createAdminClient()
+  const { data: channel } = await admin
+    .from('whapi_channels')
+    .select('token_encrypted')
+    .eq('restaurant_id', id)
+    .maybeSingle()
+  if (!channel) throw new Error('Impossible de contacter Whapi — le canal n’existe peut-être plus.')
+  const token = decryptToken(channel.token_encrypted, process.env.TOKEN_ENCRYPTION_KEY!)
+  return new WhapiClient(token)
+}
+
+/** Code d'appairage à distance — seul le code traverse vers le client. */
+export async function getPairingCode(id: string, phone: string): Promise<{ code: string }> {
+  await assertPlatformAdmin()
+  const trimmedPhone = phone.trim()
+  if (!trimmedPhone) throw new Error('Le numéro de téléphone est requis.')
+
+  const whapi = await whapiClientForRestaurant(id)
+  try {
+    const { code } = await whapi.getLoginCode(trimmedPhone)
+    if (!code) throw new Error('code manquant')
+    return { code }
+  } catch {
+    throw new Error('Impossible de contacter Whapi — le canal n’existe peut-être plus.')
+  }
+}
+
+/** QR de connexion à distance en base64 — seule l'image traverse vers le client. */
+export async function getLoginQrAction(id: string): Promise<{ base64: string }> {
+  await assertPlatformAdmin()
+
+  const whapi = await whapiClientForRestaurant(id)
+  try {
+    const { base64 } = await whapi.getLoginQr()
+    if (!base64) throw new Error('base64 manquant')
+    return { base64 }
+  } catch {
+    throw new Error('Impossible de contacter Whapi — le canal n’existe peut-être plus.')
+  }
 }
 
 export async function updatePlan(id: string, formData: FormData) {

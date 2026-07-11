@@ -24,7 +24,7 @@ export default async function AdminRestaurantDetailPage({ params }: { params: Pr
       `id, name, slug, address, contact_phone, hours_text, delivery_info, bot_welcome, bot_info_extra,
        drive_enabled, wheel_enabled, wheel_trigger_orders, lp_config,
        subscriptions(plan, status),
-       whapi_channels(id, status, last_webhook_at, token_encrypted)`
+       whapi_channels(id, status, last_webhook_at, token_encrypted, phone)`
     )
     .eq('id', id)
     .single()
@@ -36,6 +36,7 @@ export default async function AdminRestaurantDetailPage({ params }: { params: Pr
     status: string
     last_webhook_at: string | null
     token_encrypted: string
+    phone: string | null
   } | null
 
   const lpConfig = parseLpConfig(resto.lp_config, resto.name)
@@ -94,6 +95,8 @@ export default async function AdminRestaurantDetailPage({ params }: { params: Pr
             channelStatus={channel?.status}
             lastWebhookAt={channel?.last_webhook_at ?? null}
             webhookButton={webhookButton}
+            hasChannel={!!channel}
+            channelPhone={channel?.phone ?? null}
             botWelcome={resto.bot_welcome}
             botInfoExtra={resto.bot_info_extra}
             profile={{

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { updateBotMessages, updateChannelToken } from './actions'
+import { updateBotMessages, updateChannelToken, getPairingCode, getLoginQrAction } from './actions'
 import { renderBotInfosPreview, renderBotWelcomePreview } from './bot-info-preview'
 
 type ChannelStatus = 'active' | 'error' | string
@@ -53,6 +53,8 @@ export function BotTab({
   channelStatus,
   lastWebhookAt,
   webhookButton,
+  hasChannel,
+  channelPhone,
   botWelcome,
   botInfoExtra,
   profile,
@@ -61,6 +63,8 @@ export function BotTab({
   channelStatus: string | undefined
   lastWebhookAt: string | null
   webhookButton?: ReactNode
+  hasChannel: boolean
+  channelPhone: string | null
   botWelcome: string | null
   botInfoExtra: string | null
   profile: BotTabProfile
@@ -74,6 +78,43 @@ export function BotTab({
   const [messagesSaved, setMessagesSaved] = useState(false)
   const [welcomeDraft, setWelcomeDraft] = useState(botWelcome ?? '')
   const [infoExtraDraft, setInfoExtraDraft] = useState(botInfoExtra ?? '')
+
+  const [pairingPhone, setPairingPhone] = useState(channelPhone ?? '')
+  const [pairingCode, setPairingCode] = useState<string | null>(null)
+  const [pairingError, setPairingError] = useState<string | null>(null)
+  const [pairingLoading, setPairingLoading] = useState(false)
+
+  const [qrBase64, setQrBase64] = useState<string | null>(null)
+  const [qrError, setQrError] = useState<string | null>(null)
+  const [qrLoading, setQrLoading] = useState(false)
+
+  async function handleGetPairingCode() {
+    setPairingLoading(true)
+    setPairingError(null)
+    setPairingCode(null)
+    try {
+      const { code } = await getPairingCode(restaurantId, pairingPhone)
+      setPairingCode(code)
+    } catch (e) {
+      setPairingError(errorMessage(e, 'Impossible de contacter Whapi — le canal n’existe peut-être plus.'))
+    } finally {
+      setPairingLoading(false)
+    }
+  }
+
+  async function handleShowQr() {
+    setQrLoading(true)
+    setQrError(null)
+    setQrBase64(null)
+    try {
+      const { base64 } = await getLoginQrAction(restaurantId)
+      setQrBase64(base64)
+    } catch (e) {
+      setQrError(errorMessage(e, 'Impossible de contacter Whapi — le canal n’existe peut-être plus.'))
+    } finally {
+      setQrLoading(false)
+    }
+  }
 
   async function handleTokenSubmit(formData: FormData) {
     setTokenSaving(true)
@@ -150,6 +191,80 @@ export function BotTab({
           {webhookButton}
         </CardContent>
       </Card>
+
+      {hasChannel && (
+        <Card className="rounded-2xl p-4">
+          <CardHeader className="px-0 pt-0">
+            <CardTitle className="font-display text-base">Connexion du numéro</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-5 px-0">
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Label htmlFor="pairing-phone">Numéro de téléphone</Label>
+                  <Input
+                    id="pairing-phone"
+                    value={pairingPhone}
+                    onChange={(e) => setPairingPhone(e.target.value)}
+                    placeholder="24177000000"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleGetPairingCode}
+                  disabled={pairingLoading || !pairingPhone.trim()}
+                >
+                  {pairingLoading ? 'Obtention…' : "Obtenir un code d'appairage"}
+                </Button>
+              </div>
+              {pairingError && (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                >
+                  {pairingError}
+                </div>
+              )}
+              {pairingCode && (
+                <div className="rounded-2xl border border-border bg-card p-4 text-center">
+                  <p className="font-display text-3xl font-semibold tracking-[0.3em]">{pairingCode}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    WhatsApp → Réglages → Appareils connectés → Connecter avec le numéro de téléphone.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <Button type="button" variant="outline" onClick={handleShowQr} disabled={qrLoading} className="self-start">
+                {qrLoading ? 'Chargement…' : 'Afficher le QR'}
+              </Button>
+              {qrError && (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                >
+                  {qrError}
+                </div>
+              )}
+              {qrBase64 && (
+                <div className="flex flex-col items-center gap-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element -- data URI, next/image ne s'applique pas */}
+                  <img
+                    src={`data:image/png;base64,${qrBase64}`}
+                    alt="QR de connexion WhatsApp"
+                    className="h-48 w-48 rounded-xl border border-border bg-white p-2"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Le QR expire rapidement — cliquez pour rafraîchir.
+                  </p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="rounded-2xl p-4">
         <CardHeader className="px-0 pt-0">
