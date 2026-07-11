@@ -13,6 +13,7 @@ export default async function CommandesPage({ searchParams }: { searchParams: Pr
              customers(name, phone), drive_slots(label), order_items(name, qty, unit_price)`)
     .gte('created_at', new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString())
     .order('created_at', { ascending: false })
+    .order('position', { referencedTable: 'order_items', ascending: true })
 
   const orders: OrderCard[] = (data ?? []).map((o) => {
     const customer = o.customers as unknown as { name: string | null; phone: string } | null
