@@ -5,7 +5,8 @@ import { AppShell } from '@/components/app-shell'
 import type { NavItem } from '@/components/nav-links'
 
 const NAV = [
-  { href: '/admin', label: 'Restaurants', icon: 'Store' },
+  { href: '/admin', label: 'Dashboard', icon: 'Home' },
+  { href: '/admin/restaurants', label: 'Restaurants', icon: 'Store' },
 ] satisfies NavItem[]
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
