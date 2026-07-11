@@ -15,6 +15,7 @@ const NAV = [
   { href: '/app/campagnes', label: 'Campagnes', icon: 'Megaphone' },
   { href: '/app/fidelite', label: 'Fidélité', icon: 'Gift' },
   { href: '/app/statuts', label: 'Statuts', icon: 'Camera' },
+  { href: '/app/reglages', label: 'Réglages', icon: 'Settings' },
 ] satisfies NavItem[]
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
