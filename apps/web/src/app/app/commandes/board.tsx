@@ -154,7 +154,17 @@ export function Board({ initialOrders, initialQuery = '' }: { initialOrders: Ord
       </div>
 
       {/* Bandes commande pleine largeur */}
-      <div className="divide-y divide-border rounded-xl border border-border bg-card">
+      <div className="divide-y divide-border rounded-2xl border border-border bg-card shadow-xs">
+        {/* En-têtes de colonnes (desktop) */}
+        <div className="hidden gap-x-4 px-6 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground md:grid md:grid-cols-[6.5rem_7rem_1fr_1fr_8rem_9rem_7.5rem]">
+          <span>N°</span>
+          <span>Source</span>
+          <span>Client</span>
+          <span>Mode</span>
+          <span className="text-right">Total</span>
+          <span className="text-center">Statut</span>
+          <span className="text-right">Action</span>
+        </div>
         {visible.length === 0 && (
           <p className="py-12 text-center text-muted-foreground">Aucune commande ici pour l&apos;instant.</p>
         )}
@@ -168,7 +178,7 @@ export function Board({ initialOrders, initialQuery = '' }: { initialOrders: Ord
               tabIndex={0}
               onClick={() => setSelected(o)}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(o) } }}
-              className="grid cursor-pointer grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-1 px-4 py-4 transition-colors hover:bg-accent/40 focus-visible:outline-2 focus-visible:outline-primary md:grid-cols-[7rem_7rem_1fr_1fr_7rem_8rem_auto] md:px-6"
+              className="grid cursor-pointer grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-1 px-4 py-4 transition-colors hover:bg-accent/40 focus-visible:outline-2 focus-visible:outline-primary md:grid-cols-[6.5rem_7rem_1fr_1fr_8rem_9rem_7.5rem] md:px-6"
             >
               {/* N° + heure */}
               <div>
@@ -196,10 +206,10 @@ export function Board({ initialOrders, initialQuery = '' }: { initialOrders: Ord
               </div>
 
               {/* Total */}
-              <p className="text-right text-base font-bold text-primary">{formatFcfa(o.total)}</p>
+              <p className="whitespace-nowrap text-right text-base font-bold tabular-nums text-primary">{formatFcfa(o.total)}</p>
 
               {/* Statut */}
-              <div className="hidden justify-end md:flex">
+              <div className="hidden justify-center md:flex">
                 <Badge variant={badgeVariantForOrder(o.status)}>{ORDER_STATUS_LABELS[o.status]}</Badge>
               </div>
 
@@ -208,14 +218,18 @@ export function Board({ initialOrders, initialQuery = '' }: { initialOrders: Ord
                 <Badge className="md:hidden" variant={badgeVariantForOrder(o.status)}>
                   {ORDER_STATUS_LABELS[o.status]}
                 </Badge>
-                {rowAction && (
+                {rowAction ? (
                   <Button
                     size="sm"
+                    variant="outline"
+                    className="border-primary/40 font-semibold text-primary hover:bg-primary hover:text-primary-foreground"
                     disabled={pending}
                     onClick={(e) => { e.stopPropagation(); advance(o) }}
                   >
-                    {rowAction}
+                    {rowAction} →
                   </Button>
+                ) : (
+                  <span className="hidden text-muted-foreground/40 md:inline">—</span>
                 )}
               </div>
             </div>
