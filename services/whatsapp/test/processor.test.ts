@@ -85,6 +85,47 @@ describe('processor', () => {
       expect.objectContaining({ items: [] }))
   })
 
+  it('menu avec suppléments → contexte machine transmis dans la bonne forme, entre en SUPPLEMENTS', async () => {
+    repo.getBotContext = vi.fn().mockResolvedValue({
+      restaurantName: 'Chez Test', driveEnabled: true,
+      driveSlots: [{ id: 's1', label: '12h00' }],
+      menu: {
+        categories: [{
+          name: 'Plats',
+          items: [{
+            id: 'i1', name: 'Bo Bun', price: 4500,
+            supplements: [{ id: 'sup-1', name: 'Œuf', price: 300 }],
+          }],
+        }],
+      },
+    })
+    repo.loadConversation = vi.fn().mockResolvedValue({ state: 'MENU', cart: EMPTY_CART })
+    const process = createProcessor(repo, () => ({ sendText }))
+    await process('chan-uuid', webhookPayload('1'))
+    expect(sendText).toHaveBeenCalledWith('24177000001@s.whatsapp.net', expect.stringContaining('Œuf'))
+    expect(repo.saveConversation).toHaveBeenCalledWith('resto-1', 'cust-1', 'SUPPLEMENTS', expect.objectContaining({
+      items: [expect.objectContaining({ menuItemId: 'i1', supplements: [] })],
+    }))
+  })
+
+  it('confirmation avec suppléments → panier transmis à createOrder avec ses lignes suppléments', async () => {
+    repo.loadConversation = vi.fn().mockResolvedValue({
+      state: 'CONFIRMATION',
+      cart: {
+        items: [{
+          menuItemId: 'i1', name: 'Bo Bun', unitPrice: 4500, qty: 1,
+          supplements: [{ id: 'sup-1', name: 'Œuf', price: 300 }],
+        }],
+        mode: 'sur_place',
+      },
+    })
+    const process = createProcessor(repo, () => ({ sendText }))
+    await process('chan-uuid', webhookPayload('1'))
+    expect(repo.createOrder).toHaveBeenCalledWith('resto-1', 'cust-1', expect.objectContaining({
+      items: [expect.objectContaining({ supplements: [{ id: 'sup-1', name: 'Œuf', price: 300 }] })],
+    }))
+  })
+
   it('erreur de traitement d’un message → message de secours envoyé, pas de crash', async () => {
     repo.upsertCustomer = vi.fn().mockRejectedValue(new Error('db down'))
     const process = createProcessor(repo, () => ({ sendText }))
