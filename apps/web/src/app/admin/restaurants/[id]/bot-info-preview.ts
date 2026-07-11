@@ -31,5 +31,5 @@ const WELCOME_REMINDER = 'Tapez *menu* pour commander, *infos* pour nos horaires
 export function renderBotWelcomePreview(botWelcome: string): string | null {
   const custom = botWelcome.trim()
   if (!custom) return null
-  return `${custom}\n\n${WELCOME_REMINDER}`
+  return `${custom}\n${WELCOME_REMINDER}`
 }
