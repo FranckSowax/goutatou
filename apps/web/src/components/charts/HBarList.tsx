@@ -26,7 +26,7 @@ export function HBarList({ data, valueFormat = defaultFormat, ariaLabel }: HBarL
   const pct = (v: number) => (max <= 0 ? 0 : (v / max) * 100)
 
   return (
-    <ul role="img" aria-label={ariaLabel} className="flex flex-col gap-2">
+    <ul aria-label={ariaLabel} className="flex flex-col gap-2">
       {data.map((d, i) => {
         const formatted = d.display ?? valueFormat(d.value)
         return (
