@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
     "@goutatou/db": "workspace:*",
     "@goutatou/whapi": "workspace:*",
     "@gsap/react": "^2.1.2",
