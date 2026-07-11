@@ -5,10 +5,41 @@ import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { buildWaLink } from '@/lib/lp/wa'
+import { HeroScrub } from '@/components/lp/HeroScrub'
+import type { LpHeroFrames } from '@/lib/lp/config'
 
 gsap.registerPlugin(ScrollTrigger, useGSAP)
 
-export function Hero({ title, subtitle, mediaUrl, mediaType, waPhone, restaurantName }: {
+export function Hero({ title, subtitle, mediaUrl, mediaType, waPhone, restaurantName, frames }: {
+  title: string; subtitle: string; mediaUrl: string | null
+  mediaType: 'image' | 'video'; waPhone: string | null; restaurantName: string
+  frames?: LpHeroFrames | null
+}) {
+  if (frames?.status === 'ready' && frames.count > 0) {
+    return (
+      <HeroScrub
+        frames={frames}
+        title={title}
+        subtitle={subtitle}
+        waPhone={waPhone}
+        restaurantName={restaurantName}
+      />
+    )
+  }
+
+  return (
+    <HeroFallback
+      title={title}
+      subtitle={subtitle}
+      mediaUrl={mediaUrl}
+      mediaType={mediaType}
+      waPhone={waPhone}
+      restaurantName={restaurantName}
+    />
+  )
+}
+
+function HeroFallback({ title, subtitle, mediaUrl, mediaType, waPhone, restaurantName }: {
   title: string; subtitle: string; mediaUrl: string | null
   mediaType: 'image' | 'video'; waPhone: string | null; restaurantName: string
 }) {
