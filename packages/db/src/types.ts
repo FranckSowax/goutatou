@@ -37,6 +37,16 @@ export interface MenuForBot {
   }[]
 }
 
+/** Fiche pratique + messages bot d'un restaurant (migration 0018) — null = non renseigné. */
+export interface RestaurantProfile {
+  address: string | null
+  contactPhone: string | null
+  hoursText: string | null
+  deliveryInfo: string | null
+  botWelcome: string | null
+  botInfoExtra: string | null
+}
+
 export const EMPTY_CART: Cart = Object.freeze({
   items: Object.freeze([]) as unknown as CartItem[],
 })
