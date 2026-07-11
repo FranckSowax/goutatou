@@ -80,8 +80,10 @@ export function MenuStudio({ categories, renderItemActions }: MenuStudioProps) {
     setError(message)
   }
 
-  function errorMessage(e: unknown, fallback: string): string {
-    return e instanceof Error ? e.message : fallback
+  function errorMessage(_e: unknown, fallback: string): string {
+    // Next redige les messages d'erreur des Server Actions en prod (texte
+    // anglais générique) : on affiche TOUJOURS le message FR fixe.
+    return fallback
   }
 
   function handleDragEnd(event: DragEndEvent) {
