@@ -67,10 +67,13 @@ function transformToCss(transform: Transform): string | undefined {
 
 type MenuStudioProps = {
   categories: MenuStudioCategory[]
-  renderItemActions?: (item: MenuStudioItem) => ReactNode
+  // Map id plat → actions pré-rendues côté serveur. Une fonction de rendu
+  // n'est PAS sérialisable RSC→client (crash prod « Functions cannot be
+  // passed directly to Client Components ») ; des ReactNode le sont.
+  itemActions?: Record<string, ReactNode>
 }
 
-export function MenuStudio({ categories, renderItemActions }: MenuStudioProps) {
+export function MenuStudio({ categories, itemActions }: MenuStudioProps) {
   const [localCategories, setLocalCategories] = useState<MenuStudioCategory[]>(categories)
   const [error, setError] = useState<string | null>(null)
 
@@ -216,7 +219,7 @@ export function MenuStudio({ categories, renderItemActions }: MenuStudioProps) {
                 category={category}
                 onRename={handleRenameCategory}
                 onDelete={handleDeleteCategory}
-                renderItemActions={renderItemActions}
+                itemActions={itemActions}
               />
             ))}
           </div>
@@ -230,12 +233,12 @@ function CategorySection({
   category,
   onRename,
   onDelete,
-  renderItemActions,
+  itemActions,
 }: {
   category: MenuStudioCategory
   onRename: (categoryId: string, name: string) => void
   onDelete: (category: MenuStudioCategory) => void
-  renderItemActions?: (item: MenuStudioItem) => ReactNode
+  itemActions?: Record<string, ReactNode>
 }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: category.id,
@@ -334,7 +337,7 @@ function CategorySection({
       <SortableContext items={category.items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
         <div className="flex flex-col gap-1.5">
           {category.items.map((item) => (
-            <ItemRow key={item.id} item={item} categoryId={category.id} renderItemActions={renderItemActions} />
+            <ItemRow key={item.id} item={item} categoryId={category.id} actions={itemActions?.[item.id]} />
           ))}
           {category.items.length === 0 && (
             <p className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">
@@ -350,11 +353,11 @@ function CategorySection({
 function ItemRow({
   item,
   categoryId,
-  renderItemActions,
+  actions,
 }: {
   item: MenuStudioItem
   categoryId: string
-  renderItemActions?: (item: MenuStudioItem) => ReactNode
+  actions?: ReactNode
 }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
@@ -422,7 +425,7 @@ function ItemRow({
       </form>
 
       <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-        {renderItemActions?.(item)}
+        {actions}
       </div>
     </div>
   )

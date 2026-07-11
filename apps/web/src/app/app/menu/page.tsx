@@ -74,16 +74,17 @@ export default async function MenuPage() {
 
       <MenuStudio
         categories={studioCategories}
-        renderItemActions={(item) => {
-          const categoryId =
-            studioCategories.find((cat) => cat.items.some((i) => i.id === item.id))?.id ?? ''
-          return (
-            <>
-              <EditItemDialog item={item} categoryId={categoryId} categories={studioCategories} />
-              <DeleteItemDialog item={item} />
-            </>
+        itemActions={Object.fromEntries(
+          studioCategories.flatMap((cat) =>
+            cat.items.map((item) => [
+              item.id,
+              <>
+                <EditItemDialog item={item} categoryId={cat.id} categories={studioCategories} />
+                <DeleteItemDialog item={item} />
+              </>,
+            ])
           )
-        }}
+        )}
       />
     </div>
   )
