@@ -11,6 +11,8 @@ export interface WebOrderPayload {
 
 type Result = { ok: true; payload: WebOrderPayload } | { ok: false; error: string }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export function validateWebOrder(body: unknown): Result {
   if (body === null || typeof body !== 'object') return { ok: false, error: 'Requête invalide.' }
   const b = body as Record<string, unknown>
@@ -43,7 +45,7 @@ export function validateWebOrder(body: unknown): Result {
 
     let supplementIds: string[] | undefined
     if (o.supplementIds !== undefined) {
-      if (!Array.isArray(o.supplementIds) || o.supplementIds.some((s) => typeof s !== 'string' || s.length === 0)) {
+      if (!Array.isArray(o.supplementIds) || o.supplementIds.some((s) => typeof s !== 'string' || !UUID_RE.test(s))) {
         return { ok: false, error: 'Panier invalide.' }
       }
       const deduped = [...new Set(o.supplementIds as string[])]

@@ -230,6 +230,7 @@ export function EditItemDialog({ item, categoryId, categories }: EditItemDialogP
                 required
                 type="number"
                 min="0"
+                step="1"
                 placeholder="0"
               />
             </div>

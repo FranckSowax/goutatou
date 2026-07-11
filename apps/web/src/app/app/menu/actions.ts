@@ -229,7 +229,7 @@ export async function createSupplement(itemId: string, formData: FormData) {
 
   const priceRaw = formData.get('price')
   const price = Number(priceRaw)
-  if (!Number.isFinite(price) || price < 0) throw new Error('Le prix doit être un nombre positif')
+  if (!Number.isInteger(price) || price < 0) throw new Error('Le prix doit être un nombre entier positif')
 
   const { count, error: countError } = await supabase
     .from('menu_supplements')
@@ -257,7 +257,7 @@ export async function updateSupplement(id: string, formData: FormData) {
 
   const priceRaw = formData.get('price')
   const price = Number(priceRaw)
-  if (!Number.isFinite(price) || price < 0) throw new Error('Le prix doit être un nombre positif')
+  if (!Number.isInteger(price) || price < 0) throw new Error('Le prix doit être un nombre entier positif')
 
   const { error } = await supabase.from('menu_supplements').update({ name, price }).eq('id', id)
   if (error) throw new Error(error.message)

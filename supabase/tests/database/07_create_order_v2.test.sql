@@ -1,5 +1,5 @@
 begin;
-select plan(16);
+select plan(18);
 
 -- Fixtures : un resto, deux plats, un client.
 insert into restaurants (id, slug, name) values
@@ -139,6 +139,23 @@ select results_eq(
 select results_eq(
   $$select total from t_e$$,
   array[14600], 'parent dupliqué : total = (4500+500) + 2x(4500+300)');
+
+-- (i) Id malformé (pas un uuid) : silencieusement ignoré — la commande
+-- aboutit avec les seuls suppléments valides, aucun throw sur le cast.
+create temp table t_i as
+  select * from create_order(
+    '70000000-0000-0000-0000-000000000001', '70000000-0000-0000-0000-000000000005',
+    'whatsapp', 'sur_place',
+    '[{"menu_item_id": "70000000-0000-0000-0000-000000000003", "qty": 1,
+       "supplement_ids": ["pas-un-uuid", "", "70000000-0000-0000-0000-000000000006"]}]'::jsonb,
+    null, null);
+
+select results_eq(
+  $$select total from t_i$$,
+  array[5000], 'ids malformés ignorés : total = plat 4500 + Fromage 500');
+select results_eq(
+  $$select count(*)::int from order_items where order_id = (select order_id from t_i)$$,
+  array[2], 'ids malformés ignorés : 1 ligne plat + 1 ligne supplément');
 
 -- (f) ACL : anon et authenticated ne peuvent pas exécuter create_order
 -- (grant service_role only, préservé depuis 0005).

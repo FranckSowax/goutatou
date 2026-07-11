@@ -79,8 +79,11 @@ begin
         select s.name, s.price
         from menu_supplements s
         where s.id in (
+                -- Ids malformés silencieusement ignorés (le cast ::uuid brut
+                -- lèverait une exception et annulerait toute la commande).
                 select distinct x::uuid
                 from jsonb_array_elements_text(v_item->'supplement_ids') as x
+                where x ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
               )
           and s.menu_item_id = v_mi.id
           and s.restaurant_id = p_restaurant_id

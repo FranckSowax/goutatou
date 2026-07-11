@@ -32,27 +32,30 @@ describe('validateWebOrder', () => {
     expect(validateWebOrder({ ...valid, customerName: 'F' }).ok).toBe(false)
   })
 
-  it('accepte supplementIds valides, dédupliqués', () => {
-    const r = validateWebOrder({ ...valid, items: [{ menuItemId: 'a', qty: 2, supplementIds: ['s1', 's2', 's1'] }] })
+  const uuid = (i: number) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`
+
+  it('accepte supplementIds valides (uuid), dédupliqués', () => {
+    const r = validateWebOrder({ ...valid, items: [{ menuItemId: 'a', qty: 2, supplementIds: [uuid(1), uuid(2), uuid(1)] }] })
     expect(r.ok).toBe(true)
-    if (r.ok) expect(r.payload.items[0].supplementIds).toEqual(['s1', 's2'])
+    if (r.ok) expect(r.payload.items[0].supplementIds).toEqual([uuid(1), uuid(2)])
   })
   it('accepte un item sans supplementIds (rétrocompat v1)', () => {
     const r = validateWebOrder(valid)
     expect(r.ok).toBe(true)
     if (r.ok) expect(r.payload.items[0].supplementIds).toBeUndefined()
   })
-  it('rejette supplementIds non-array, avec string vide, ou non-string', () => {
+  it('rejette supplementIds non-array, string vide, non-string ou non-uuid', () => {
     expect(validateWebOrder({ ...valid, items: [{ menuItemId: 'a', qty: 1, supplementIds: 's1' }] }).ok).toBe(false)
     expect(validateWebOrder({ ...valid, items: [{ menuItemId: 'a', qty: 1, supplementIds: [''] }] }).ok).toBe(false)
     expect(validateWebOrder({ ...valid, items: [{ menuItemId: 'a', qty: 1, supplementIds: [1] }] }).ok).toBe(false)
+    expect(validateWebOrder({ ...valid, items: [{ menuItemId: 'a', qty: 1, supplementIds: ['pas-un-uuid'] }] }).ok).toBe(false)
   })
   it('rejette plus de 10 supplementIds uniques', () => {
-    const ids = Array.from({ length: 11 }, (_, i) => `s${i}`)
+    const ids = Array.from({ length: 11 }, (_, i) => uuid(i))
     expect(validateWebOrder({ ...valid, items: [{ menuItemId: 'a', qty: 1, supplementIds: ids }] }).ok).toBe(false)
   })
   it('accepte exactement 10 supplementIds uniques après déduplication', () => {
-    const ids = [...Array.from({ length: 10 }, (_, i) => `s${i}`), 's0']
+    const ids = [...Array.from({ length: 10 }, (_, i) => uuid(i)), uuid(0)]
     const r = validateWebOrder({ ...valid, items: [{ menuItemId: 'a', qty: 1, supplementIds: ids }] })
     expect(r.ok).toBe(true)
     if (r.ok) expect(r.payload.items[0].supplementIds).toHaveLength(10)
