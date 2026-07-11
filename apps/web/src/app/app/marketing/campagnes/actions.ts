@@ -31,8 +31,8 @@ export async function createCampaign(formData: FormData) {
     started_at: action === 'now' ? new Date().toISOString() : null,
   }).select('id').single()
   if (error || !data) throw new Error(error?.message ?? 'Création impossible')
-  revalidatePath('/app/campagnes')
-  redirect(`/app/campagnes/${data.id}`)
+  revalidatePath('/app/marketing/campagnes')
+  redirect(`/app/marketing/campagnes/${data.id}`)
 }
 
 export async function cancelCampaign(id: string) {
@@ -41,8 +41,8 @@ export async function cancelCampaign(id: string) {
   const { error } = await supabase.from('campaigns').update({ status: 'canceled', finished_at: new Date().toISOString() })
     .eq('id', id).in('status', ['scheduled', 'sending'])
   if (error) throw new Error(error.message)
-  revalidatePath(`/app/campagnes/${id}`)
-  revalidatePath('/app/campagnes')
+  revalidatePath(`/app/marketing/campagnes/${id}`)
+  revalidatePath('/app/marketing/campagnes')
 }
 
 export async function uploadCampaignMedia(formData: FormData): Promise<string> {

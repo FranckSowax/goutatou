@@ -25,13 +25,13 @@ export function Board({ initial }: { initial: Row[] }) {
       <div className="mb-6 flex items-center justify-between">
         <h1 className="font-display text-2xl font-semibold">Campagnes WhatsApp</h1>
         <Button asChild>
-          <Link href="/app/campagnes/nouvelle">Nouvelle campagne</Link>
+          <Link href="/app/marketing/campagnes/nouvelle">Nouvelle campagne</Link>
         </Button>
       </div>
       <ul className="flex flex-col gap-3">
         {initial.map((c) => (
           <li key={c.id}>
-            <Link href={`/app/campagnes/${c.id}`} className="block">
+            <Link href={`/app/marketing/campagnes/${c.id}`} className="block">
               <Card className="rounded-2xl p-4 transition-colors hover:bg-muted/50">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-display font-semibold">{c.name}</span>

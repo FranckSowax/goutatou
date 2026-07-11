@@ -12,9 +12,8 @@ const NAV = [
   { href: '/app/conversations', label: 'Conversations', icon: 'MessagesSquare' },
   { href: '/app/stats', label: 'Statistiques', icon: 'ChartColumn' },
   { href: '/app/menu', label: 'Menu', icon: 'UtensilsCrossed' },
-  { href: '/app/campagnes', label: 'Campagnes', icon: 'Megaphone' },
+  { href: '/app/marketing/statuts', label: 'Marketing', icon: 'Megaphone', match: '/app/marketing' },
   { href: '/app/fidelite', label: 'Fidélité', icon: 'Gift' },
-  { href: '/app/statuts', label: 'Statuts', icon: 'Camera' },
   { href: '/app/reglages', label: 'Réglages', icon: 'Settings' },
 ] satisfies NavItem[]
 

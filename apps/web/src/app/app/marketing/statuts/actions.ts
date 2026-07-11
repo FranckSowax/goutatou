@@ -32,7 +32,7 @@ export async function createStatus(formData: FormData) {
       : action === 'now' ? new Date().toISOString() : null,
   })
   if (error) throw new Error(error.message)
-  revalidatePath('/app/statuts')
+  revalidatePath('/app/marketing/statuts')
 }
 
 export async function cancelStatus(id: string) {
@@ -41,7 +41,7 @@ export async function cancelStatus(id: string) {
   const { error } = await supabase.from('statuses').update({ state: 'canceled' })
     .eq('id', id).in('state', ['scheduled', 'posting'])
   if (error) throw new Error(error.message)
-  revalidatePath('/app/statuts')
+  revalidatePath('/app/marketing/statuts')
 }
 
 export async function uploadStatusMedia(formData: FormData): Promise<string> {
