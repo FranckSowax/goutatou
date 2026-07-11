@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { decryptToken } from '@goutatou/db'
 
 export interface DueCampaign { id: string; restaurantId: string; body: string; mediaUrl: string | null }
-export interface PendingRecipient { recipientId: string; chatId: string }
+export interface PendingRecipient { recipientId: string; chatId: string; phone: string }
 export interface CampaignChannel { token: string; status: string }
 
 export interface CampaignRepo {
@@ -47,13 +47,14 @@ export function createCampaignRepo(db: SupabaseClient, tokenKey: string): Campai
       // Re-filtre opted_out à l'envoi : un client qui envoie STOP en cours de
       // campagne ne doit plus recevoir aucun message des lots suivants.
       const { data } = await db.from('campaign_recipients')
-        .select('id, customers!inner(chat_id, opted_out)')
+        .select('id, customers!inner(chat_id, phone, opted_out)')
         .eq('campaign_id', campaignId).eq('status', 'pending')
         .eq('customers.opted_out', false)
         .limit(limit)
-      return (data ?? []).map((r) => ({
-        recipientId: r.id, chatId: (r.customers as unknown as { chat_id: string }).chat_id,
-      }))
+      return (data ?? []).map((r) => {
+        const c = r.customers as unknown as { chat_id: string; phone: string }
+        return { recipientId: r.id, chatId: c.chat_id, phone: c.phone }
+      })
     },
     async getChannel(restaurantId) {
       const { data } = await db.from('whapi_channels').select('token_encrypted, status')

@@ -3,7 +3,7 @@ import { decryptToken, type OrderMode, type OrderStatus } from '@goutatou/db'
 import { signWheelToken } from '@goutatou/db/wheel'
 import { shouldOfferSpin } from '@goutatou/db/types'
 import { WhapiClient } from '@goutatou/whapi'
-import { buildWheelLink, wheelMessage } from './loyalty/trigger.js'
+import { buildWheelLink, wheelMessage, wheelMessageBody } from './loyalty/trigger.js'
 
 export interface OrderRow {
   id: string
@@ -31,7 +31,7 @@ export function statusMessage(status: OrderStatus, orderNumber: number, mode: Or
   }
 }
 
-type MakeWhapi = (token: string) => Pick<WhapiClient, 'sendText'>
+type MakeWhapi = (token: string) => Pick<WhapiClient, 'sendText' | 'sendInteractiveUrl'>
 type Decrypt = (payload: string, keyHex: string) => string
 
 export async function handleOrderUpdate(
@@ -72,8 +72,15 @@ export async function handleOrderUpdate(
           const token = signWheelToken(
             { rid: newRow.restaurant_id, cid: newRow.customer_id, jti: `${newRow.restaurant_id}:${newRow.customer_id}:${count}`, ttlSec: 72 * 3600 },
             wheelSecret, Math.floor(Date.now() / 1000))
+          const link = buildWheelLink(wheelBaseUrl, token)
           try {
-            await whapiClient.sendText(customer.chat_id, wheelMessage(buildWheelLink(wheelBaseUrl, token)))
+            // Bouton interactif d'abord (pattern cartelle congratulate) ; sur toute erreur (payload
+            // instable, réseau…), fallback sendText BYTE-IDENTIQUE au message v1.
+            try {
+              await whapiClient.sendInteractiveUrl(customer.chat_id, wheelMessageBody(), '🎰 Tourner la roue', link)
+            } catch {
+              await whapiClient.sendText(customer.chat_id, wheelMessage(link))
+            }
           } catch (err) {
             console.error('[notifier] envoi roue échoué', err)
           }

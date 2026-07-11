@@ -1,10 +1,11 @@
 import type { WhapiClient } from '@goutatou/whapi'
 import { nextSendDelayMs } from './throttle.js'
+import { validPhoneForCountry } from '../bot/validation.js'
 import type { CampaignRepo, DueCampaign } from './repo.js'
 
 export interface WorkerDeps {
   repo: CampaignRepo
-  makeWhapi: (token: string) => Pick<WhapiClient, 'sendText' | 'sendImage'>
+  makeWhapi: (token: string) => Pick<WhapiClient, 'sendText' | 'sendImage' | 'checkContact'>
   sleep: (ms: number) => Promise<void>
   rng?: () => number
   dailyCap: number
@@ -24,6 +25,24 @@ export async function processCampaignOnce(campaign: DueCampaign, deps: WorkerDep
   const batch = await deps.repo.nextPendingBatch(campaign.id, deps.batchSize)
   for (const r of batch) {
     if (await deps.repo.isCanceled(campaign.id)) return
+
+    // Pré-validation : numéro invalide ou sans WhatsApp → failed 'numéro invalide', aucun envoi,
+    // aucun crédit du throttle consommé (pas de sleep pour ce destinataire).
+    if (!validPhoneForCountry(r.phone)) {
+      await deps.repo.markRecipient(r.recipientId, campaign.id, false, 'numéro invalide')
+      continue
+    }
+    let hasWhatsapp = true
+    try {
+      hasWhatsapp = await whapi.checkContact(r.phone)
+    } catch {
+      hasWhatsapp = true // erreur réseau checkContact : fail-open, on ne bloque pas la campagne
+    }
+    if (!hasWhatsapp) {
+      await deps.repo.markRecipient(r.recipientId, campaign.id, false, 'numéro invalide')
+      continue
+    }
+
     try {
       if (campaign.mediaUrl) await whapi.sendImage(r.chatId, campaign.mediaUrl, campaign.body)
       else await whapi.sendText(r.chatId, campaign.body)

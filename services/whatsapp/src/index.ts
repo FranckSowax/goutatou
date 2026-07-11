@@ -11,6 +11,8 @@ import { createStatusRepo } from './statuses/repo.js'
 import { startStatusWorker } from './statuses/worker.js'
 import { createLpFramesRepo } from './lpframes/repo.js'
 import { createFfmpegRunner, startLpFramesWorker } from './lpframes/worker.js'
+import { createWheelReminderRepo } from './wheel/repo.js'
+import { startWheelReminderWorker } from './wheel/worker.js'
 
 const config = loadConfig()
 const db = createServiceClient(config.supabaseUrl, config.serviceRoleKey)
@@ -41,6 +43,12 @@ startLpFramesWorker({
   // replace(/\/+$/,'') : un slash final dans SUPABASE_URL marquerait silencieusement
   // toutes les extractions en failed (préfixe à double slash ≠ mediaUrl du web).
   allowedMediaPrefix: `${config.supabaseUrl.replace(/\/+$/, '')}/storage/v1/object/public/lp-media/`,
+})
+const wheelReminderRepo = createWheelReminderRepo(db, config.tokenKey)
+startWheelReminderWorker({
+  repo: wheelReminderRepo,
+  makeWhapi: (token) => new WhapiClient(token),
+  pollMs: config.wheelReminderPollMs,
 })
 const processWebhook = createProcessor(repo, (token) => new WhapiClient(token), {
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),

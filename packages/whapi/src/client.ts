@@ -60,6 +60,34 @@ export class WhapiClient {
     return { id: res.message?.id }
   }
 
+  /**
+   * Bouton interactif URL (POST /messages/interactive, type "button", action.buttons[0].type "url").
+   * Schéma confirmé via la doc Whapi (INTERACTIVE ACTION OBJECT > buttons) : title/id/url sont les
+   * champs du bouton ; `id` est requis par le schéma même pour un bouton url (pas de callback dessus).
+   */
+  async sendInteractiveUrl(to: string, body: string, buttonText: string, url: string): Promise<{ id?: string }> {
+    const res = (await this.request('POST', '/messages/interactive', {
+      to,
+      type: 'button',
+      body: { text: body },
+      action: {
+        buttons: [{ type: 'url', title: buttonText, id: 'url-button', url }],
+      },
+    })) as { message?: { id?: string } }
+    return { id: res.message?.id }
+  }
+
+  /**
+   * Vérifie si un numéro est enregistré sur WhatsApp (POST /contacts, méthode recommandée par
+   * Whapi — cf. "Check phones"). Réponse : { contacts: [{ input, status: 'valid'|'invalid', wa_id? }] }.
+   */
+  async checkContact(phone: string): Promise<boolean> {
+    const res = (await this.request('POST', '/contacts', { contacts: [phone] })) as {
+      contacts?: Array<{ status?: string }>
+    }
+    return res.contacts?.[0]?.status === 'valid'
+  }
+
   async postStatusText(caption: string): Promise<{ id?: string }> {
     const res = (await this.request('POST', '/messages/story/text', { caption })) as {
       message?: { id?: string }

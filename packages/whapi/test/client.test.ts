@@ -43,6 +43,42 @@ describe('WhapiClient', () => {
     expect(fetchFn).toHaveBeenCalledTimes(3)
   })
 
+  it('sendInteractiveUrl : POST /messages/interactive avec bouton URL au format exact', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { message: { id: 'MI1' } } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.sendInteractiveUrl(
+      '24177000001@s.whatsapp.net', 'Bravo !', '🎰 Tourner la roue', 'https://x.test/roue?t=abc',
+    )
+    expect(res.id).toBe('MI1')
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/messages/interactive')
+    expect(JSON.parse(init.body)).toEqual({
+      to: '24177000001@s.whatsapp.net',
+      type: 'button',
+      body: { text: 'Bravo !' },
+      action: {
+        buttons: [{ type: 'url', title: '🎰 Tourner la roue', id: 'url-button', url: 'https://x.test/roue?t=abc' }],
+      },
+    })
+  })
+
+  it('checkContact : numéro enregistré (status valid) → true', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { contacts: [{ input: '24177000001', status: 'valid', wa_id: '24177000001@s.whatsapp.net' }] } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const ok = await client.checkContact('24177000001')
+    expect(ok).toBe(true)
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/contacts')
+    expect(JSON.parse(init.body)).toEqual({ contacts: ['24177000001'] })
+  })
+
+  it('checkContact : numéro non enregistré (status invalid) → false', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { contacts: [{ input: '24177000001', status: 'invalid' }] } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const ok = await client.checkContact('24177000001')
+    expect(ok).toBe(false)
+  })
+
   it('configure le webhook au format Whapi exact', async () => {
     const fetchFn = mockFetch([{ status: 200 }])
     const client = new WhapiClient('t', { fetchFn, retryDelayMs: 0 })

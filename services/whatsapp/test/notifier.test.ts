@@ -69,12 +69,41 @@ describe('handleOrderUpdate', () => {
     }
   }
 
-  it('recuperee + roue activée + seuil atteint + lot dispo : envoie aussi le lien roue', async () => {
+  it('recuperee + roue activée + seuil atteint + lot dispo : bouton interactif OK → pas de fallback sendText', async () => {
+    const sendText = vi.fn().mockResolvedValue({ id: 'x' })
+    const sendInteractiveUrl = vi.fn().mockResolvedValue({ id: 'i1' })
+    const decrypt = vi.fn().mockReturnValue('tok')
+    const db = fakeDbWithWheel('24177@s.whatsapp.net', { wheel_enabled: true, wheel_trigger_orders: 3 }, 3, 1)
+    await handleOrderUpdate(db as never, 'k'.repeat(64), oldRow,
+      { ...oldRow, status: 'recuperee' }, () => ({ sendText, sendInteractiveUrl }), decrypt, 's'.repeat(32), 'https://x.test')
+    // 1 seul sendText (le message de statut) : le lien roue passe par le bouton interactif, pas de fallback.
+    expect(sendText).toHaveBeenCalledTimes(1)
+    expect(sendInteractiveUrl).toHaveBeenCalledTimes(1)
+    const [chatId, body, buttonText, url] = sendInteractiveUrl.mock.calls[0]
+    expect(chatId).toBe('24177@s.whatsapp.net')
+    expect(body).not.toContain('/roue?t=')
+    expect(buttonText).toBe('🎰 Tourner la roue')
+    expect(url).toContain('/roue?t=')
+  })
+
+  it('recuperee + roue activée : bouton interactif échoue → fallback sendText byte-identique au message v1', async () => {
+    const sendText = vi.fn().mockResolvedValue({ id: 'x' })
+    const sendInteractiveUrl = vi.fn().mockRejectedValue(new Error('whapi interactive 400'))
+    const decrypt = vi.fn().mockReturnValue('tok')
+    const db = fakeDbWithWheel('24177@s.whatsapp.net', { wheel_enabled: true, wheel_trigger_orders: 3 }, 3, 1)
+    await handleOrderUpdate(db as never, 'k'.repeat(64), oldRow,
+      { ...oldRow, status: 'recuperee' }, () => ({ sendText, sendInteractiveUrl }), decrypt, 's'.repeat(32), 'https://x.test')
+    expect(sendInteractiveUrl).toHaveBeenCalledTimes(1)
+    expect(sendText).toHaveBeenCalledTimes(2)
+    expect(sendText).toHaveBeenNthCalledWith(2, '24177@s.whatsapp.net', expect.stringContaining('/roue?t='))
+  })
+
+  it('recuperee + roue activée : makeWhapi sans sendInteractiveUrl (v1) → fallback sendText inchangé', async () => {
     const sendText = vi.fn().mockResolvedValue({ id: 'x' })
     const decrypt = vi.fn().mockReturnValue('tok')
     const db = fakeDbWithWheel('24177@s.whatsapp.net', { wheel_enabled: true, wheel_trigger_orders: 3 }, 3, 1)
     await handleOrderUpdate(db as never, 'k'.repeat(64), oldRow,
-      { ...oldRow, status: 'recuperee' }, () => ({ sendText }), decrypt, 's'.repeat(32), 'https://x.test')
+      { ...oldRow, status: 'recuperee' }, () => ({ sendText }) as never, decrypt, 's'.repeat(32), 'https://x.test')
     expect(sendText).toHaveBeenCalledTimes(2)
     expect(sendText).toHaveBeenNthCalledWith(2, '24177@s.whatsapp.net', expect.stringContaining('/roue?t='))
   })
