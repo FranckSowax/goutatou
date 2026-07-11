@@ -12,7 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { updateLpConfig, uploadHeroMedia } from './actions'
+import { updateLpConfig } from './actions'
+import { HeroUpload } from './hero-upload'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,12 +67,7 @@ export default async function LpEditorPage({ params }: { params: Promise<{ resta
               </a>
             </p>
           )}
-          <form action={uploadHeroMedia.bind(null, restaurantId)} className="flex flex-wrap items-center gap-2">
-            <Input name="hero" type="file" accept="image/*,video/*" required className="w-auto" />
-            <Button type="submit" variant="outline">
-              Uploader le média hero
-            </Button>
-          </form>
+          <HeroUpload restaurantId={restaurantId} />
         </CardContent>
       </Card>
 

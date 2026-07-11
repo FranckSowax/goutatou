@@ -61,21 +61,21 @@ export async function updateLpConfig(restaurantId: string, formData: FormData) {
   revalidatePath('/r/' + resto.slug, 'layout')
 }
 
-export async function uploadHeroMedia(restaurantId: string, formData: FormData) {
+/**
+ * Enregistre un média hero déjà uploadé DIRECTEMENT dans le bucket lp-media depuis
+ * le navigateur (les Server Actions plafonnent à quelques Mo — une vidéo n'y passe
+ * pas ; l'upload direct storage n'a pas cette limite). On ne reçoit que le chemin.
+ */
+export async function setHeroMedia(restaurantId: string, path: string) {
   await assertPlatformAdmin()
+  if (!path.startsWith(`${restaurantId}/`)) throw new Error('Chemin média invalide.')
   const admin = createAdminClient()
-  const file = formData.get('hero') as File | null
-  if (!file || file.size === 0) return
 
   const resto = await loadRestaurant(admin, restaurantId)
   const current = parseLpConfig(resto.lp_config, resto.name)
 
-  const safeName = file.name.replace(/^.*[\\/]/, '').replace(/[^a-zA-Z0-9._-]/g, '_')
-  const path = `${restaurantId}/hero-${Date.now()}-${safeName}`
-  const { error: upErr } = await admin.storage.from('lp-media').upload(path, file)
-  if (upErr) throw new Error(upErr.message)
   const mediaUrl = admin.storage.from('lp-media').getPublicUrl(path).data.publicUrl
-  const mediaType: 'image' | 'video' = file.type.startsWith('video') ? 'video' : 'image'
+  const mediaType: 'image' | 'video' = /\.(mp4|webm|mov|m4v)$/i.test(path) ? 'video' : 'image'
 
   const next: LpConfig = {
     ...current,
