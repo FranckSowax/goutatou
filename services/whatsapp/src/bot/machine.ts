@@ -59,8 +59,17 @@ function parseItemInput(input: string): { index: number; qty: number } | null {
   return { index: Number(m[1]), qty: m[2] ? Number(m[2]) : 1 }
 }
 
-function addToCart(cart: Cart, item: { id: string; name: string; price: number }, qty: number): Cart {
-  const existing = cart.items.find((it) => it.menuItemId === item.id)
+function addToCart(
+  cart: Cart,
+  item: { id: string; name: string; price: number; supplements?: SupplementLine[] },
+  qty: number,
+): Cart {
+  // Plat AVEC suppléments : toujours une NOUVELLE ligne (jamais de fusion), pour que
+  // la ligne tout juste ajoutée soit garantie dernière (ciblage de l'état SUPPLEMENTS)
+  // et que chaque occurrence porte son propre jeu de suppléments (sémantique LP B4).
+  // Plat SANS suppléments : fusion par menuItemId, comportement v1 strictement inchangé.
+  const hasSupplements = (item.supplements?.length ?? 0) > 0
+  const existing = hasSupplements ? undefined : cart.items.find((it) => it.menuItemId === item.id)
   const items = existing
     ? cart.items.map((it) => (it.menuItemId === item.id ? { ...it, qty: it.qty + qty } : it))
     : [...cart.items, { menuItemId: item.id, name: item.name, unitPrice: item.price, qty, supplements: [] }]

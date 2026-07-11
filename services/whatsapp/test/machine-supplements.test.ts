@@ -152,6 +152,62 @@ describe('SUPPLEMENTS — sélection', () => {
   })
 })
 
+describe('SUPPLEMENTS — re-ajout d’un plat à suppléments (lignes séparées)', () => {
+  it('re-ajouter le plat A après un plat B → NOUVELLE ligne en fin de panier, la sélection cible cette ligne', () => {
+    // 1. Plat A (avec suppléments) + un supplément, puis 0.
+    const a1 = transition('MENU', EMPTY_CART, '1', ctx)
+    const a1sup = transition('SUPPLEMENTS', a1.cart, '1', ctx)
+    const a1done = transition('SUPPLEMENTS', a1sup.cart, '0', ctx)
+    expect(a1done.state).toBe('MENU')
+
+    // 2. Plat B (sans suppléments).
+    const b = transition('MENU', a1done.cart, '2', ctx)
+    expect(b.state).toBe('MENU')
+    expect(b.cart.items).toHaveLength(2)
+
+    // 3. Re-ajout du plat A → ligne SÉPARÉE (pas de fusion avec la ligne 0).
+    const a2 = transition('MENU', b.cart, '1', ctx)
+    expect(a2.state).toBe('SUPPLEMENTS')
+    expect(a2.cart.items).toHaveLength(3)
+    expect(a2.cart.items[0]).toMatchObject({ menuItemId: 'item-bobun', qty: 1 })
+    expect(a2.cart.items[2]).toMatchObject({ menuItemId: 'item-bobun', qty: 1, supplements: [] })
+
+    // La sélection doit cibler la NOUVELLE ligne A (index 2), pas B ni l'ancienne A.
+    const a2sup = transition('SUPPLEMENTS', a2.cart, '2', ctx)
+    expect(a2sup.state).toBe('SUPPLEMENTS')
+    expect(a2sup.cart.items[0].supplements).toEqual([{ id: 'sup-oeuf', name: 'Œuf', price: 300 }])
+    expect(a2sup.cart.items[1].supplements).toEqual([])
+    expect(a2sup.cart.items[2].supplements).toEqual([{ id: 'sup-boeuf', name: 'Bœuf', price: 1000 }])
+
+    // Récap : deux lignes Bo Bun, chacune avec ses propres suppléments.
+    const recap = transition('SUPPLEMENTS', a2sup.cart, 'panier', ctx)
+    const lines = recap.replies[0].split('\n')
+    expect(lines.filter((l) => l.includes('1× Bo Bun'))).toHaveLength(2)
+    expect(recap.replies[0]).toContain('  ↳ Œuf +300 FCFA')
+    expect(recap.replies[0]).toContain('  ↳ Bœuf +1 000 FCFA')
+    // Total = (4500+300) + 2500 + (4500+1000) = 12 800
+    expect(recap.replies[0]).toContain('*Total : 12 800 FCFA*')
+  })
+
+  it('plat sans suppléments : re-ajout fusionne toujours (comportement v1 inchangé)', () => {
+    const once = transition('MENU', EMPTY_CART, '2', ctx)
+    const twice = transition('MENU', once.cart, '2', ctx)
+    expect(twice.cart.items).toHaveLength(1)
+    expect(twice.cart.items[0]).toMatchObject({ menuItemId: 'item-nems', qty: 2 })
+  })
+
+  it('"1x2" sur un plat à suppléments → une nouvelle ligne qty 2, les suppléments s’y appliquent', () => {
+    const r = transition('MENU', EMPTY_CART, '1x2', ctx)
+    expect(r.state).toBe('SUPPLEMENTS')
+    expect(r.cart.items).toEqual([
+      { menuItemId: 'item-bobun', name: 'Bo Bun', unitPrice: 4500, qty: 2, supplements: [] },
+    ])
+    const picked = transition('SUPPLEMENTS', r.cart, '1', ctx)
+    expect(picked.cart.items[0].qty).toBe(2)
+    expect(picked.cart.items[0].supplements).toEqual([{ id: 'sup-oeuf', name: 'Œuf', price: 300 }])
+  })
+})
+
 describe('SUPPLEMENTS — récap panier et total', () => {
   it('le récap liste les sous-lignes ↳ et le total inclut les suppléments', () => {
     const cart: Cart = {
