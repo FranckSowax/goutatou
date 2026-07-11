@@ -93,6 +93,24 @@ export async function updateItem(id: string, formData: FormData) {
   revalidatePath('/app/menu')
 }
 
+export async function updateItemPhoto(id: string, formData: FormData) {
+  const supabase = await createSupabaseServer()
+  const restaurantId = await myRestaurantId()
+
+  const photo = formData.get('photo') as File | null
+  if (!photo || photo.size === 0) return
+
+  const safeName = photo.name.replace(/^.*[\\/]/, '').replace(/[^a-zA-Z0-9._-]/g, '_')
+  const path = `${restaurantId}/${Date.now()}-${safeName}`
+  const { error: upErr } = await supabase.storage.from('menu-photos').upload(path, photo)
+  if (upErr) throw new Error(upErr.message)
+  const photoUrl = supabase.storage.from('menu-photos').getPublicUrl(path).data.publicUrl
+
+  const { error } = await supabase.from('menu_items').update({ photo_url: photoUrl }).eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/app/menu')
+}
+
 export async function reorderItems(categoryId: string, orderedIds: string[]) {
   const supabase = await createSupabaseServer()
   await myRestaurantId()
