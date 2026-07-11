@@ -38,5 +38,11 @@ export function needsExtraction(cfg: NeedsExtractionInput): boolean {
   if (cfg.mediaType !== 'video') return false
   if (cfg.mediaUrl === null) return false
   if (cfg.frames === null) return true
-  return cfg.frames.sourceUrl !== cfg.mediaUrl
+  if (cfg.frames.sourceUrl !== cfg.mediaUrl) return true
+  // Un 'pending' visible sur la même source est forcément périmé : les ticks
+  // sont strictement séquentiels (runLpFramesTick attend processOne avant de
+  // passer au candidat suivant), donc un pending qui traîne signifie que le
+  // worker a crashé/redémarré en plein traitement. On le reprend. 'failed'
+  // sur la même source reste ignoré (anti-boucle).
+  return cfg.frames.status === 'pending'
 }

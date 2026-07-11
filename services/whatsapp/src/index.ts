@@ -38,6 +38,7 @@ startLpFramesWorker({
   repo: lpFramesRepo,
   runFfmpeg: createFfmpegRunner(),
   pollMs: config.lpFramesPollMs,
+  allowedMediaPrefix: `${config.supabaseUrl}/storage/v1/object/public/lp-media/`,
 })
 const processWebhook = createProcessor(repo, (token) => new WhapiClient(token))
 

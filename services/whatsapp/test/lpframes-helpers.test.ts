@@ -121,14 +121,14 @@ describe('needsExtraction', () => {
     ).toBe(true)
   })
 
-  it('false quand frames pending sur la même source', () => {
+  it('true quand frames pending sur la même source (ticks séquentiels → forcément périmé)', () => {
     expect(
       needsExtraction({
         mediaType: 'video',
         mediaUrl: VIDEO_URL,
         frames: { status: 'pending', sourceUrl: VIDEO_URL },
       }),
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('true quand frames pending mais sur une autre source', () => {

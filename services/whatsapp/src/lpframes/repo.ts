@@ -64,13 +64,22 @@ export function createLpFramesRepo(db: SupabaseClient): LpFramesRepo {
 
     async setFrames(restaurantId, frames) {
       // On relit le lp_config courant juste avant l'update pour ne fusionner
-      // que hero.frames, sans écraser une édition admin concurrente.
-      const { data } = await db.from('restaurants').select('lp_config')
+      // que hero.frames, sans écraser une édition admin concurrente. Un échec
+      // de relecture (data=null et/ou error) ne doit JAMAIS être traité comme
+      // un lp_config vide : ça écraserait tout le reste au prochain update.
+      const { data, error } = await db.from('restaurants').select('lp_config')
         .eq('id', restaurantId).single()
-      const cfg = obj(data?.lp_config)
+      if (error || !data) {
+        throw new Error(`setFrames: relecture lp_config échouée — ${error?.message ?? 'introuvable'}`)
+      }
+      const cfg = obj(data.lp_config)
       const hero = obj(cfg.hero)
       const next = { ...cfg, hero: { ...hero, frames } }
-      await db.from('restaurants').update({ lp_config: next }).eq('id', restaurantId)
+      const { error: updateError } = await db.from('restaurants')
+        .update({ lp_config: next }).eq('id', restaurantId)
+      if (updateError) {
+        throw new Error(`setFrames: mise à jour lp_config échouée — ${updateError.message}`)
+      }
     },
 
     async uploadFrame(path, data) {

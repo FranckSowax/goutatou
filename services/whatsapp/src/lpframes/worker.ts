@@ -27,6 +27,13 @@ export interface LpFramesWorkerDeps {
   repo: LpFramesRepo
   runFfmpeg: RunFfmpeg
   fetchImpl?: typeof fetch
+  /**
+   * Garde SSRF : seule une mediaUrl commençant par ce préfixe (le dossier
+   * public du bucket lp-media) sera fetchée. Toute autre origine — y compris
+   * une URL absolue arbitraire injectée dans lp_config.hero.mediaUrl — est
+   * refusée sans requête réseau.
+   */
+  allowedMediaPrefix: string
 }
 
 /** Extrait la hauteur produite depuis le stderr ffmpeg (ex. "960x540"). 0 si non capturable. */
@@ -45,9 +52,15 @@ const FAILED_FRAMES = (sourceUrl: string): LpFrames => ({
 })
 
 export async function processOne(candidate: LpFramesCandidate, deps: LpFramesWorkerDeps): Promise<void> {
-  const { repo, runFfmpeg } = deps
+  const { repo, runFfmpeg, allowedMediaPrefix } = deps
   const fetchFn = deps.fetchImpl ?? fetch
   const sourceUrl = candidate.mediaUrl
+
+  if (!sourceUrl.startsWith(allowedMediaPrefix)) {
+    console.error('[lpframes-worker]', candidate.restaurantId, `mediaUrl hors origine autorisée (SSRF guard) : ${sourceUrl}`)
+    await repo.setFrames(candidate.restaurantId, FAILED_FRAMES(sourceUrl))
+    return
+  }
 
   await repo.setFrames(candidate.restaurantId, PENDING_FRAMES(sourceUrl))
 

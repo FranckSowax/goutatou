@@ -1,7 +1,11 @@
 import { writeFile } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
 import { processOne, runLpFramesTick, type LpFramesWorkerDeps } from '../src/lpframes/worker.js'
+import { createLpFramesRepo } from '../src/lpframes/repo.js'
 import type { LpFramesCandidate, LpFramesRepo } from '../src/lpframes/repo.js'
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+const ALLOWED_MEDIA_PREFIX = 'https://example.com/'
 
 const candidate: LpFramesCandidate = {
   restaurantId: 'r1',
@@ -17,6 +21,24 @@ function makeRepo(over: Partial<LpFramesRepo> = {}): LpFramesRepo {
     publicUrl: vi.fn((path: string) => `https://cdn.test/lp-media/${path}`),
     ...over,
   }
+}
+
+/**
+ * Stub minimal du client Supabase pour tester createLpFramesRepo().setFrames
+ * en isolation : reproduit la chaîne `.from().select().eq().single()` (lecture)
+ * et `.from().update().eq()` (écriture), avec des réponses configurables.
+ */
+function makeSupabaseStub(opts: {
+  selectResult: { data: unknown; error: { message: string } | null }
+  updateResult?: { error: { message: string } | null }
+}) {
+  const single = vi.fn().mockResolvedValue(opts.selectResult)
+  const selectEq = vi.fn().mockReturnValue({ single })
+  const select = vi.fn().mockReturnValue({ eq: selectEq })
+  const updateEq = vi.fn().mockResolvedValue(opts.updateResult ?? { error: null })
+  const update = vi.fn().mockReturnValue({ eq: updateEq })
+  const from = vi.fn().mockReturnValue({ select, update })
+  return { db: { from } as unknown as SupabaseClient, from, select, update, updateEq }
 }
 
 function makeFetch(ok = true) {
@@ -45,7 +67,7 @@ describe('processOne', () => {
     const repo = makeRepo()
     const fetchImpl = makeFetch()
     const runFfmpeg = makeSucceedingFfmpeg(3)
-    const deps: LpFramesWorkerDeps = { repo, runFfmpeg, fetchImpl }
+    const deps: LpFramesWorkerDeps = { repo, runFfmpeg, fetchImpl, allowedMediaPrefix: ALLOWED_MEDIA_PREFIX }
 
     await processOne(candidate, deps)
 
@@ -75,7 +97,7 @@ describe('processOne', () => {
     const repo = makeRepo()
     const fetchImpl = makeFetch()
     const runFfmpeg = vi.fn().mockRejectedValue(new Error('ffmpeg exit 1: invalid data'))
-    const deps: LpFramesWorkerDeps = { repo, runFfmpeg, fetchImpl }
+    const deps: LpFramesWorkerDeps = { repo, runFfmpeg, fetchImpl, allowedMediaPrefix: ALLOWED_MEDIA_PREFIX }
 
     await expect(processOne(candidate, deps)).resolves.toBeUndefined()
 
@@ -89,7 +111,7 @@ describe('processOne', () => {
     const repo = makeRepo()
     const fetchImpl = makeFetch(false)
     const runFfmpeg = vi.fn()
-    const deps: LpFramesWorkerDeps = { repo, runFfmpeg, fetchImpl }
+    const deps: LpFramesWorkerDeps = { repo, runFfmpeg, fetchImpl, allowedMediaPrefix: ALLOWED_MEDIA_PREFIX }
 
     await expect(processOne(candidate, deps)).resolves.toBeUndefined()
 
@@ -102,19 +124,97 @@ describe('processOne', () => {
     const repo = makeRepo()
     const fetchImpl = makeFetch()
     const runFfmpeg = makeSucceedingFfmpeg(0)
-    const deps: LpFramesWorkerDeps = { repo, runFfmpeg, fetchImpl }
+    const deps: LpFramesWorkerDeps = { repo, runFfmpeg, fetchImpl, allowedMediaPrefix: ALLOWED_MEDIA_PREFIX }
 
     await processOne(candidate, deps)
 
     const setFramesCalls = (repo.setFrames as ReturnType<typeof vi.fn>).mock.calls
     expect(setFramesCalls[1][1]).toMatchObject({ status: 'failed' })
   })
+
+  it('mediaUrl hors du bucket autorisé (garde SSRF) → failed direct, fetch jamais appelé', async () => {
+    const repo = makeRepo()
+    const fetchImpl = makeFetch()
+    const runFfmpeg = vi.fn()
+    const rogueCandidate: LpFramesCandidate = {
+      restaurantId: 'r1',
+      mediaUrl: 'https://attacker.example/internal-metadata',
+      lpConfig: {},
+    }
+    const deps: LpFramesWorkerDeps = { repo, runFfmpeg, fetchImpl, allowedMediaPrefix: ALLOWED_MEDIA_PREFIX }
+
+    await expect(processOne(rogueCandidate, deps)).resolves.toBeUndefined()
+
+    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(runFfmpeg).not.toHaveBeenCalled()
+    const setFramesCalls = (repo.setFrames as ReturnType<typeof vi.fn>).mock.calls
+    expect(setFramesCalls).toHaveLength(1)
+    expect(setFramesCalls[0]).toEqual(['r1', expect.objectContaining({ status: 'failed', sourceUrl: rogueCandidate.mediaUrl })])
+  })
+})
+
+describe('createLpFramesRepo — setFrames', () => {
+  it('relecture lp_config en échec (error) → throw, update jamais appelé', async () => {
+    const stub = makeSupabaseStub({ selectResult: { data: null, error: { message: 'network blip' } } })
+    const repo = createLpFramesRepo(stub.db)
+
+    await expect(
+      repo.setFrames('r1', { status: 'ready', sourceUrl: 'https://example.com/v.mp4', baseUrl: '', count: 1, width: 1, height: 1 }),
+    ).rejects.toThrow(/relecture lp_config échouée/)
+
+    expect(stub.update).not.toHaveBeenCalled()
+    expect(stub.updateEq).not.toHaveBeenCalled()
+  })
+
+  it('relecture sans error mais data=null → throw aussi, update jamais appelé', async () => {
+    const stub = makeSupabaseStub({ selectResult: { data: null, error: null } })
+    const repo = createLpFramesRepo(stub.db)
+
+    await expect(
+      repo.setFrames('r1', { status: 'ready', sourceUrl: 'https://example.com/v.mp4', baseUrl: '', count: 1, width: 1, height: 1 }),
+    ).rejects.toThrow(/relecture lp_config échouée/)
+
+    expect(stub.update).not.toHaveBeenCalled()
+  })
+
+  it('update en échec → throw (symétrique à la lecture)', async () => {
+    const stub = makeSupabaseStub({
+      selectResult: { data: { lp_config: { hero: { mediaType: 'video' } } }, error: null },
+      updateResult: { error: { message: 'write conflict' } },
+    })
+    const repo = createLpFramesRepo(stub.db)
+
+    await expect(
+      repo.setFrames('r1', { status: 'ready', sourceUrl: 'https://example.com/v.mp4', baseUrl: '', count: 1, width: 1, height: 1 }),
+    ).rejects.toThrow(/mise à jour lp_config échouée/)
+  })
+
+  it('lecture et update ok → merge hero.frames sans écraser le reste de lp_config', async () => {
+    const stub = makeSupabaseStub({
+      selectResult: {
+        data: { lp_config: { hero: { mediaType: 'video', mediaUrl: 'https://example.com/v.mp4' }, other: 'kept' } },
+        error: null,
+      },
+    })
+    const repo = createLpFramesRepo(stub.db)
+    const frames = { status: 'ready' as const, sourceUrl: 'https://example.com/v.mp4', baseUrl: 'https://cdn/x/', count: 2, width: 960, height: 540 }
+
+    await repo.setFrames('r1', frames)
+
+    expect(stub.update).toHaveBeenCalledWith({
+      lp_config: {
+        other: 'kept',
+        hero: { mediaType: 'video', mediaUrl: 'https://example.com/v.mp4', frames },
+      },
+    })
+    expect(stub.updateEq).toHaveBeenCalledWith('id', 'r1')
+  })
 })
 
 describe('runLpFramesTick', () => {
   it('aucun candidat → no-op', async () => {
     const repo = makeRepo({ listCandidates: vi.fn().mockResolvedValue([]) })
-    const deps: LpFramesWorkerDeps = { repo, runFfmpeg: vi.fn(), fetchImpl: makeFetch() }
+    const deps: LpFramesWorkerDeps = { repo, runFfmpeg: vi.fn(), fetchImpl: makeFetch(), allowedMediaPrefix: ALLOWED_MEDIA_PREFIX }
 
     await runLpFramesTick(deps)
 
@@ -125,7 +225,7 @@ describe('runLpFramesTick', () => {
   it('un candidat → traite via processOne', async () => {
     const repo = makeRepo({ listCandidates: vi.fn().mockResolvedValue([candidate]) })
     const runFfmpeg = makeSucceedingFfmpeg(1)
-    const deps: LpFramesWorkerDeps = { repo, runFfmpeg, fetchImpl: makeFetch() }
+    const deps: LpFramesWorkerDeps = { repo, runFfmpeg, fetchImpl: makeFetch(), allowedMediaPrefix: ALLOWED_MEDIA_PREFIX }
 
     await runLpFramesTick(deps)
 
