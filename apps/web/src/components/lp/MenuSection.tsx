@@ -1,11 +1,10 @@
 'use client'
 import { formatFcfa } from '@goutatou/db/types'
 import { Reveal } from './Reveal'
-import { useCart } from './CartProvider'
+import { AddToCartButton } from './AddToCartButton'
 import type { LpData } from '@/lib/lp/data'
 
 export function MenuSection({ categories }: { categories: LpData['categories'] }) {
-  const { addItem } = useCart()
   return (
     <section id="carte" className="mx-auto max-w-3xl px-6 py-20">
       <Reveal><h2 className="mb-10 text-3xl font-bold md:text-4xl">La carte</h2></Reveal>
@@ -23,12 +22,7 @@ export function MenuSection({ categories }: { categories: LpData['categories'] }
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="whitespace-nowrap font-semibold">{formatFcfa(it.price)}</span>
-                  <button onClick={() => addItem({ menuItemId: it.id, name: it.name, unitPrice: it.price })}
-                    aria-label={`Ajouter ${it.name} au panier`}
-                    className="rounded-full px-3 py-1 text-sm font-bold text-white"
-                    style={{ backgroundColor: 'var(--lp-primary)' }}>
-                    + Ajouter
-                  </button>
+                  <AddToCartButton item={it} />
                 </div>
               </li>
             ))}

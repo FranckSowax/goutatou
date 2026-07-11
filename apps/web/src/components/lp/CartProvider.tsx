@@ -1,12 +1,12 @@
 'use client'
 import { createContext, useContext, useEffect, useReducer, type ReactNode } from 'react'
-import { cartReducer, webCartTotal, type CartAction, type WebCartItem } from '@/lib/lp/cart'
+import { cartReducer, normalizeCartItems, webCartTotal, type CartAction, type WebCartItem } from '@/lib/lp/cart'
 
 interface CartApi {
   items: WebCartItem[]
   addItem: (i: Omit<WebCartItem, 'qty'>) => void
-  removeItem: (id: string) => void
-  setQty: (id: string, qty: number) => void
+  removeItem: (lineKey: string) => void
+  setQty: (lineKey: string, qty: number) => void
   clear: () => void
   total: number
   count: number
@@ -28,7 +28,7 @@ export function CartProvider({ children, slug }: { children: ReactNode; slug: st
     [],
     () => {
       if (typeof window === 'undefined') return []
-      try { return JSON.parse(window.localStorage.getItem(key) ?? '[]') as WebCartItem[] } catch { return [] }
+      try { return normalizeCartItems(JSON.parse(window.localStorage.getItem(key) ?? '[]')) } catch { return [] }
     },
   )
   useEffect(() => {
@@ -39,8 +39,8 @@ export function CartProvider({ children, slug }: { children: ReactNode; slug: st
     <Ctx.Provider value={{
       items,
       addItem: (item) => dispatch({ type: 'add', item }),
-      removeItem: (menuItemId) => dispatch({ type: 'remove', menuItemId }),
-      setQty: (menuItemId, qty) => dispatch({ type: 'setQty', menuItemId, qty }),
+      removeItem: (lineKey) => dispatch({ type: 'remove', lineKey }),
+      setQty: (lineKey, qty) => dispatch({ type: 'setQty', lineKey, qty }),
       clear: () => dispatch({ type: 'clear' }),
       total: webCartTotal(items),
       count: items.reduce((n, i) => n + i.qty, 0),

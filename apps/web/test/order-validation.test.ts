@@ -31,4 +31,30 @@ describe('validateWebOrder', () => {
     expect(validateWebOrder(null).ok).toBe(false)
     expect(validateWebOrder({ ...valid, customerName: 'F' }).ok).toBe(false)
   })
+
+  it('accepte supplementIds valides, dédupliqués', () => {
+    const r = validateWebOrder({ ...valid, items: [{ menuItemId: 'a', qty: 2, supplementIds: ['s1', 's2', 's1'] }] })
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.payload.items[0].supplementIds).toEqual(['s1', 's2'])
+  })
+  it('accepte un item sans supplementIds (rétrocompat v1)', () => {
+    const r = validateWebOrder(valid)
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.payload.items[0].supplementIds).toBeUndefined()
+  })
+  it('rejette supplementIds non-array, avec string vide, ou non-string', () => {
+    expect(validateWebOrder({ ...valid, items: [{ menuItemId: 'a', qty: 1, supplementIds: 's1' }] }).ok).toBe(false)
+    expect(validateWebOrder({ ...valid, items: [{ menuItemId: 'a', qty: 1, supplementIds: [''] }] }).ok).toBe(false)
+    expect(validateWebOrder({ ...valid, items: [{ menuItemId: 'a', qty: 1, supplementIds: [1] }] }).ok).toBe(false)
+  })
+  it('rejette plus de 10 supplementIds uniques', () => {
+    const ids = Array.from({ length: 11 }, (_, i) => `s${i}`)
+    expect(validateWebOrder({ ...valid, items: [{ menuItemId: 'a', qty: 1, supplementIds: ids }] }).ok).toBe(false)
+  })
+  it('accepte exactement 10 supplementIds uniques après déduplication', () => {
+    const ids = [...Array.from({ length: 10 }, (_, i) => `s${i}`), 's0']
+    const r = validateWebOrder({ ...valid, items: [{ menuItemId: 'a', qty: 1, supplementIds: ids }] })
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.payload.items[0].supplementIds).toHaveLength(10)
+  })
 })

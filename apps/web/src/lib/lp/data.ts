@@ -3,12 +3,19 @@ import { cache } from 'react'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { parseLpConfig, type LpConfig } from './config'
 
+export interface LpSupplement {
+  id: string
+  name: string
+  price: number
+}
+
 export interface LpMenuItem {
   id: string
   name: string
   description: string | null
   price: number
   photoUrl: string | null
+  supplements: LpSupplement[]
 }
 
 export interface LpData {
@@ -39,7 +46,7 @@ export const getLpData = cache(async (slug: string): Promise<LpData | null> => {
 
   const [{ data: cats }, { data: slots }] = await Promise.all([
     db.from('menu_categories')
-      .select('id, name, position, menu_items(id, name, description, price, photo_url, available, position)')
+      .select('id, name, position, menu_items(id, name, description, price, photo_url, available, position, menu_supplements(id, name, price, available, position))')
       .eq('restaurant_id', resto.id)
       .order('position'),
     db.from('drive_slots').select('id, label, position')
@@ -52,10 +59,17 @@ export const getLpData = cache(async (slug: string): Promise<LpData | null> => {
     items: ((c.menu_items as {
       id: string; name: string; description: string | null; price: number
       photo_url: string | null; available: boolean; position: number
+      menu_supplements: { id: string; name: string; price: number; available: boolean; position: number }[] | null
     }[]) ?? [])
       .filter((i) => i.available)
       .sort((a, b) => a.position - b.position)
-      .map((i) => ({ id: i.id, name: i.name, description: i.description, price: i.price, photoUrl: i.photo_url })),
+      .map((i) => ({
+        id: i.id, name: i.name, description: i.description, price: i.price, photoUrl: i.photo_url,
+        supplements: (i.menu_supplements ?? [])
+          .filter((s) => s.available)
+          .sort((a, b) => a.position - b.position)
+          .map((s) => ({ id: s.id, name: s.name, price: s.price })),
+      })),
   })).filter((c) => c.items.length > 0)
 
   const allItems = categories.flatMap((c) => c.items)

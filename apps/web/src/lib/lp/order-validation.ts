@@ -6,7 +6,7 @@ export interface WebOrderPayload {
   mode: 'drive' | 'livraison' | 'sur_place'
   driveSlotId?: string
   address?: string
-  items: { menuItemId: string; qty: number }[]
+  items: { menuItemId: string; qty: number; supplementIds?: string[] }[]
 }
 
 type Result = { ok: true; payload: WebOrderPayload } | { ok: false; error: string }
@@ -35,12 +35,23 @@ export function validateWebOrder(body: unknown): Result {
   }
 
   const rawItems = Array.isArray(b.items) ? b.items : []
-  const items: { menuItemId: string; qty: number }[] = []
+  const items: { menuItemId: string; qty: number; supplementIds?: string[] }[] = []
   for (const it of rawItems) {
     const o = it as Record<string, unknown>
     if (typeof o?.menuItemId !== 'string' || typeof o?.qty !== 'number') return { ok: false, error: 'Panier invalide.' }
     if (!Number.isInteger(o.qty) || o.qty < 1 || o.qty > 20) return { ok: false, error: 'Quantité invalide.' }
-    items.push({ menuItemId: o.menuItemId, qty: o.qty })
+
+    let supplementIds: string[] | undefined
+    if (o.supplementIds !== undefined) {
+      if (!Array.isArray(o.supplementIds) || o.supplementIds.some((s) => typeof s !== 'string' || s.length === 0)) {
+        return { ok: false, error: 'Panier invalide.' }
+      }
+      const deduped = [...new Set(o.supplementIds as string[])]
+      if (deduped.length > 10) return { ok: false, error: 'Panier invalide.' }
+      supplementIds = deduped
+    }
+
+    items.push({ menuItemId: o.menuItemId, qty: o.qty, ...(supplementIds ? { supplementIds } : {}) })
   }
   if (items.length < 1 || items.length > 15) return { ok: false, error: 'Votre panier est vide.' }
 

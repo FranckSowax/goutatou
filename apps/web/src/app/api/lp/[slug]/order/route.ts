@@ -58,7 +58,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ slug: s
     p_customer_id: customer.id,
     p_source: 'web',
     p_mode: p.mode,
-    p_items: p.items.map((i) => ({ menu_item_id: i.menuItemId, qty: i.qty })),
+    p_items: p.items.map((i) => ({
+      menu_item_id: i.menuItemId,
+      qty: i.qty,
+      ...(i.supplementIds && i.supplementIds.length > 0 ? { supplement_ids: i.supplementIds } : {}),
+    })),
     p_drive_slot_id: p.driveSlotId ?? null,
     p_delivery_address: p.address ?? null,
   })

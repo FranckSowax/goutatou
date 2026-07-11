@@ -3,6 +3,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { formatFcfa } from '@goutatou/db/types'
 import { useCart } from '@/components/lp/CartProvider'
+import { cartLineUnitPrice, lineKey } from '@/lib/lp/cart'
 
 export function CheckoutForm({ slug, driveEnabled, driveSlots }: {
   slug: string; driveEnabled: boolean; driveSlots: { id: string; label: string }[]
@@ -26,7 +27,11 @@ export function CheckoutForm({ slug, driveEnabled, driveSlots }: {
         mode,
         driveSlotId: fd.get('slot') || undefined,
         address: fd.get('address') || undefined,
-        items: items.map((i) => ({ menuItemId: i.menuItemId, qty: i.qty })),
+        items: items.map((i) => ({
+          menuItemId: i.menuItemId,
+          qty: i.qty,
+          ...(i.supplements.length > 0 ? { supplementIds: i.supplements.map((s) => s.id) } : {}),
+        })),
       }),
     })
     const json = await res.json().catch(() => ({}))
@@ -44,16 +49,21 @@ export function CheckoutForm({ slug, driveEnabled, driveSlots }: {
     <form onSubmit={submit} className="flex flex-col gap-5">
       <ul className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 p-4">
         {items.map((it) => (
-          <li key={it.menuItemId} className="flex items-center justify-between gap-3">
-            <span>{it.name}</span>
-            <span className="flex items-center gap-2">
-              <button type="button" aria-label="Moins" onClick={() => setQty(it.menuItemId, it.qty - 1)}
-                className="h-7 w-7 rounded-full border border-white/30">−</button>
-              <span className="w-6 text-center">{it.qty}</span>
-              <button type="button" aria-label="Plus" onClick={() => setQty(it.menuItemId, it.qty + 1)}
-                className="h-7 w-7 rounded-full border border-white/30">+</button>
-              <span className="ml-2 w-24 text-right font-semibold">{formatFcfa(it.unitPrice * it.qty)}</span>
-            </span>
+          <li key={lineKey(it)} className="flex flex-col gap-1">
+            <div className="flex items-center justify-between gap-3">
+              <span>{it.name}</span>
+              <span className="flex items-center gap-2">
+                <button type="button" aria-label="Moins" onClick={() => setQty(lineKey(it), it.qty - 1)}
+                  className="h-7 w-7 rounded-full border border-white/30">−</button>
+                <span className="w-6 text-center">{it.qty}</span>
+                <button type="button" aria-label="Plus" onClick={() => setQty(lineKey(it), it.qty + 1)}
+                  className="h-7 w-7 rounded-full border border-white/30">+</button>
+                <span className="ml-2 w-24 text-right font-semibold">{formatFcfa(cartLineUnitPrice(it) * it.qty)}</span>
+              </span>
+            </div>
+            {it.supplements.map((s) => (
+              <p key={s.id} className="pl-3 text-sm opacity-70">↳ {s.name} +{formatFcfa(s.price)}</p>
+            ))}
           </li>
         ))}
         <li className="flex justify-between border-t border-white/10 pt-3 font-bold">
