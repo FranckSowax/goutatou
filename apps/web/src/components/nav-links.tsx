@@ -2,9 +2,9 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { ClipboardList, UtensilsCrossed, Megaphone, Gift, Camera, Store, LayoutTemplate, Home, ChartColumn, type LucideIcon } from 'lucide-react'
+import { ClipboardList, UtensilsCrossed, Megaphone, Gift, Camera, Store, LayoutTemplate, Home, ChartColumn, MessagesSquare, type LucideIcon } from 'lucide-react'
 
-const ICONS = { ClipboardList, UtensilsCrossed, Megaphone, Gift, Camera, Store, LayoutTemplate, Home, ChartColumn } satisfies Record<string, LucideIcon>
+const ICONS = { ClipboardList, UtensilsCrossed, Megaphone, Gift, Camera, Store, LayoutTemplate, Home, ChartColumn, MessagesSquare } satisfies Record<string, LucideIcon>
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS }
 
 export function NavLinks({ items, orientation }: { items: NavItem[]; orientation: 'vertical' | 'horizontal' }) {
