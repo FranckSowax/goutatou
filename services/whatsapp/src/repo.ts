@@ -37,6 +37,14 @@ export interface BotRepo {
   getBotContext(restaurantId: string, restaurantName: string, driveEnabled: boolean): Promise<BotContext>
   upsertCustomer(restaurantId: string, phone: string, chatId: string, name?: string): Promise<{ id: string }>
   setOptedOut(restaurantId: string, customerId: string): Promise<void>
+  /** Opt-in marketing explicite (mot-clé PROMOS) : n'altère PAS opted_out (critère audience v1). */
+  setMarketingOptIn(restaurantId: string, customerId: string): Promise<void>
+  /**
+   * Progression roue pour CE client, pour le mot-clé *roue* uniquement (pas chargé sur
+   * chaque message). orderCount = commandes *recuperee*, même critère que le déclencheur
+   * réel (shouldOfferSpin / notifier.ts) pour une progression honnête.
+   */
+  getWheelInfo(restaurantId: string, customerId: string): Promise<{ enabled: boolean; triggerOrders: number; orderCount: number }>
   loadConversation(restaurantId: string, customerId: string): Promise<{ state: BotState; cart: Cart }>
   saveConversation(restaurantId: string, customerId: string, state: BotState, cart: Cart): Promise<void>
   createOrder(restaurantId: string, customerId: string, cart: Cart): Promise<{ orderNumber: number; total: number }>
@@ -126,6 +134,25 @@ export function createRepo(db: SupabaseClient, tokenKey: string): BotRepo {
       const { error } = await db.from('customers').update({ opted_out: true })
         .eq('restaurant_id', restaurantId).eq('id', customerId)
       if (error) throw new Error(`setOptedOut: ${error.message}`)
+    },
+
+    async setMarketingOptIn(restaurantId, customerId) {
+      const { error } = await db.from('customers').update({ marketing_opt_in: true })
+        .eq('restaurant_id', restaurantId).eq('id', customerId)
+      if (error) throw new Error(`setMarketingOptIn: ${error.message}`)
+    },
+
+    async getWheelInfo(restaurantId, customerId) {
+      const [{ data: resto }, { count }] = await Promise.all([
+        db.from('restaurants').select('wheel_enabled, wheel_trigger_orders').eq('id', restaurantId).single(),
+        db.from('orders').select('id', { count: 'exact', head: true })
+          .eq('restaurant_id', restaurantId).eq('customer_id', customerId).eq('status', 'recuperee'),
+      ])
+      return {
+        enabled: resto?.wheel_enabled ?? false,
+        triggerOrders: resto?.wheel_trigger_orders ?? 1,
+        orderCount: count ?? 0,
+      }
     },
 
     async loadConversation(restaurantId, customerId) {

@@ -18,6 +18,12 @@ export interface BotContext {
   profile?: BotProfile
   /** Message d'accueil personnalisé du restaurant. Absent/vide = accueil générique. */
   botWelcome?: string
+  /**
+   * Progression roue de la fortune pour CE client, injectée par le processor (repo) sur
+   * la seule commande *roue* (pas chargée sur chaque message). Absente si le mot-clé n'est
+   * pas celui en cours de traitement — cf. shouldOfferSpin/loyalty pour la sémantique du seuil.
+   */
+  wheel?: { enabled: boolean; triggerOrders: number; orderCount: number }
 }
 
 export interface TransitionResult {
@@ -106,6 +112,8 @@ export function transition(state: BotState, cart: Cart, input: string, ctx: BotC
   if (text === 'annuler') return result('ACCUEIL', EMPTY_CART, [copy.canceled])
   if (text === 'humain') return result('HUMAIN', cart, [copy.human])
   if (text === 'infos') return result(state, cart, [copy.infos(ctx.profile)])
+  if (text === 'roue') return result(state, cart, [copy.roue(ctx.wheel)])
+  if (text === 'promos') return result(state, cart, [copy.promos])
   if (text === 'panier') {
     return result(state === 'ACCUEIL' ? 'MENU' : state, cart,
       [cart.items.length ? copy.cartRecap(cart) : copy.emptyCart])

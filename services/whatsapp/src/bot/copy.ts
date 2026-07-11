@@ -62,4 +62,27 @@ export const copy = {
     }
     return `ℹ️ *Infos pratiques*\n${lines.join('\n')}`
   },
+  /**
+   * roue désactivée/absente (ctx.wheel non fourni) → présentation courte du programme,
+   * PAS de tour gratuit v1 (cf. spec marketing QR opt-in). roue activée → pitch + progression,
+   * calculée par modulo comme le déclencheur réel (shouldOfferSpin) : jamais négative,
+   * jamais à 0 (le seuil suivant est toujours entre 1 et triggerOrders commandes plus loin).
+   */
+  roue: (wheel?: { enabled: boolean; triggerOrders: number; orderCount: number }) => {
+    if (!wheel?.enabled) {
+      return (
+        `🎡 *Programme fidélité*\n` +
+        `Commandez régulièrement et gagnez la chance de remporter un cadeau à la roue de la fortune ! ` +
+        `Revenez bientôt, le programme sera activé prochainement. 🎁`
+      )
+    }
+    const remaining = wheel.triggerOrders - (wheel.orderCount % wheel.triggerOrders)
+    const plural = remaining > 1 ? 's' : ''
+    return (
+      `🎡 *Roue de la fortune*\n` +
+      `Commandez régulièrement et tentez de gagner un cadeau ! 🎁\n` +
+      `Plus que ${remaining} commande${plural} avant votre tour de roue !`
+    )
+  },
+  promos: `✅ C'est noté ! Vous recevrez nos offres et promotions ici. Envoyez STOP à tout moment pour vous désinscrire.`,
 }

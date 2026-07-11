@@ -111,11 +111,20 @@ export function createProcessor(
         }
 
         const conv = await repo.loadConversation(channel.restaurantId, customer.id)
-        const ctx = await repo.getBotContext(channel.restaurantId, channel.restaurantName, channel.driveEnabled)
+        const baseCtx = await repo.getBotContext(channel.restaurantId, channel.restaurantName, channel.driveEnabled)
 
-        // Détection précise de la commande globale 'menu' (cf. bot/machine.ts, routage
-        // global) : c'est cette même condition qui déclenche le rendu du menu texte.
+        // Détection précise des commandes globales (cf. bot/machine.ts, routage global) :
+        // mêmes conditions que celles évaluées par la machine.
         const isMenuCommand = msg.text.body.trim().toLowerCase() === 'menu'
+        const isRoueCommand = msg.text.body.trim().toLowerCase() === 'roue'
+        const isPromosCommand = msg.text.body.trim().toLowerCase() === 'promos'
+
+        // Contexte roue chargé UNIQUEMENT sur le mot-clé 'roue', et jamais en état HUMAIN
+        // (où la commande serait de toute façon avalée silencieusement par la machine) :
+        // la machine reste pure, le processor injecte l'effet de lecture repo dans ctx.wheel.
+        const ctx = isRoueCommand && conv.state !== 'HUMAIN'
+          ? { ...baseCtx, wheel: await repo.getWheelInfo(channel.restaurantId, customer.id) }
+          : baseCtx
 
         const res = transition(conv.state, conv.cart, msg.text.body, ctx)
         const replies = [...res.replies]
@@ -145,6 +154,18 @@ export function createProcessor(
             await sendMenuPhotos(whapi, repo, channel.restaurantId, msg.chat_id, ctx.menu, deps)
           } catch (err) {
             console.error('[menu-photos] erreur inattendue', err)
+          }
+        }
+
+        // res.replies non vide confirme que la transition a bien emprunté le routage global
+        // 'promos' (et non un état HUMAIN qui l'aurait avalé silencieusement — seul cas où
+        // une commande globale produit une liste de réponses vide). Écriture best-effort :
+        // un échec d'opt-in ne doit jamais faire échouer la conversation en cours.
+        if (isPromosCommand && res.replies.length > 0) {
+          try {
+            await repo.setMarketingOptIn(channel.restaurantId, customer.id)
+          } catch (err) {
+            console.error('[processor] setMarketingOptIn échoué', err)
           }
         }
       } catch (err) {

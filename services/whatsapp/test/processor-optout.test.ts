@@ -30,6 +30,8 @@ describe('processor opt-out', () => {
       createOrder: vi.fn(),
       logMessage: vi.fn().mockResolvedValue(true),
       setOptedOut: vi.fn().mockResolvedValue(undefined),
+      setMarketingOptIn: vi.fn().mockResolvedValue(undefined),
+      getWheelInfo: vi.fn().mockResolvedValue({ enabled: false, triggerOrders: 5, orderCount: 0 }),
     }
   })
 

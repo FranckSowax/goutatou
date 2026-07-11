@@ -43,6 +43,8 @@ describe('processor — photos du menu', () => {
       }),
       upsertCustomer: vi.fn().mockResolvedValue({ id: 'cust-1' }),
       setOptedOut: vi.fn().mockResolvedValue(undefined),
+      setMarketingOptIn: vi.fn().mockResolvedValue(undefined),
+      getWheelInfo: vi.fn().mockResolvedValue({ enabled: false, triggerOrders: 5, orderCount: 0 }),
       loadConversation: vi.fn().mockResolvedValue({ state: 'ACCUEIL', cart: EMPTY_CART }),
       saveConversation: vi.fn().mockResolvedValue(undefined),
       createOrder: vi.fn(),
