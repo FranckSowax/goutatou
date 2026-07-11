@@ -105,6 +105,10 @@ export async function getPairingCode(id: string, phone: string): Promise<{ code:
   try {
     const { code } = await whapi.getLoginCode(trimmedPhone)
     if (!code) throw new Error('code manquant')
+    // Mémorise le numéro sur le canal : c'est lui qui alimente les QR opt-in
+    // (wa.me) côté dashboard — aucun autre chemin ne renseigne phone.
+    const admin = createAdminClient()
+    await admin.from('whapi_channels').update({ phone: trimmedPhone }).eq('restaurant_id', id)
     return { code }
   } catch {
     throw new Error('Impossible de contacter Whapi — le canal n’existe peut-être plus.')

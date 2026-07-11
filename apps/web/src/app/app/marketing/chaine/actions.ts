@@ -72,12 +72,15 @@ export async function createChannelAction() {
   }
 
   const admin = createAdminClient()
-  const { data: updated, error } = await admin
+  // Écriture conditionnelle anti double-clic : si un appel concurrent a déjà
+  // posé un wa_channel_id, on ne l'écrase pas (course perdue = succès, la
+  // chaîne surnuméraire reste orpheline côté Whapi, sans effet chez nous).
+  const { error } = await admin
     .from('restaurants')
     .update({ wa_channel_id: channelId, wa_channel_invite: invite ?? null })
     .eq('id', restaurantId)
-    .select('id')
-  if (error || !updated || updated.length === 0) {
+    .is('wa_channel_id', null)
+  if (error) {
     throw new Error('Impossible de créer la chaîne — vérifiez que votre canal WhatsApp est connecté.')
   }
 
