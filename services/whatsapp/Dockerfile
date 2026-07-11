@@ -6,6 +6,8 @@ RUN pnpm install --frozen-lockfile && pnpm --filter @goutatou/service-whatsapp..
 
 FROM node:22-slim
 RUN corepack enable
+# ffmpeg : requis par le worker d'extraction de frames LP (services/whatsapp/src/lpframes)
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /repo
 COPY --from=build /repo .
 ENV NODE_ENV=production

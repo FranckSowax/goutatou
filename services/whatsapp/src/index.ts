@@ -9,6 +9,8 @@ import { createCampaignRepo } from './campaigns/repo.js'
 import { startCampaignWorker } from './campaigns/worker.js'
 import { createStatusRepo } from './statuses/repo.js'
 import { startStatusWorker } from './statuses/worker.js'
+import { createLpFramesRepo } from './lpframes/repo.js'
+import { createFfmpegRunner, startLpFramesWorker } from './lpframes/worker.js'
 
 const config = loadConfig()
 const db = createServiceClient(config.supabaseUrl, config.serviceRoleKey)
@@ -30,6 +32,12 @@ startStatusWorker({
   repo: statusRepo,
   makeWhapi: (token) => new WhapiClient(token),
   pollMs: config.statusPollMs,
+})
+const lpFramesRepo = createLpFramesRepo(db)
+startLpFramesWorker({
+  repo: lpFramesRepo,
+  runFfmpeg: createFfmpegRunner(),
+  pollMs: config.lpFramesPollMs,
 })
 const processWebhook = createProcessor(repo, (token) => new WhapiClient(token))
 

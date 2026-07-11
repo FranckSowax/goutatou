@@ -18,6 +18,7 @@ export function loadConfig() {
     dailyCap: Number(process.env.CAMPAIGN_DAILY_CAP ?? 500),
     batchSize: Number(process.env.CAMPAIGN_BATCH_SIZE ?? 50),
     statusPollMs: Number(process.env.STATUS_POLL_MS ?? 30000),
+    lpFramesPollMs: Number(process.env.LP_FRAMES_POLL_MS ?? 60000),
   }
 }
 export type Config = ReturnType<typeof loadConfig>
