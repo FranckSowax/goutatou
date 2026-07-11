@@ -212,3 +212,72 @@ export async function reorderCategories(orderedIds: string[]) {
   if (failed?.error) throw new Error(failed.error.message)
   revalidatePath('/app/menu')
 }
+
+export async function createSupplement(itemId: string, formData: FormData) {
+  const supabase = await createSupabaseServer()
+  await myRestaurantId()
+
+  const { data: item, error: itemError } = await supabase
+    .from('menu_items')
+    .select('id, restaurant_id')
+    .eq('id', itemId)
+    .single()
+  if (itemError || !item) throw new Error('Plat introuvable')
+
+  const name = String(formData.get('name') ?? '').trim()
+  if (!name) throw new Error('Le nom du supplément est requis')
+
+  const priceRaw = formData.get('price')
+  const price = Number(priceRaw)
+  if (!Number.isFinite(price) || price < 0) throw new Error('Le prix doit être un nombre positif')
+
+  const { count, error: countError } = await supabase
+    .from('menu_supplements')
+    .select('id', { count: 'exact', head: true })
+    .eq('menu_item_id', itemId)
+  if (countError) throw new Error(countError.message)
+
+  const { error } = await supabase.from('menu_supplements').insert({
+    restaurant_id: item.restaurant_id,
+    menu_item_id: itemId,
+    name,
+    price,
+    position: (count ?? 0) + 1,
+  })
+  if (error) throw new Error(error.message)
+  revalidatePath('/app/menu')
+}
+
+export async function updateSupplement(id: string, formData: FormData) {
+  const supabase = await createSupabaseServer()
+  await myRestaurantId()
+
+  const name = String(formData.get('name') ?? '').trim()
+  if (!name) throw new Error('Le nom du supplément est requis')
+
+  const priceRaw = formData.get('price')
+  const price = Number(priceRaw)
+  if (!Number.isFinite(price) || price < 0) throw new Error('Le prix doit être un nombre positif')
+
+  const { error } = await supabase.from('menu_supplements').update({ name, price }).eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/app/menu')
+}
+
+export async function deleteSupplement(id: string) {
+  const supabase = await createSupabaseServer()
+  await myRestaurantId()
+
+  const { error } = await supabase.from('menu_supplements').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/app/menu')
+}
+
+export async function toggleSupplementAvailable(id: string, available: boolean) {
+  const supabase = await createSupabaseServer()
+  await myRestaurantId()
+
+  const { error } = await supabase.from('menu_supplements').update({ available }).eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/app/menu')
+}

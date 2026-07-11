@@ -26,6 +26,14 @@ import { cn } from '@/lib/utils'
 import { arrayMove } from '@/lib/reorder'
 import { deleteCategory, moveItem, renameCategory, reorderCategories, reorderItems, toggleItemAvailable } from './actions'
 
+export type MenuStudioSupplement = {
+  id: string
+  name: string
+  price: number
+  available: boolean
+  position: number
+}
+
 export type MenuStudioItem = {
   id: string
   name: string
@@ -34,6 +42,7 @@ export type MenuStudioItem = {
   photo_url: string | null
   available: boolean
   position: number
+  supplements: MenuStudioSupplement[]
 }
 
 export type MenuStudioCategory = {
@@ -388,7 +397,14 @@ function ItemRow({
       )}
 
       <div className="min-w-0">
-        <p className="truncate font-medium">{item.name}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="truncate font-medium">{item.name}</p>
+          {item.supplements.length > 0 && (
+            <Badge variant="outline" className="shrink-0">
+              {item.supplements.length} suppl.
+            </Badge>
+          )}
+        </div>
         {item.description && (
           <p className="truncate text-xs text-muted-foreground">{item.description}</p>
         )}

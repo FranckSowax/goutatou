@@ -32,7 +32,7 @@ export default async function MenuPage() {
   const { data: categories } = await supabase
     .from('menu_categories')
     .select(
-      'id, name, position, menu_items(id, name, description, price, available, photo_url, position)'
+      'id, name, position, menu_items(id, name, description, price, available, photo_url, position, menu_supplements(id, name, price, available, position))'
     )
     .order('position')
     .order('position', { referencedTable: 'menu_items' })
@@ -49,6 +49,16 @@ export default async function MenuPage() {
       photo_url: item.photo_url,
       available: item.available,
       position: item.position,
+      supplements: (item.menu_supplements ?? [])
+        .slice()
+        .sort((a, b) => a.position - b.position)
+        .map((supplement) => ({
+          id: supplement.id,
+          name: supplement.name,
+          price: supplement.price,
+          available: supplement.available,
+          position: supplement.position,
+        })),
     })),
   }))
 
