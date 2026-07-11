@@ -38,6 +38,7 @@ export default async function FidelitePage() {
     supabase.from('wheel_spins')
       .select('code, created_at, expires_at, prizes(label)')
       .eq('restaurant_id', restaurantId)
+      .eq('outcome', 'prize')
       .is('redeemed_at', null)
       .order('created_at', { ascending: false })
       .limit(20),
