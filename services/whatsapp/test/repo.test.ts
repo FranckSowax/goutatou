@@ -35,14 +35,14 @@ describe('createRepo — getBotContext (suppléments)', () => {
       name: 'Plats', position: 0,
       menu_items: [
         {
-          id: 'i1', name: 'Bo Bun', price: 4500, available: true, position: 0,
+          id: 'i1', name: 'Bo Bun', price: 4500, available: true, position: 0, photo_url: null,
           menu_supplements: [
             { id: 's2', name: 'Bœuf', price: 1000, available: true, position: 1 },
             { id: 's1', name: 'Œuf', price: 300, available: true, position: 0 },
             { id: 's3', name: 'Indispo', price: 500, available: false, position: 2 },
           ],
         },
-        { id: 'i2', name: 'Nems', price: 2500, available: true, position: 1, menu_supplements: [] },
+        { id: 'i2', name: 'Nems', price: 2500, available: true, position: 1, photo_url: null, menu_supplements: [] },
       ],
     }]
     const { db } = makeMenuSupabaseStub(cats)
@@ -50,7 +50,7 @@ describe('createRepo — getBotContext (suppléments)', () => {
     const ctx = await repo.getBotContext('r1', 'Chez Test', true)
 
     expect(ctx.menu.categories[0].items[0]).toEqual({
-      id: 'i1', name: 'Bo Bun', price: 4500,
+      id: 'i1', name: 'Bo Bun', price: 4500, photoUrl: null,
       supplements: [
         { id: 's1', name: 'Œuf', price: 300 },
         { id: 's2', name: 'Bœuf', price: 1000 },
@@ -58,6 +58,27 @@ describe('createRepo — getBotContext (suppléments)', () => {
     })
     // Plat sans supplément dispo : tableau vide (forme B5 inchangée).
     expect(ctx.menu.categories[0].items[1].supplements).toEqual([])
+  })
+})
+
+describe('createRepo — getBotContext (photo_url)', () => {
+  it('mappe photo_url → photoUrl dans le menu bot', async () => {
+    const cats = [{
+      name: 'Plats', position: 0,
+      menu_items: [
+        {
+          id: 'i1', name: 'Bo Bun', price: 4500, available: true, position: 0,
+          photo_url: 'https://cdn.example.com/bo-bun.jpg', menu_supplements: [],
+        },
+        { id: 'i2', name: 'Nems', price: 2500, available: true, position: 1, photo_url: null, menu_supplements: [] },
+      ],
+    }]
+    const { db } = makeMenuSupabaseStub(cats)
+    const repo = createRepo(db, 'k'.repeat(32))
+    const ctx = await repo.getBotContext('r1', 'Chez Test', true)
+
+    expect(ctx.menu.categories[0].items[0].photoUrl).toBe('https://cdn.example.com/bo-bun.jpg')
+    expect(ctx.menu.categories[0].items[1].photoUrl).toBeNull()
   })
 })
 

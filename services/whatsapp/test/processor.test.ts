@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { EMPTY_CART } from '@goutatou/db'
-import { createProcessor } from '../src/processor.js'
+import { createProcessor, type ProcessorDeps } from '../src/processor.js'
 import type { BotRepo } from '../src/repo.js'
+
+const deps: ProcessorDeps = {
+  sleep: vi.fn().mockResolvedValue(undefined),
+  sendDelayMinMs: 0, sendDelayMaxMs: 0, menuPhotosMax: 8,
+}
 
 function webhookPayload(body: string, overrides: Record<string, unknown> = {}) {
   return {
@@ -45,14 +50,14 @@ describe('processor', () => {
   })
 
   it('message "menu" → répond la carte au chat_id, sauve l’état MENU', async () => {
-    const process = createProcessor(repo, () => ({ sendText }))
+    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn() }), deps)
     await process('chan-uuid', webhookPayload('menu'))
     expect(sendText).toHaveBeenCalledWith('24177000001@s.whatsapp.net', expect.stringContaining('Bo Bun'))
     expect(repo.saveConversation).toHaveBeenCalledWith('resto-1', 'cust-1', 'MENU', expect.anything())
   })
 
   it('ignore from_me et les types non-text', async () => {
-    const process = createProcessor(repo, () => ({ sendText }))
+    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn() }), deps)
     await process('chan-uuid', webhookPayload('menu', { from_me: true }))
     await process('chan-uuid', webhookPayload('menu', { type: 'image' }))
     expect(sendText).not.toHaveBeenCalled()
@@ -60,14 +65,14 @@ describe('processor', () => {
 
   it('canal inconnu → aucun envoi, pas de crash', async () => {
     repo.getChannel = vi.fn().mockResolvedValue(null)
-    const process = createProcessor(repo, () => ({ sendText }))
+    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn() }), deps)
     await process('unknown', webhookPayload('menu'))
     expect(sendText).not.toHaveBeenCalled()
   })
 
   it('message déjà traité (dédup) → skip', async () => {
     repo.logMessage = vi.fn().mockResolvedValue(false)
-    const process = createProcessor(repo, () => ({ sendText }))
+    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn() }), deps)
     await process('chan-uuid', webhookPayload('menu'))
     expect(sendText).not.toHaveBeenCalled()
   })
@@ -77,7 +82,7 @@ describe('processor', () => {
       state: 'CONFIRMATION',
       cart: { items: [{ menuItemId: 'i1', name: 'Bo Bun', unitPrice: 4500, qty: 1 }], mode: 'drive', driveSlotId: 's1', driveSlotLabel: '12h00' },
     })
-    const process = createProcessor(repo, () => ({ sendText }))
+    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn() }), deps)
     await process('chan-uuid', webhookPayload('1'))
     expect(repo.createOrder).toHaveBeenCalledWith('resto-1', 'cust-1', expect.objectContaining({ mode: 'drive' }))
     expect(sendText).toHaveBeenCalledWith('24177000001@s.whatsapp.net', expect.stringContaining('n°42'))
@@ -100,7 +105,7 @@ describe('processor', () => {
       },
     })
     repo.loadConversation = vi.fn().mockResolvedValue({ state: 'MENU', cart: EMPTY_CART })
-    const process = createProcessor(repo, () => ({ sendText }))
+    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn() }), deps)
     await process('chan-uuid', webhookPayload('1'))
     expect(sendText).toHaveBeenCalledWith('24177000001@s.whatsapp.net', expect.stringContaining('Œuf'))
     expect(repo.saveConversation).toHaveBeenCalledWith('resto-1', 'cust-1', 'SUPPLEMENTS', expect.objectContaining({
@@ -119,7 +124,7 @@ describe('processor', () => {
         mode: 'sur_place',
       },
     })
-    const process = createProcessor(repo, () => ({ sendText }))
+    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn() }), deps)
     await process('chan-uuid', webhookPayload('1'))
     expect(repo.createOrder).toHaveBeenCalledWith('resto-1', 'cust-1', expect.objectContaining({
       items: [expect.objectContaining({ supplements: [{ id: 'sup-1', name: 'Œuf', price: 300 }] })],
@@ -128,14 +133,14 @@ describe('processor', () => {
 
   it('erreur de traitement d’un message → message de secours envoyé, pas de crash', async () => {
     repo.upsertCustomer = vi.fn().mockRejectedValue(new Error('db down'))
-    const process = createProcessor(repo, () => ({ sendText }))
+    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn() }), deps)
     await expect(process('chan-uuid', webhookPayload('menu'))).resolves.toBeUndefined()
     expect(sendText).toHaveBeenCalledWith('24177000001@s.whatsapp.net', expect.stringContaining('souci technique'))
   })
 
   it('échec d’envoi Whapi → loggé en message_logs, pas de crash', async () => {
     sendText = vi.fn().mockRejectedValue(new Error('whapi 500'))
-    const process = createProcessor(repo, () => ({ sendText }))
+    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn() }), deps)
     await expect(process('chan-uuid', webhookPayload('menu'))).resolves.toBeUndefined()
     expect(repo.logMessage).toHaveBeenCalledWith(
       expect.anything(), 'out', expect.any(String), expect.any(String), undefined, expect.any(String),

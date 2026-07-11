@@ -19,6 +19,7 @@ export function loadConfig() {
     batchSize: Number(process.env.CAMPAIGN_BATCH_SIZE ?? 50),
     statusPollMs: Number(process.env.STATUS_POLL_MS ?? 30000),
     lpFramesPollMs: Number(process.env.LP_FRAMES_POLL_MS ?? 60000),
+    menuPhotosMax: Math.max(0, Number(process.env.MENU_PHOTOS_MAX ?? 8)),
   }
 }
 export type Config = ReturnType<typeof loadConfig>

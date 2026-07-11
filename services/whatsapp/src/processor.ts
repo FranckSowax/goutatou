@@ -1,7 +1,8 @@
 import { EMPTY_CART, formatFcfa } from '@goutatou/db'
 import type { WhapiClient } from '@goutatou/whapi'
-import { transition } from './bot/machine.js'
+import { flatMenuItems, transition, type BotContext } from './bot/machine.js'
 import { isOptOutKeyword } from './campaigns/optout.js'
+import { nextSendDelayMs } from './campaigns/throttle.js'
 import type { BotRepo } from './repo.js'
 
 interface WhapiMessage {
@@ -12,6 +13,50 @@ interface WhapiMessage {
   from: string
   from_name?: string
   text?: { body?: string }
+}
+
+export interface ProcessorDeps {
+  sleep: (ms: number) => Promise<void>
+  rng?: () => number
+  sendDelayMinMs: number
+  sendDelayMaxMs: number
+  menuPhotosMax: number
+}
+
+type ProcessorWhapi = Pick<WhapiClient, 'sendText' | 'sendImage'>
+
+/**
+ * Envoi des photos des plats disponibles après la réponse texte à la commande *menu*.
+ * Complément au menu texte (source canonique) : throttlé, cappé, jamais bloquant pour
+ * la conversation (chaque échec est loggé et n'interrompt pas les envois suivants).
+ */
+async function sendMenuPhotos(
+  whapi: ProcessorWhapi,
+  repo: BotRepo,
+  restaurantId: string,
+  chatId: string,
+  menu: BotContext['menu'],
+  deps: ProcessorDeps,
+): Promise<void> {
+  if (deps.menuPhotosMax <= 0) return
+
+  const dishes = flatMenuItems(menu)
+    .filter((it): it is typeof it & { photoUrl: string } => !!it.photoUrl)
+    .slice(0, deps.menuPhotosMax)
+
+  for (let i = 0; i < dishes.length; i++) {
+    const dish = dishes[i]
+    const caption = `${dish.name} — ${formatFcfa(dish.price)}`
+    try {
+      const sent = await whapi.sendImage(chatId, dish.photoUrl, caption)
+      await repo.logMessage(restaurantId, 'out', chatId, caption, sent.id)
+    } catch (err) {
+      console.error(`[menu-photos] échec envoi photo plat ${dish.id}`, err)
+    }
+    if (i < dishes.length - 1) {
+      await deps.sleep(nextSendDelayMs(deps.sendDelayMinMs, deps.sendDelayMaxMs, deps.rng))
+    }
+  }
 }
 
 function orderConfirmedCopy(orderNumber: number, total: number, cart: {
@@ -29,7 +74,8 @@ function orderConfirmedCopy(orderNumber: number, total: number, cart: {
 
 export function createProcessor(
   repo: BotRepo,
-  makeWhapi: (token: string) => Pick<WhapiClient, 'sendText'>,
+  makeWhapi: (token: string) => ProcessorWhapi,
+  deps: ProcessorDeps,
 ): (channelUuid: string, payload: unknown) => Promise<void> {
   return async (channelUuid, payload) => {
     const messages = (payload as { messages?: WhapiMessage[] })?.messages ?? []
@@ -67,6 +113,10 @@ export function createProcessor(
         const conv = await repo.loadConversation(channel.restaurantId, customer.id)
         const ctx = await repo.getBotContext(channel.restaurantId, channel.restaurantName, channel.driveEnabled)
 
+        // Détection précise de la commande globale 'menu' (cf. bot/machine.ts, routage
+        // global) : c'est cette même condition qui déclenche le rendu du menu texte.
+        const isMenuCommand = msg.text.body.trim().toLowerCase() === 'menu'
+
         const res = transition(conv.state, conv.cart, msg.text.body, ctx)
         const replies = [...res.replies]
         let nextCart = res.cart
@@ -85,6 +135,16 @@ export function createProcessor(
             await repo.logMessage(channel.restaurantId, 'out', msg.chat_id, reply, sent.id)
           } catch (err) {
             await repo.logMessage(channel.restaurantId, 'out', msg.chat_id, reply, undefined, String(err))
+          }
+        }
+
+        // res.state === 'MENU' confirme que la transition a bien emprunté le routage
+        // global 'menu' (et non un état HUMAIN qui l'aurait avalé silencieusement).
+        if (isMenuCommand && res.state === 'MENU') {
+          try {
+            await sendMenuPhotos(whapi, repo, channel.restaurantId, msg.chat_id, ctx.menu, deps)
+          } catch (err) {
+            console.error('[menu-photos] erreur inattendue', err)
           }
         }
       } catch (err) {

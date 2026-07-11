@@ -42,7 +42,12 @@ startLpFramesWorker({
   // toutes les extractions en failed (préfixe à double slash ≠ mediaUrl du web).
   allowedMediaPrefix: `${config.supabaseUrl.replace(/\/+$/, '')}/storage/v1/object/public/lp-media/`,
 })
-const processWebhook = createProcessor(repo, (token) => new WhapiClient(token))
+const processWebhook = createProcessor(repo, (token) => new WhapiClient(token), {
+  sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+  sendDelayMinMs: config.sendDelayMinMs,
+  sendDelayMaxMs: config.sendDelayMaxMs,
+  menuPhotosMax: config.menuPhotosMax,
+})
 
 const app = createApp({ processWebhook })
 app.listen(config.port, () => console.log(`[service-whatsapp] écoute sur :${config.port}`))

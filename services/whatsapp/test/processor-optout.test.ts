@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { EMPTY_CART } from '@goutatou/db'
-import { createProcessor } from '../src/processor.js'
+import { createProcessor, type ProcessorDeps } from '../src/processor.js'
 import type { BotRepo } from '../src/repo.js'
+
+const deps: ProcessorDeps = {
+  sleep: vi.fn().mockResolvedValue(undefined),
+  sendDelayMinMs: 0, sendDelayMaxMs: 0, menuPhotosMax: 8,
+}
 
 function payload(body: string) {
   return {
@@ -29,7 +34,7 @@ describe('processor opt-out', () => {
   })
 
   it('mot-clé STOP → setOptedOut + confirmation, pas de transition', async () => {
-    const process = createProcessor(repo, () => ({ sendText }))
+    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn() }), deps)
     await process('c', payload('STOP'))
     expect(repo.setOptedOut).toHaveBeenCalledWith('r1', 'cust1')
     expect(sendText).toHaveBeenCalledWith('24177000001@s.whatsapp.net', expect.stringContaining('désabonné'))
@@ -37,7 +42,7 @@ describe('processor opt-out', () => {
   })
 
   it('message normal → pas de setOptedOut', async () => {
-    const process = createProcessor(repo, () => ({ sendText }))
+    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn() }), deps)
     await process('c', payload('menu'))
     expect(repo.setOptedOut).not.toHaveBeenCalled()
   })

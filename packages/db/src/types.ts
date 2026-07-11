@@ -29,7 +29,11 @@ export interface Cart {
 export interface MenuForBot {
   categories: {
     name: string
-    items: { id: string; name: string; price: number; supplements?: SupplementLine[] }[]
+    items: {
+      id: string; name: string; price: number; supplements?: SupplementLine[]
+      /** Optionnel : rétrocompatible avec les fixtures existantes qui ne le fournissent pas. */
+      photoUrl?: string | null
+    }[]
   }[]
 }
 

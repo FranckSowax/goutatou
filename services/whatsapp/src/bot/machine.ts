@@ -25,7 +25,7 @@ export interface TransitionResult {
 
 export function flatMenuItems(
   menu: MenuForBot,
-): { id: string; name: string; price: number; supplements?: SupplementLine[] }[] {
+): { id: string; name: string; price: number; supplements?: SupplementLine[]; photoUrl?: string | null }[] {
   return menu.categories.flatMap((c) => c.items)
 }
 
