@@ -1,12 +1,21 @@
 export type OrderMode = 'drive' | 'livraison' | 'sur_place'
 export type OrderStatus = 'recue' | 'en_preparation' | 'prete' | 'recuperee' | 'annulee'
-export type BotState = 'ACCUEIL' | 'MENU' | 'MODE' | 'CRENEAU' | 'ADRESSE' | 'CONFIRMATION' | 'HUMAIN'
+export type BotState =
+  | 'ACCUEIL' | 'MENU' | 'MODE' | 'CRENEAU' | 'ADRESSE' | 'CONFIRMATION' | 'HUMAIN' | 'SUPPLEMENTS'
+
+export interface SupplementLine {
+  id: string
+  name: string
+  price: number
+}
 
 export interface CartItem {
   menuItemId: string
   name: string
   unitPrice: number
   qty: number
+  /** Suppléments choisis pour cet item (défaut : absent = aucun, rétrocompatible). */
+  supplements?: SupplementLine[]
 }
 
 export interface Cart {
@@ -18,7 +27,10 @@ export interface Cart {
 }
 
 export interface MenuForBot {
-  categories: { name: string; items: { id: string; name: string; price: number }[] }[]
+  categories: {
+    name: string
+    items: { id: string; name: string; price: number; supplements?: SupplementLine[] }[]
+  }[]
 }
 
 export const EMPTY_CART: Cart = Object.freeze({
@@ -26,7 +38,10 @@ export const EMPTY_CART: Cart = Object.freeze({
 })
 
 export function cartTotal(cart: Cart): number {
-  return cart.items.reduce((sum, it) => sum + it.unitPrice * it.qty, 0)
+  return cart.items.reduce((sum, it) => {
+    const supplementsTotal = (it.supplements ?? []).reduce((s, sup) => s + sup.price, 0)
+    return sum + (it.unitPrice + supplementsTotal) * it.qty
+  }, 0)
 }
 
 export function formatFcfa(amount: number): string {

@@ -1,4 +1,8 @@
-import { type Cart, cartTotal, formatFcfa } from '@goutatou/db'
+import { type Cart, type SupplementLine, cartTotal, formatFcfa } from '@goutatou/db'
+
+function supplementsList(supplements: SupplementLine[]): string {
+  return supplements.map((s, i) => `${i + 1}. ${s.name} +${formatFcfa(s.price)}`).join('\n')
+}
 
 export const copy = {
   welcome: (name: string) =>
@@ -11,9 +15,17 @@ export const copy = {
   notUnderstood: `Désolé, je n'ai pas compris 😅 Tapez *menu* pour voir la carte.`,
   emptyCart: `Votre panier est vide. Tapez *menu* pour voir la carte.`,
   cartRecap: (cart: Cart) => {
-    const lines = cart.items.map((it) => `• ${it.qty}× ${it.name} — ${formatFcfa(it.unitPrice * it.qty)}`)
+    const lines = cart.items.flatMap((it) => {
+      const main = `• ${it.qty}× ${it.name} — ${formatFcfa(it.unitPrice * it.qty)}`
+      const subs = (it.supplements ?? []).map((s) => `  ↳ ${s.name} +${formatFcfa(s.price)}`)
+      return [main, ...subs]
+    })
     return `🛒 *Votre panier*\n${lines.join('\n')}\n\n*Total : ${formatFcfa(cartTotal(cart))}*`
   },
+  supplementsPrompt: (itemName: string, supplements: SupplementLine[]) =>
+    `Avec supplément pour ${itemName} ?\n0. Non merci\n${supplementsList(supplements)}`,
+  supplementsAgain: (supplements: SupplementLine[]) =>
+    `Autre supplément ? (0 pour continuer)\n0. Non merci\n${supplementsList(supplements)}`,
   canceled: `Commande annulée. Tapez *menu* quand vous voulez recommencer. 👍`,
   human: `Un membre de l'équipe va vous répondre ici. Tapez *bot* pour reprendre la commande automatique.`,
   chooseMode: (options: string[]) =>

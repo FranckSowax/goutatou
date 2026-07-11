@@ -4,6 +4,7 @@ import {
   type Cart,
   type MenuForBot,
   type OrderMode,
+  type SupplementLine,
   formatFcfa,
 } from '@goutatou/db'
 import { copy } from './copy.js'
@@ -22,7 +23,9 @@ export interface TransitionResult {
   createOrder?: boolean
 }
 
-export function flatMenuItems(menu: MenuForBot): { id: string; name: string; price: number }[] {
+export function flatMenuItems(
+  menu: MenuForBot,
+): { id: string; name: string; price: number; supplements?: SupplementLine[] }[] {
   return menu.categories.flatMap((c) => c.items)
 }
 
@@ -60,8 +63,20 @@ function addToCart(cart: Cart, item: { id: string; name: string; price: number }
   const existing = cart.items.find((it) => it.menuItemId === item.id)
   const items = existing
     ? cart.items.map((it) => (it.menuItemId === item.id ? { ...it, qty: it.qty + qty } : it))
-    : [...cart.items, { menuItemId: item.id, name: item.name, unitPrice: item.price, qty }]
+    : [...cart.items, { menuItemId: item.id, name: item.name, unitPrice: item.price, qty, supplements: [] }]
   return { ...cart, items }
+}
+
+/** Dernier item du panier + suppléments disponibles pour ce plat (menu). */
+function lastItemWithSupplements(
+  cart: Cart, ctx: BotContext,
+): { item: Cart['items'][number]; index: number; supplements: SupplementLine[] } | null {
+  const index = cart.items.length - 1
+  const item = cart.items[index]
+  if (!item) return null
+  const menuItem = flatMenuItems(ctx.menu).find((m) => m.id === item.menuItemId)
+  const supplements = menuItem?.supplements ?? []
+  return { item, index, supplements }
 }
 
 export function transition(state: BotState, cart: Cart, input: string, ctx: BotContext): TransitionResult {
@@ -98,10 +113,45 @@ export function transition(state: BotState, cart: Cart, input: string, ctx: BotC
         const item = items[parsed.index - 1]
         if (item) {
           const next = addToCart(cart, item, parsed.qty)
+          if (item.supplements && item.supplements.length > 0) {
+            return result('SUPPLEMENTS', next, [copy.supplementsPrompt(item.name, item.supplements)])
+          }
           return result('MENU', next, [copy.added(item.name, parsed.qty)])
         }
       }
       return result('MENU', cart, [copy.notUnderstood])
+    }
+
+    case 'SUPPLEMENTS': {
+      const ctxItem = lastItemWithSupplements(cart, ctx)
+      if (!ctxItem || ctxItem.supplements.length === 0) {
+        // Garde-fou : rien à proposer, on revient au flux normal.
+        return result('MENU', cart, [copy.notUnderstood])
+      }
+      const { item, index, supplements } = ctxItem
+      const chosen = item.supplements ?? []
+
+      if (text === '0' || text === 'non') {
+        return result('MENU', cart, [copy.added(item.name, item.qty)])
+      }
+
+      const idx = Number(text) - 1
+      const pick = text !== '' && Number.isInteger(idx) ? supplements[idx] : undefined
+      if (pick) {
+        const alreadyChosen = chosen.some((s) => s.id === pick.id)
+        if (!alreadyChosen) {
+          const updatedItem = { ...item, supplements: [...chosen, pick] }
+          const items = cart.items.map((it, i) => (i === index ? updatedItem : it))
+          return result('SUPPLEMENTS', { ...cart, items }, [copy.supplementsAgain(supplements)])
+        }
+        return result('SUPPLEMENTS', cart, [copy.supplementsAgain(supplements)])
+      }
+
+      // Entrée invalide : on redemande (même prompt que celui affiché en dernier).
+      const prompt = chosen.length > 0
+        ? copy.supplementsAgain(supplements)
+        : copy.supplementsPrompt(item.name, supplements)
+      return result('SUPPLEMENTS', cart, [prompt])
     }
 
     case 'MODE': {

@@ -46,14 +46,18 @@ describe('transition — accueil et menu', () => {
 
   it('MENU: "1" ajoute 1 Bo Bun au panier', () => {
     const r = transition('MENU', EMPTY_CART, '1', ctx)
-    expect(r.cart.items).toEqual([{ menuItemId: 'item-bobun', name: 'Bo Bun', unitPrice: 4500, qty: 1 }])
+    expect(r.cart.items).toEqual([
+      { menuItemId: 'item-bobun', name: 'Bo Bun', unitPrice: 4500, qty: 1, supplements: [] },
+    ])
     expect(r.replies[0]).toContain('Bo Bun')
     expect(r.replies[0]).toContain('*valider*')
   })
 
   it('MENU: "3x2" ajoute 2 Coca', () => {
     const r = transition('MENU', EMPTY_CART, '3x2', ctx)
-    expect(r.cart.items[0]).toEqual({ menuItemId: 'item-coca', name: 'Coca 33cl', unitPrice: 1000, qty: 2 })
+    expect(r.cart.items[0]).toEqual(
+      { menuItemId: 'item-coca', name: 'Coca 33cl', unitPrice: 1000, qty: 2, supplements: [] },
+    )
   })
 
   it('MENU: re-ajouter le même item incrémente la quantité', () => {
