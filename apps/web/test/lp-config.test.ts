@@ -40,4 +40,83 @@ describe('parseLpConfig', () => {
     expect(parseLpConfig(null, 'X').published).toBe(false)
     expect(parseLpConfig('junk', 'X').hero.title).toBe('X')
   })
+
+  it('hero.frames absent → null', () => {
+    const c = parseLpConfig({}, 'Chez Mama')
+    expect(c.hero.frames).toBeNull()
+  })
+
+  it('hero.frames ready complet → objet', () => {
+    const c = parseLpConfig({
+      hero: {
+        frames: {
+          status: 'ready',
+          sourceUrl: 'https://x/video.mp4',
+          baseUrl: 'https://cdn/frames/',
+          count: 90,
+          width: 1920,
+          height: 1080,
+        },
+      },
+    }, 'Chez Mama')
+    expect(c.hero.frames).toEqual({
+      status: 'ready',
+      sourceUrl: 'https://x/video.mp4',
+      baseUrl: 'https://cdn/frames/',
+      count: 90,
+      width: 1920,
+      height: 1080,
+    })
+  })
+
+  it('hero.frames ready sans count → null', () => {
+    const c = parseLpConfig({
+      hero: {
+        frames: {
+          status: 'ready',
+          sourceUrl: 'https://x/video.mp4',
+          baseUrl: 'https://cdn/frames/',
+          count: 0,
+          width: 1920,
+          height: 1080,
+        },
+      },
+    }, 'Chez Mama')
+    expect(c.hero.frames).toBeNull()
+  })
+
+  it('hero.frames pending minimal (status+sourceUrl) → objet avec baseUrl vide/count 0', () => {
+    const c = parseLpConfig({
+      hero: {
+        frames: {
+          status: 'pending',
+          sourceUrl: 'https://x/video.mp4',
+        },
+      },
+    }, 'Chez Mama')
+    expect(c.hero.frames).toEqual({
+      status: 'pending',
+      sourceUrl: 'https://x/video.mp4',
+      baseUrl: '',
+      count: 0,
+      width: 0,
+      height: 0,
+    })
+  })
+
+  it('hero.frames status inconnu → null', () => {
+    const c = parseLpConfig({
+      hero: {
+        frames: {
+          status: 'bogus',
+          sourceUrl: 'https://x/video.mp4',
+          baseUrl: 'https://cdn/frames/',
+          count: 10,
+          width: 100,
+          height: 100,
+        },
+      },
+    }, 'Chez Mama')
+    expect(c.hero.frames).toBeNull()
+  })
 })

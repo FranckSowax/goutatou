@@ -6,9 +6,24 @@ export interface LpTheme {
   font: 'sans' | 'serif'
 }
 
+export interface LpHeroFrames {
+  status: 'pending' | 'ready' | 'failed'
+  sourceUrl: string
+  baseUrl: string
+  count: number
+  width: number
+  height: number
+}
+
 export interface LpConfig {
   published: boolean
-  hero: { title: string; subtitle: string; mediaUrl: string | null; mediaType: 'image' | 'video' }
+  hero: {
+    title: string
+    subtitle: string
+    mediaUrl: string | null
+    mediaType: 'image' | 'video'
+    frames: LpHeroFrames | null
+  }
   about: { title: string; text: string } | null
   featuredIds: string[]
   infos: { address: string | null; hours: string[]; mapsUrl: string | null }
@@ -36,6 +51,27 @@ function strOrNull(v: unknown): string | null {
 function obj(v: unknown): Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {}
 }
+function num(v: unknown, fallback: number): number {
+  return typeof v === 'number' && Number.isFinite(v) ? v : fallback
+}
+
+function parseHeroFrames(v: unknown): LpHeroFrames | null {
+  const f = obj(v)
+  if (f.status !== 'pending' && f.status !== 'ready' && f.status !== 'failed') return null
+  const sourceUrl = strOrNull(f.sourceUrl)
+  if (!sourceUrl) return null
+  const baseUrl = str(f.baseUrl, '')
+  const count = num(f.count, 0)
+  if (f.status === 'ready' && (!baseUrl || count <= 0)) return null
+  return {
+    status: f.status,
+    sourceUrl,
+    baseUrl,
+    count,
+    width: num(f.width, 0),
+    height: num(f.height, 0),
+  }
+}
 
 export function parseLpConfig(raw: unknown, restaurantName: string): LpConfig {
   const r = obj(raw)
@@ -54,6 +90,7 @@ export function parseLpConfig(raw: unknown, restaurantName: string): LpConfig {
       subtitle: str(hero.subtitle, ''),
       mediaUrl: strOrNull(hero.mediaUrl),
       mediaType: hero.mediaType === 'video' ? 'video' : 'image',
+      frames: parseHeroFrames(hero.frames),
     },
     about: aboutText ? { title: str(about.title, 'Notre histoire'), text: aboutText } : null,
     featuredIds: Array.isArray(r.featuredIds) ? r.featuredIds.filter((x): x is string => typeof x === 'string') : [],
