@@ -38,7 +38,9 @@ startLpFramesWorker({
   repo: lpFramesRepo,
   runFfmpeg: createFfmpegRunner(),
   pollMs: config.lpFramesPollMs,
-  allowedMediaPrefix: `${config.supabaseUrl}/storage/v1/object/public/lp-media/`,
+  // replace(/\/+$/,'') : un slash final dans SUPABASE_URL marquerait silencieusement
+  // toutes les extractions en failed (préfixe à double slash ≠ mediaUrl du web).
+  allowedMediaPrefix: `${config.supabaseUrl.replace(/\/+$/, '')}/storage/v1/object/public/lp-media/`,
 })
 const processWebhook = createProcessor(repo, (token) => new WhapiClient(token))
 
