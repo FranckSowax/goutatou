@@ -88,6 +88,69 @@ export class WhapiClient {
     return res.contacts?.[0]?.status === 'valid'
   }
 
+  /**
+   * Crée un canal (newsletter WhatsApp) — POST /newsletters. Endpoint et champ `name` confirmés
+   * par .agents/skills/whapi/references/channels-management.md et whapi.readme.io/reference/createnewsletter.
+   * La doc ne détaille pas le schéma exact de la réponse (pas d'exemple JSON affiché) : lecture
+   * défensive de `id`/`invite`, tous deux optionnels — utiliser getNewsletter en repli si `invite`
+   * manque à la création.
+   */
+  async createNewsletter(name: string): Promise<{ id?: string; invite?: string }> {
+    const res = (await this.request('POST', '/newsletters', { name })) as { id?: string; invite?: string }
+    return { id: res.id, invite: res.invite }
+  }
+
+  /**
+   * Récupère les métadonnées d'un canal — GET /newsletters/{NewsletterID}. Endpoint confirmé par
+   * channels-management.md et whapi.readme.io/reference/getnewsletter. Schéma de réponse non
+   * détaillé par la doc (pas d'exemple JSON) : lecture défensive de `id`/`invite`/`name`.
+   */
+  async getNewsletter(id: string): Promise<{ id?: string; invite?: string; name?: string }> {
+    const res = (await this.request('GET', `/newsletters/${id}`)) as { id?: string; invite?: string; name?: string }
+    return { id: res.id ?? id, invite: res.invite, name: res.name }
+  }
+
+  /**
+   * Envoie un texte à un canal : même endpoint POST /messages/text que sendText, avec `to` =
+   * ID du canal au format `...@newsletter` (confirmé par channels-management.md, section
+   * "Post to a Channel" : "Use the channel's @newsletter ID as the to field").
+   */
+  async sendNewsletterText(newsletterId: string, body: string): Promise<{ id?: string }> {
+    return this.sendText(newsletterId, body)
+  }
+
+  /**
+   * Envoie une image à un canal : même endpoint POST /messages/image que sendImage, avec `to` =
+   * ID du canal au format `...@newsletter` (confirmé par channels-management.md).
+   */
+  async sendNewsletterImage(newsletterId: string, mediaUrl: string, caption?: string): Promise<{ id?: string }> {
+    return this.sendImage(newsletterId, mediaUrl, caption)
+  }
+
+  /**
+   * QR code de connexion à distance, en base64 — GET /users/login. Méthode et chemin confirmés
+   * via whapi.readme.io/reference/loginuser (non documenté dans .agents/skills/whapi/references/).
+   * Nom du champ `base64` INFÉRÉ de la description de l'outil MCP loginUser ("returns an image
+   * of the type base64") — la doc readme.io n'affiche pas d'exemple de réponse JSON. À vérifier
+   * contre une vraie réponse Whapi avant usage en prod.
+   */
+  async getLoginQr(): Promise<{ base64?: string }> {
+    const res = (await this.request('GET', '/users/login')) as { base64?: string }
+    return { base64: res.base64 }
+  }
+
+  /**
+   * Code d'appairage à distance (sans QR) — GET /users/login/{PhoneNumber}. Méthode et chemin
+   * confirmés via whapi.readme.io/reference/loginuserviaauthcode (non documenté dans
+   * .agents/skills/whapi/references/). Nom du champ `code` INFÉRÉ de la description de l'outil
+   * MCP loginUserViaAuthCode ("returns a code that allows you to connect the phone number...") —
+   * la doc readme.io n'affiche pas d'exemple de réponse JSON. À vérifier avant usage en prod.
+   */
+  async getLoginCode(phone: string): Promise<{ code?: string }> {
+    const res = (await this.request('GET', `/users/login/${phone}`)) as { code?: string }
+    return { code: res.code }
+  }
+
   async postStatusText(caption: string): Promise<{ id?: string }> {
     const res = (await this.request('POST', '/messages/story/text', { caption })) as {
       message?: { id?: string }

@@ -90,4 +90,67 @@ describe('WhapiClient', () => {
       webhooks: [{ mode: 'body', events: [{ type: 'messages', method: 'post' }], url: 'https://bot.example.com/hook/abc' }],
     })
   })
+
+  it('createNewsletter : POST /newsletters avec le bon body, parse id et invite', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { id: '120363@newsletter', invite: 'https://wa.me/channel/abc' } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.createNewsletter('Promos Goutatou')
+    expect(res).toEqual({ id: '120363@newsletter', invite: 'https://wa.me/channel/abc' })
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/newsletters')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body)).toEqual({ name: 'Promos Goutatou' })
+  })
+
+  it('getNewsletter : GET /newsletters/{id}, parse id (repli sur l\'id demandé)/invite/name', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { invite: 'https://wa.me/channel/xyz', name: 'Promos Goutatou' } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.getNewsletter('120363@newsletter')
+    expect(res).toEqual({ id: '120363@newsletter', invite: 'https://wa.me/channel/xyz', name: 'Promos Goutatou' })
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/newsletters/120363@newsletter')
+    expect(init.method).toBe('GET')
+  })
+
+  it('sendNewsletterText : POST /messages/text avec to = ID @newsletter', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { message: { id: 'NW1' } } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.sendNewsletterText('120363@newsletter', 'Promo du jour')
+    expect(res.id).toBe('NW1')
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/messages/text')
+    expect(JSON.parse(init.body)).toEqual({ to: '120363@newsletter', body: 'Promo du jour' })
+  })
+
+  it('sendNewsletterImage : POST /messages/image avec to = ID @newsletter', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { message: { id: 'NW2' } } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.sendNewsletterImage('120363@newsletter', 'https://cdn.example.com/promo.jpg', 'Nouveau menu')
+    expect(res.id).toBe('NW2')
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/messages/image')
+    expect(JSON.parse(init.body)).toEqual({
+      to: '120363@newsletter', media: 'https://cdn.example.com/promo.jpg', caption: 'Nouveau menu',
+    })
+  })
+
+  it('getLoginQr : GET /users/login, parse base64', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { base64: 'data:image/png;base64,AAAA' } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.getLoginQr()
+    expect(res).toEqual({ base64: 'data:image/png;base64,AAAA' })
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/users/login')
+    expect(init.method).toBe('GET')
+  })
+
+  it('getLoginCode : GET /users/login/{PhoneNumber}, parse code', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { code: 'ABCD-1234' } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.getLoginCode('24177000001')
+    expect(res).toEqual({ code: 'ABCD-1234' })
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/users/login/24177000001')
+    expect(init.method).toBe('GET')
+  })
 })
