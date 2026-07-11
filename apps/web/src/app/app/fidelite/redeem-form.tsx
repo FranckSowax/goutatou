@@ -17,7 +17,12 @@ export function RedeemForm() {
         await redeemCode(formData)
         setResult({ ok: true, message: 'Code validé.' })
       } catch (error) {
-        setResult({ ok: false, message: 'Code invalide ou déjà utilisé.' })
+        // Fallback FR fixe : seul le message d'expiration (contrôlé côté serveur, pas de
+        // détail sensible) est distingué du refus générique.
+        const message = error instanceof Error && error.message === 'Ce lot a expiré.'
+          ? 'Ce lot a expiré.'
+          : 'Code invalide ou déjà utilisé.'
+        setResult({ ok: false, message })
       }
     })
   }

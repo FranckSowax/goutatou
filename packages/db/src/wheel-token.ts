@@ -24,6 +24,29 @@ export function signWheelToken(
   return `${payloadB64}.${sign(payloadB64, secret)}`
 }
 
+const RETRY_TTL_SEC = 3600
+
+/**
+ * Émet un jeton de rejeu (« Rejouez ! ») à partir des claims d'un jeton d'origine
+ * déjà vérifié. Même restaurant/client, nouveau jti suffixé `:r1`, TTL 1h.
+ * Anti-chaîne : un jti déjà suffixé `:r…` ne peut jamais produire un nouveau retry
+ * (un seul rejeu autorisé par jeton d'origine).
+ */
+export function mintRetryToken(
+  claims: { rid: string; cid: string; jti: string },
+  secret: string,
+  nowSec: number,
+): string {
+  if (claims.jti.includes(':r')) {
+    throw new Error('retry_chain_forbidden')
+  }
+  return signWheelToken(
+    { rid: claims.rid, cid: claims.cid, jti: `${claims.jti}:r1`, ttlSec: RETRY_TTL_SEC },
+    secret,
+    nowSec,
+  )
+}
+
 export function verifyWheelToken(token: string, secret: string, nowSec: number): WheelClaims | null {
   const parts = token.split('.')
   if (parts.length !== 2) return null

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { verifyWheelToken } from '@goutatou/db/wheel'
+import { mintRetryToken, verifyWheelToken } from '@goutatou/db/wheel'
 import { decryptToken } from '@goutatou/db/crypto'
 import { WhapiClient } from '@goutatou/whapi'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -27,9 +27,33 @@ export async function POST(req: Request) {
     if (msg.includes('no_prize')) return NextResponse.json({ error: 'Aucun lot disponible pour le moment.' }, { status: 409 })
     return NextResponse.json({ error: 'Une erreur est survenue.' }, { status: 500 })
   }
-  const row = data?.[0] as { prize_id: string; label: string; code: string } | undefined
+  const row = data?.[0] as {
+    prize_id: string | null; label: string | null; code: string | null
+    outcome: 'prize' | 'lose' | 'retry'; expires_at: string | null
+  } | undefined
   if (!row) return NextResponse.json({ error: 'Une erreur est survenue.' }, { status: 500 })
 
+  if (row.outcome === 'lose') {
+    return NextResponse.json({ outcome: 'lose' })
+  }
+
+  if (row.outcome === 'retry') {
+    let retryToken: string | null = null
+    try {
+      retryToken = mintRetryToken(
+        { rid: claims.rid, cid: claims.cid, jti: claims.jti },
+        process.env.WHEEL_JWT_SECRET,
+        Math.floor(Date.now() / 1000),
+      )
+    } catch {
+      // Anti-chaîne : un jeton de rejeu ne peut jamais produire un nouveau rejeu.
+      // On dégrade proprement en résultat "perdu" plutôt que de faire échouer l'appel.
+      return NextResponse.json({ outcome: 'lose' })
+    }
+    return NextResponse.json({ outcome: 'retry', retryToken })
+  }
+
+  // outcome === 'prize'
   // Envoi du code par WhatsApp best-effort
   const { data: customer } = await db.from('customers').select('chat_id').eq('id', claims.cid).single()
   const { data: channel } = await db.from('whapi_channels').select('token_encrypted, status').eq('restaurant_id', claims.rid).single()
@@ -40,5 +64,7 @@ export async function POST(req: Request) {
     } catch (err) { console.error('[roue] envoi code échoué', err) }
   }
 
-  return NextResponse.json({ prizeId: row.prize_id, label: row.label, code: row.code })
+  return NextResponse.json({
+    outcome: 'prize', prizeId: row.prize_id, label: row.label, code: row.code, expiresAt: row.expires_at,
+  })
 }

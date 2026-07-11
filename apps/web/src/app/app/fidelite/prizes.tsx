@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { createPrize, deletePrize, togglePrizeActive, updatePrize } from './actions'
+import { createPrize, deletePrize, togglePrizeActive, updatePrize, updatePrizeImage } from './actions'
 
 export function Prizes({ prizes }: { prizes: WheelPrize[] }) {
   return (
@@ -23,6 +23,7 @@ export function Prizes({ prizes }: { prizes: WheelPrize[] }) {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Image</TableHead>
                 <TableHead>Libellé</TableHead>
                 <TableHead>Poids</TableHead>
                 <TableHead>Stock</TableHead>
@@ -34,6 +35,36 @@ export function Prizes({ prizes }: { prizes: WheelPrize[] }) {
                 const updateFormId = `prize-update-${prize.id}`
                 return (
                   <TableRow key={prize.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {prize.imageUrl ? (
+                          <img
+                            src={prize.imageUrl}
+                            alt={prize.label}
+                            className="h-10 w-10 shrink-0 rounded-lg border border-border object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-dashed border-border text-[10px] text-muted-foreground">
+                            —
+                          </div>
+                        )}
+                        <form
+                          action={updatePrizeImage.bind(null, prize.id)}
+                          className="flex items-center gap-1"
+                        >
+                          <input
+                            type="file"
+                            name="image"
+                            accept="image/*"
+                            aria-label={`Image pour ${prize.label}`}
+                            className="w-28 text-xs text-muted-foreground file:mr-1 file:rounded-md file:border-0 file:bg-muted file:px-2 file:py-1 file:text-xs"
+                          />
+                          <Button type="submit" size="sm" variant="outline">
+                            OK
+                          </Button>
+                        </form>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <span className={prize.active ? '' : 'text-muted-foreground line-through'}>
                         {prize.label}

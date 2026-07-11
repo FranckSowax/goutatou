@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Prizes } from './prizes'
 import { RedeemForm } from './redeem-form'
-import { updateWheelSettings } from './actions'
+import { Badge } from '@/components/ui/badge'
+import { updateWheelSettings, updateWheelWeights } from './actions'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,16 +30,19 @@ export default async function FidelitePage() {
   }
   const restaurantId = member!.restaurant_id
 
-  const [{ data: prizes }, { data: restaurant }, { data: spins }] = await Promise.all([
-    supabase.from('prizes').select('id, label, weight, stock, active').eq('restaurant_id', restaurantId).order('position'),
-    supabase.from('restaurants').select('wheel_enabled, wheel_trigger_orders').eq('id', restaurantId).single(),
+  const [{ data: prizesRaw }, { data: restaurant }, { data: spins }] = await Promise.all([
+    supabase.from('prizes').select('id, label, weight, stock, active, image_url').eq('restaurant_id', restaurantId).order('position'),
+    supabase.from('restaurants')
+      .select('wheel_enabled, wheel_trigger_orders, wheel_unlucky_weight, wheel_retry_weight')
+      .eq('id', restaurantId).single(),
     supabase.from('wheel_spins')
-      .select('code, created_at, prizes(label)')
+      .select('code, created_at, expires_at, prizes(label)')
       .eq('restaurant_id', restaurantId)
       .is('redeemed_at', null)
       .order('created_at', { ascending: false })
       .limit(20),
   ])
+  const prizes = (prizesRaw ?? []).map((p) => ({ ...p, imageUrl: p.image_url }))
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8">
@@ -78,7 +82,47 @@ export default async function FidelitePage() {
         </Card>
       </section>
 
-      <Prizes prizes={prizes ?? []} />
+      <section className="flex flex-col gap-4">
+        <h2 className="font-display text-lg font-semibold">Segments spéciaux</h2>
+        <Card className="rounded-2xl p-4">
+          <form action={updateWheelWeights} className="flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+              Ajoute des segments « Pas de chance » et « Rejouez ! » à la roue. Poids à 0 = segment désactivé.
+            </p>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <Label htmlFor="wheel_unlucky_weight" className="font-normal">
+                Poids « Pas de chance »
+              </Label>
+              <Input
+                id="wheel_unlucky_weight"
+                name="wheel_unlucky_weight"
+                type="number"
+                min="0"
+                defaultValue={restaurant?.wheel_unlucky_weight ?? 0}
+                className="w-20"
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <Label htmlFor="wheel_retry_weight" className="font-normal">
+                Poids « Rejouez ! »
+              </Label>
+              <Input
+                id="wheel_retry_weight"
+                name="wheel_retry_weight"
+                type="number"
+                min="0"
+                defaultValue={restaurant?.wheel_retry_weight ?? 0}
+                className="w-20"
+              />
+            </div>
+            <Button type="submit" className="w-fit">
+              Enregistrer
+            </Button>
+          </form>
+        </Card>
+      </section>
+
+      <Prizes prizes={prizes} />
 
       <section className="flex flex-col gap-4">
         <h2 className="font-display text-lg font-semibold">Valider un code</h2>
@@ -91,15 +135,23 @@ export default async function FidelitePage() {
         <h2 className="font-display text-lg font-semibold">Gains en attente de validation</h2>
         <Card className="rounded-2xl p-4">
           <ul className="flex flex-col gap-2 text-sm">
-            {(spins ?? []).map((s) => (
-              <li key={s.code} className="flex justify-between border-b pb-2 last:border-0 last:pb-0">
-                <span className="font-mono tracking-widest">{s.code}</span>
-                <span className="text-muted-foreground">
-                  {(s.prizes as unknown as { label: string } | null)?.label ?? '—'}
-                </span>
-                <span className="text-muted-foreground">{new Date(s.created_at).toLocaleString('fr-FR')}</span>
-              </li>
-            ))}
+            {(spins ?? []).map((s) => {
+              const expired = s.expires_at ? new Date(s.expires_at).getTime() < Date.now() : false
+              return (
+                <li key={s.code} className="flex flex-wrap items-center justify-between gap-2 border-b pb-2 last:border-0 last:pb-0">
+                  <span className="font-mono tracking-widest">{s.code}</span>
+                  <span className="text-muted-foreground">
+                    {(s.prizes as unknown as { label: string } | null)?.label ?? '—'}
+                  </span>
+                  <span className="text-muted-foreground">{new Date(s.created_at).toLocaleString('fr-FR')}</span>
+                  {s.expires_at && (
+                    <Badge variant={expired ? 'destructive' : 'warning'}>
+                      Expire le {new Date(s.expires_at).toLocaleDateString('fr-FR')}
+                    </Badge>
+                  )}
+                </li>
+              )
+            })}
             {(!spins || spins.length === 0) && (
               <p className="text-muted-foreground">Aucun gain en attente.</p>
             )}

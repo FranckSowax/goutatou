@@ -77,6 +77,49 @@ export async function updateWheelSettings(formData: FormData) {
   revalidatePath('/app/fidelite')
 }
 
+// Segments spéciaux "Pas de chance" / "Rejouez !" (roue v2) : 0 = désactivé. Même
+// contrainte RLS que updateWheelSettings ci-dessus (pas de policy UPDATE tenant sur
+// restaurants) → client admin après le même gate myRestaurantId + assertPlan.
+export async function updateWheelWeights(formData: FormData) {
+  const { supabase, restaurantId } = await myRestaurantId()
+  await assertPlan(supabase, restaurantId, ['pro', 'premium'])
+  const unluckyWeight = Math.max(0, Number(formData.get('wheel_unlucky_weight') ?? 0))
+  const retryWeight = Math.max(0, Number(formData.get('wheel_retry_weight') ?? 0))
+  const admin = createAdminClient()
+  const { data, error } = await admin.from('restaurants')
+    .update({ wheel_unlucky_weight: unluckyWeight, wheel_retry_weight: retryWeight })
+    .eq('id', restaurantId)
+    .select('id')
+  if (error || !data || data.length === 0) throw new Error('Enregistrement impossible.')
+  revalidatePath('/app/fidelite')
+}
+
+const MAX_PRIZE_IMAGE_BYTES = 4 * 1024 * 1024
+
+// Image d'un lot (roue v2), même pattern que la photo menu (apps/web/src/app/app/menu/actions.ts)
+// mais chemin déterministe par lot (bucket prize-media, policies scopées tenant, cf. migration 0017)
+// pour que le remplacement d'une image écrase l'ancienne au lieu d'accumuler des fichiers orphelins.
+export async function updatePrizeImage(prizeId: string, formData: FormData) {
+  const { supabase, restaurantId } = await myRestaurantId()
+  await assertPlan(supabase, restaurantId, ['pro', 'premium'])
+
+  const image = formData.get('image') as File | null
+  if (!image || image.size === 0) return
+  if (image.size > MAX_PRIZE_IMAGE_BYTES) throw new Error('Image trop lourde (max 4 Mo).')
+
+  const ext = (image.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
+  const path = `${restaurantId}/prizes/${prizeId}.${ext}`
+  const { error: upErr } = await supabase.storage
+    .from('prize-media')
+    .upload(path, image, { upsert: true, contentType: image.type || undefined })
+  if (upErr) throw new Error(upErr.message)
+  const imageUrl = supabase.storage.from('prize-media').getPublicUrl(path).data.publicUrl
+
+  const { error } = await supabase.from('prizes').update({ image_url: imageUrl }).eq('id', prizeId)
+  if (error) throw new Error(error.message)
+  revalidatePath('/app/fidelite')
+}
+
 export async function redeemCode(formData: FormData) {
   const { supabase, restaurantId } = await myRestaurantId()
   await assertPlan(supabase, restaurantId, ['pro', 'premium'])
@@ -84,10 +127,22 @@ export async function redeemCode(formData: FormData) {
   if (!user) throw new Error('Non authentifié')
   const code = String(formData.get('code') ?? '').trim().toUpperCase()
   if (!code) throw new Error('Code requis')
-  const { data, error } = await supabase.from('wheel_spins')
-    .update({ redeemed_at: new Date().toISOString(), redeemed_by: user.id })
+
+  const { data: spin, error: spinError } = await supabase.from('wheel_spins')
+    .select('id, expires_at')
     .eq('restaurant_id', restaurantId)
     .eq('code', code)
+    .is('redeemed_at', null)
+    .maybeSingle()
+  if (spinError) throw new Error(spinError.message)
+  if (!spin) throw new Error('Code invalide ou déjà utilisé.')
+  if (spin.expires_at && new Date(spin.expires_at).getTime() < Date.now()) {
+    throw new Error('Ce lot a expiré.')
+  }
+
+  const { data, error } = await supabase.from('wheel_spins')
+    .update({ redeemed_at: new Date().toISOString(), redeemed_by: user.id })
+    .eq('id', spin.id)
     .is('redeemed_at', null)
     .select('id')
   if (error) throw new Error(error.message)

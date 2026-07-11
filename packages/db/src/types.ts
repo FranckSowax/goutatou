@@ -72,6 +72,8 @@ export interface WheelPrize {
   weight: number
   stock: number
   active: boolean
+  /** Optionnel : rétrocompatible avec les lots existants sans image (roue v2). */
+  imageUrl?: string | null
 }
 
 export interface WheelSpinResult {
