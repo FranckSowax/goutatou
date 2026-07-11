@@ -196,7 +196,7 @@ export function MenuStudio({ categories, renderItemActions }: MenuStudioProps) {
         </div>
       )}
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <DndContext id="menu-studio" sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={localCategories.map((c) => c.id)} strategy={verticalListSortingStrategy}>
           <div className="flex flex-col gap-6">
             {localCategories.map((category) => (
