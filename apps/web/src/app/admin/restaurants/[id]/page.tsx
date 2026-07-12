@@ -22,7 +22,7 @@ export default async function AdminRestaurantDetailPage({ params }: { params: Pr
     .from('restaurants')
     .select(
       `id, name, slug, address, contact_phone, hours_text, delivery_info, bot_welcome, bot_info_extra,
-       drive_enabled, wheel_enabled, wheel_trigger_orders, lp_config,
+       drive_enabled, wheel_enabled, wheel_trigger_orders, lp_config, location_lat, location_lng,
        subscriptions(plan, status),
        whapi_channels(id, status, last_webhook_at, token_encrypted, phone)`
     )
@@ -84,6 +84,8 @@ export default async function AdminRestaurantDetailPage({ params }: { params: Pr
               hours_text: resto.hours_text,
               delivery_info: resto.delivery_info,
               drive_enabled: resto.drive_enabled,
+              location_lat: resto.location_lat,
+              location_lng: resto.location_lng,
             }}
             subscription={{ plan: subscription?.plan ?? 'starter', status: subscription?.status ?? 'active' }}
           />

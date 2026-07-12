@@ -2,6 +2,7 @@
 import { revalidatePath } from 'next/cache'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { parseLatLng } from '@/lib/gps'
 
 async function myRestaurantId(): Promise<string> {
   const supabase = await createSupabaseServer()
@@ -20,6 +21,19 @@ function trimmedOrNull(formData: FormData, key: string): string | null {
 
 export async function updateMyRestaurantProfile(formData: FormData) {
   const restaurantId = await myRestaurantId()
+
+  const gpsRaw = String(formData.get('location_gps') ?? '').trim()
+  let locationLat: number | null = null
+  let locationLng: number | null = null
+  if (gpsRaw) {
+    const parsed = parseLatLng(gpsRaw)
+    if (!parsed) {
+      throw new Error('Coordonnées GPS invalides — collez-les au format 0.4162, 9.4673')
+    }
+    locationLat = parsed.lat
+    locationLng = parsed.lng
+  }
+
   // restaurants n'a pas de policy RLS UPDATE pour les membres tenant (seulement
   // restaurants_select et restaurants_admin_all) : le client RLS-bound matcherait
   // 0 ligne silencieusement. On utilise le client admin (service_role) après le
@@ -32,6 +46,8 @@ export async function updateMyRestaurantProfile(formData: FormData) {
       contact_phone: trimmedOrNull(formData, 'contact_phone'),
       hours_text: trimmedOrNull(formData, 'hours_text'),
       delivery_info: trimmedOrNull(formData, 'delivery_info'),
+      location_lat: locationLat,
+      location_lng: locationLng,
     })
     .eq('id', restaurantId)
     .select('id')

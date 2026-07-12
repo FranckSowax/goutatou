@@ -13,9 +13,19 @@ type PracticalInfoFormProps = {
   contactPhone: string | null
   hoursText: string | null
   deliveryInfo: string | null
+  locationLat: number | null
+  locationLng: number | null
 }
 
-export function PracticalInfoForm({ address, contactPhone, hoursText, deliveryInfo }: PracticalInfoFormProps) {
+export function PracticalInfoForm({
+  address,
+  contactPhone,
+  hoursText,
+  deliveryInfo,
+  locationLat,
+  locationLng,
+}: PracticalInfoFormProps) {
+  const gpsDefaultValue = locationLat != null && locationLng != null ? `${locationLat}, ${locationLng}` : ''
   const [pending, startTransition] = useTransition()
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
 
@@ -50,6 +60,13 @@ export function PracticalInfoForm({ address, contactPhone, hoursText, deliveryIn
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="delivery_info">Livraison</Label>
         <Textarea id="delivery_info" name="delivery_info" defaultValue={deliveryInfo ?? ''} placeholder="Zones, frais, délais…" />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="location_gps">Position GPS (lat, lng)</Label>
+        <Input id="location_gps" name="location_gps" defaultValue={gpsDefaultValue} placeholder="0.3901, 9.4544" />
+        <p className="text-xs text-muted-foreground">
+          Sur Google Maps : clic droit sur le restaurant → copier les coordonnées, puis collez ici.
+        </p>
       </div>
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={pending} className="w-fit">

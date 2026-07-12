@@ -23,6 +23,8 @@ export type GeneralTabRestaurant = {
   hours_text: string | null
   delivery_info: string | null
   drive_enabled: boolean
+  location_lat: number | null
+  location_lng: number | null
 }
 
 export type GeneralTabSubscription = {
@@ -46,6 +48,11 @@ export function GeneralTab({
   const [profileError, setProfileError] = useState<string | null>(null)
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileSaved, setProfileSaved] = useState(false)
+
+  const gpsDefaultValue =
+    restaurant.location_lat != null && restaurant.location_lng != null
+      ? `${restaurant.location_lat}, ${restaurant.location_lng}`
+      : ''
 
   const [planError, setPlanError] = useState<string | null>(null)
   const [planSaving, setPlanSaving] = useState(false)
@@ -125,6 +132,19 @@ export function GeneralTab({
                 placeholder="Zones et frais de livraison"
                 rows={3}
               />
+            </div>
+            <div className="flex flex-col gap-1.5 sm:col-span-2">
+              <Label htmlFor="gen-gps">Position GPS (lat, lng)</Label>
+              <Input
+                id="gen-gps"
+                name="location_gps"
+                defaultValue={gpsDefaultValue}
+                placeholder="0.3901, 9.4544"
+              />
+              <p className="text-xs text-muted-foreground">
+                Sur Google Maps : clic droit sur le restaurant → copier les coordonnées, puis
+                collez ici.
+              </p>
             </div>
             <Label className="flex w-fit items-center gap-2 sm:col-span-2">
               <input

@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache'
 import { encryptToken, decryptToken } from '@goutatou/db/crypto'
 import { WhapiClient, WhapiError } from '@goutatou/whapi'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { parseLatLng } from '@/lib/gps'
 import { assertPlatformAdmin } from '../../actions'
 
 function revalidateFiche(id: string) {
@@ -24,6 +25,18 @@ export async function updateRestaurantProfile(id: string, formData: FormData) {
   const name = String(formData.get('name') ?? '').trim()
   if (!name) throw new Error('Le nom du restaurant est requis.')
 
+  const gpsRaw = String(formData.get('location_gps') ?? '').trim()
+  let locationLat: number | null = null
+  let locationLng: number | null = null
+  if (gpsRaw) {
+    const parsed = parseLatLng(gpsRaw)
+    if (!parsed) {
+      throw new Error('Coordonnées GPS invalides — collez-les au format 0.4162, 9.4673')
+    }
+    locationLat = parsed.lat
+    locationLng = parsed.lng
+  }
+
   const { error } = await admin
     .from('restaurants')
     .update({
@@ -33,6 +46,8 @@ export async function updateRestaurantProfile(id: string, formData: FormData) {
       hours_text: trimmedOrNull(formData, 'hours_text'),
       delivery_info: trimmedOrNull(formData, 'delivery_info'),
       drive_enabled: formData.get('drive_enabled') === 'on',
+      location_lat: locationLat,
+      location_lng: locationLng,
     })
     .eq('id', id)
   if (error) throw new Error(error.message)

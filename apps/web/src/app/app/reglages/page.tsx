@@ -18,7 +18,7 @@ export default async function ReglagesPage() {
   const restaurantId = member.restaurant_id
 
   const { data: restaurant } = await supabase.from('restaurants')
-    .select('address, contact_phone, hours_text, delivery_info, bot_welcome, bot_info_extra')
+    .select('address, contact_phone, hours_text, delivery_info, bot_welcome, bot_info_extra, location_lat, location_lng')
     .eq('id', restaurantId)
     .single()
 
@@ -34,6 +34,8 @@ export default async function ReglagesPage() {
             contactPhone={restaurant?.contact_phone ?? null}
             hoursText={restaurant?.hours_text ?? null}
             deliveryInfo={restaurant?.delivery_info ?? null}
+            locationLat={restaurant?.location_lat ?? null}
+            locationLng={restaurant?.location_lng ?? null}
           />
         </Card>
       </section>
