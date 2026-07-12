@@ -23,6 +23,7 @@ export function loadConfig() {
     wheelReminderPollMs: Number(process.env.WHEEL_REMINDER_POLL_MS ?? 6 * 3600 * 1000),
     catalogSyncPollMs: Number(process.env.CATALOG_SYNC_POLL_MS ?? 60000),
     pollWorkerPollMs: Number(process.env.POLL_WORKER_POLL_MS ?? 30000),
+    autoStatusPollMs: Number(process.env.AUTO_STATUS_POLL_MS ?? 300000),
   }
 }
 export type Config = ReturnType<typeof loadConfig>

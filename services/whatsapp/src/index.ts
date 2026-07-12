@@ -17,6 +17,8 @@ import { createCatalogRepo } from './catalog/repo.js'
 import { startCatalogWorker } from './catalog/worker.js'
 import { createPollRepo } from './polls/repo.js'
 import { startPollWorker } from './polls/worker.js'
+import { createAutoStatusRepo } from './autostatus/repo.js'
+import { startAutoStatusWorker } from './autostatus/worker.js'
 
 const config = loadConfig()
 const db = createServiceClient(config.supabaseUrl, config.serviceRoleKey)
@@ -71,6 +73,12 @@ startPollWorker({
   sendDelayMinMs: config.sendDelayMinMs,
   sendDelayMaxMs: config.sendDelayMaxMs,
   pollMs: config.pollWorkerPollMs,
+})
+const autoStatusRepo = createAutoStatusRepo(db)
+startAutoStatusWorker({
+  repo: autoStatusRepo,
+  now: () => new Date(),
+  pollMs: config.autoStatusPollMs,
 })
 const processWebhook = createProcessor(repo, (token) => new WhapiClient(token), {
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
