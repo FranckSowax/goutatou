@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/table'
 import { configureWebhook, createRestaurant } from '../actions'
 import { RestaurantRow } from './restaurant-row'
+import { ActionsCell } from './actions-cell'
 
 export const dynamic = 'force-dynamic'
 
@@ -129,7 +130,7 @@ export default async function AdminRestaurantsPage() {
                         )}
                       </TableCell>
                       <TableCell className="capitalize">{sub?.plan ?? '—'}</TableCell>
-                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <ActionsCell>
                         <div className="flex flex-wrap justify-end gap-2">
                           {chan && (
                             <form
@@ -148,7 +149,7 @@ export default async function AdminRestaurantsPage() {
                             <Link href={'/admin/restaurants/' + r.id}>Voir la fiche</Link>
                           </Button>
                         </div>
-                      </TableCell>
+                      </ActionsCell>
                     </RestaurantRow>
                   )
                 })}
