@@ -86,6 +86,39 @@ describe('createRepo — getBotContext (photo_url)', () => {
   })
 })
 
+describe('createRepo — hasWaProducts (catalogue WhatsApp natif)', () => {
+  /** Stub minimal pour `.from('menu_items').select(..., {count}).eq().not()`. */
+  function makeCountStub(count: number | null) {
+    const not = vi.fn().mockResolvedValue({ count })
+    const eq = vi.fn().mockReturnValue({ not })
+    const select = vi.fn().mockReturnValue({ eq })
+    const from = vi.fn((table: string) => {
+      if (table === 'menu_items') return { select }
+      throw new Error(`table inattendue : ${table}`)
+    })
+    return { db: { from } as unknown as SupabaseClient, select, eq, not }
+  }
+
+  it('au moins un plat avec wa_product_id → true', async () => {
+    const { db, not } = makeCountStub(3)
+    const repo = createRepo(db, 'k'.repeat(32))
+    await expect(repo.hasWaProducts('r1')).resolves.toBe(true)
+    expect(not).toHaveBeenCalledWith('wa_product_id', 'is', null)
+  })
+
+  it('aucun plat synchronisé (count 0) → false', async () => {
+    const { db } = makeCountStub(0)
+    const repo = createRepo(db, 'k'.repeat(32))
+    await expect(repo.hasWaProducts('r1')).resolves.toBe(false)
+  })
+
+  it('count null (défensif) → false', async () => {
+    const { db } = makeCountStub(null)
+    const repo = createRepo(db, 'k'.repeat(32))
+    await expect(repo.hasWaProducts('r1')).resolves.toBe(false)
+  })
+})
+
 describe('createRepo — createOrder (suppléments)', () => {
   it('mappe supplement_ids par ligne de panier, absent quand vide', async () => {
     const { db, rpc } = makeRpcSupabaseStub({ data: [{ order_id: 'o1', order_number: 7, total: 9800 }], error: null })

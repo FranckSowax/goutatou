@@ -1,6 +1,6 @@
-import { EMPTY_CART, formatFcfa } from '@goutatou/db'
+import { EMPTY_CART, formatFcfa, type CartItem } from '@goutatou/db'
 import type { WhapiClient } from '@goutatou/whapi'
-import { flatMenuItems, transition, type BotContext } from './bot/machine.js'
+import { beginCheckout, flatMenuItems, transition, type BotContext } from './bot/machine.js'
 import { isOptOutKeyword } from './campaigns/optout.js'
 import { nextSendDelayMs } from './campaigns/throttle.js'
 import type { BotRepo } from './repo.js'
@@ -20,6 +20,15 @@ interface WhapiMessage {
    * Confiance : haute.
    */
   location?: { latitude: number; longitude: number }
+  /**
+   * Panier WhatsApp natif entrant — messages[n].order.order_id (+ seller/title/token/item_count/
+   * currency/total_price/status/preview, ignorés ici). Shape confirmée via
+   * support.whapi.cloud/help-desk/receiving/webhooks/incoming-webhooks-format/incoming-message
+   * (exemple JSON officiel Whapi, type "order" : `"order": { "order_id": "964278...", ... }`).
+   * Confiance : haute sur order_id ; le corps de la réponse GET /business/orders/{id} (items)
+   * reste basse confiance côté client whapi (cf. packages/whapi/src/client.ts getOrderItems).
+   */
+  order?: { order_id?: string }
 }
 
 export interface ProcessorDeps {
@@ -32,8 +41,13 @@ export interface ProcessorDeps {
 
 type ProcessorWhapi = Pick<
   WhapiClient,
-  'sendText' | 'sendImage' | 'sendTyping' | 'markAsRead' | 'react' | 'sendLocation'
+  'sendText' | 'sendImage' | 'sendTyping' | 'markAsRead' | 'react' | 'sendLocation' | 'sendCatalog' | 'getOrderItems'
 >
+
+const CART_UNAVAILABLE_FR =
+  'Ces articles ne sont plus disponibles — tapez *menu* pour voir la carte.'
+const CART_READ_FAILED_FR =
+  "Nous n'avons pas pu lire votre panier — tapez *menu* pour commander."
 
 /**
  * Envoi des photos des plats disponibles après la réponse texte à la commande *menu*.
@@ -82,6 +96,74 @@ function orderConfirmedCopy(orderNumber: number, total: number, cart: {
   )
 }
 
+/** Envoi séquentiel des réponses texte d'une transition, chacune loggée (succès ou échec Whapi). */
+async function sendReplies(
+  whapi: ProcessorWhapi,
+  repo: BotRepo,
+  restaurantId: string,
+  chatId: string,
+  replies: string[],
+): Promise<void> {
+  for (const reply of replies) {
+    try {
+      const sent = await whapi.sendText(chatId, reply)
+      await repo.logMessage(restaurantId, 'out', chatId, reply, sent.id)
+    } catch (err) {
+      await repo.logMessage(restaurantId, 'out', chatId, reply, undefined, String(err))
+    }
+  }
+}
+
+/**
+ * Panier WhatsApp natif entrant (message type 'order') : récupère les articles composés côté
+ * client (getOrderItems), les mappe aux plats DISPONIBLES du menu par retailer_id === menu_item.id
+ * (cf. worker catalog-sync) — nom/prix TOUJOURS lus en base, JAMAIS depuis le webhook — puis
+ * enchaîne sur beginCheckout comme une transition normale (état persisté, réponses envoyées via
+ * le même chemin que sendReplies). Politique v1 : articles inconnus/indisponibles droppés
+ * silencieusement (cf. spec catalogue § Conversation). Best-effort : order_id manquant ou
+ * getOrderItems en échec → message FR générique, jamais de crash.
+ */
+async function handleNativeOrder(
+  whapi: ProcessorWhapi,
+  repo: BotRepo,
+  restaurantId: string,
+  customerId: string,
+  chatId: string,
+  orderId: string | undefined,
+  ctx: BotContext,
+): Promise<void> {
+  let items: Array<{ retailer_id?: string; quantity?: number }>
+  try {
+    if (!orderId) throw new Error('order.order_id manquant dans le webhook')
+    items = await whapi.getOrderItems(orderId)
+  } catch (err) {
+    console.error('[order] getOrderItems échoué', err)
+    await sendReplies(whapi, repo, restaurantId, chatId, [CART_READ_FAILED_FR])
+    return
+  }
+
+  const menuItems = flatMenuItems(ctx.menu)
+  const lines: CartItem[] = []
+  // Garde-fou : la forme exacte de getOrderItems est basse confiance (cf. client whapi) — un
+  // retour non-tableau est traité comme un panier vide plutôt que de faire planter le message.
+  for (const it of Array.isArray(items) ? items : []) {
+    const qty = it.quantity ?? 0
+    if (!it.retailer_id || qty <= 0) continue
+    const menuItem = menuItems.find((m) => m.id === it.retailer_id)
+    if (!menuItem) continue
+    lines.push({ menuItemId: menuItem.id, name: menuItem.name, unitPrice: menuItem.price, qty, supplements: [] })
+  }
+
+  if (lines.length === 0) {
+    await sendReplies(whapi, repo, restaurantId, chatId, [CART_UNAVAILABLE_FR])
+    return
+  }
+
+  const res = beginCheckout({ items: lines }, ctx)
+  await repo.saveConversation(restaurantId, customerId, res.state, res.cart)
+  await sendReplies(whapi, repo, restaurantId, chatId, res.replies)
+}
+
 export function createProcessor(
   repo: BotRepo,
   makeWhapi: (token: string) => ProcessorWhapi,
@@ -103,11 +185,15 @@ export function createProcessor(
 
       // Un message location est converti en lien Google Maps et traité EXACTEMENT comme un
       // texte libre (adresse de livraison en état ADRESSE, "pas compris" ailleurs) — cf.
-      // spec bot-vivant § GPS entrant. Tout autre type non-text/non-location reste ignoré
-      // (comportement v1 inchangé).
+      // spec bot-vivant § GPS entrant. Un message 'order' (panier WhatsApp natif) n'a pas de
+      // texte : body sert uniquement au log entrant, le routage réel se fait via isOrderMessage
+      // ci-dessous (pas d'appel à transition()). Tout autre type non-text/non-location/non-order
+      // reste ignoré (comportement v1 inchangé).
+      const isOrderMessage = msg.type === 'order'
       const body =
         msg.type === 'text' ? msg.text?.body :
         msg.type === 'location' && msg.location ? `https://maps.google.com/?q=${msg.location.latitude},${msg.location.longitude}` :
+        isOrderMessage ? '🛒 Panier WhatsApp' :
         undefined
       if (!body) continue
 
@@ -117,6 +203,14 @@ export function createProcessor(
 
       try {
         const customer = await repo.upsertCustomer(channel.restaurantId, msg.from, msg.chat_id, msg.from_name)
+
+        // Panier natif : pas de texte libre, pas de routage global (opt-out/roue/etc n'ont pas
+        // de sens pour ce type de message) — traitement dédié puis message suivant.
+        if (isOrderMessage) {
+          const orderCtx = await repo.getBotContext(channel.restaurantId, channel.restaurantName, channel.driveEnabled)
+          await handleNativeOrder(whapi, repo, channel.restaurantId, customer.id, msg.chat_id, msg.order?.order_id, orderCtx)
+          continue
+        }
 
         if (isOptOutKeyword(body)) {
           await repo.setOptedOut(channel.restaurantId, customer.id)
@@ -171,22 +265,33 @@ export function createProcessor(
 
         await repo.saveConversation(channel.restaurantId, customer.id, res.state, nextCart)
 
-        for (const reply of replies) {
-          try {
-            const sent = await whapi.sendText(msg.chat_id, reply)
-            await repo.logMessage(channel.restaurantId, 'out', msg.chat_id, reply, sent.id)
-          } catch (err) {
-            await repo.logMessage(channel.restaurantId, 'out', msg.chat_id, reply, undefined, String(err))
-          }
-        }
+        await sendReplies(whapi, repo, channel.restaurantId, msg.chat_id, replies)
 
         // res.state === 'MENU' confirme que la transition a bien emprunté le routage
-        // global 'menu' (et non un état HUMAIN qui l'aurait avalé silencieusement).
+        // global 'menu' (et non un état HUMAIN qui l'aurait avalé silencieusement). Catalogue
+        // natif (carte WhatsApp) À LA PLACE des photos quand catalog_enabled ET au moins un
+        // plat synchronisé (wa_product_id) — sinon photos inchangées (non-régression).
         if (isMenuCommand && res.state === 'MENU') {
-          try {
-            await sendMenuPhotos(whapi, repo, channel.restaurantId, msg.chat_id, ctx.menu, deps)
-          } catch (err) {
-            console.error('[menu-photos] erreur inattendue', err)
+          const catalogReady = channel.catalogEnabled
+            ? await repo.hasWaProducts(channel.restaurantId).catch((err) => {
+                console.error('[catalog] hasWaProducts échoué, repli photos', err)
+                return false
+              })
+            : false
+
+          if (catalogReady) {
+            try {
+              const sent = await whapi.sendCatalog(msg.chat_id)
+              await repo.logMessage(channel.restaurantId, 'out', msg.chat_id, '🛍️ Catalogue envoyé', sent.id)
+            } catch (err) {
+              console.error('[catalog] échec envoi carte catalogue', err)
+            }
+          } else {
+            try {
+              await sendMenuPhotos(whapi, repo, channel.restaurantId, msg.chat_id, ctx.menu, deps)
+            } catch (err) {
+              console.error('[menu-photos] erreur inattendue', err)
+            }
           }
         }
 

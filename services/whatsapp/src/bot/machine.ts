@@ -98,6 +98,21 @@ function lastItemWithSupplements(
   return { item, index, supplements }
 }
 
+/**
+ * Démarre le paiement pour un panier importé depuis l'extérieur de la machine (panier WhatsApp
+ * natif entrant, cf. processor + spec catalogue § Conversation) — PAS un état/branche existant :
+ * addition pure, `transition` n'appelle jamais cette fonction. Contrairement au chemin
+ * MENU→"valider" (qui n'affiche PAS de récap, le client l'ayant déjà vu au fil des ajouts), ici
+ * le client n'a rien vu construire le panier : le récap (copy.cartRecap, texte identique à
+ * celui de "panier"/CONFIRMATION) précède donc la question du mode (copy.chooseMode, mêmes
+ * libellés/helpers que "valider" — availableModes(ctx)).
+ */
+export function beginCheckout(cart: Cart, ctx: BotContext): TransitionResult {
+  if (!cart.items.length) return result('MENU', cart, [copy.emptyCart])
+  const modes = availableModes(ctx)
+  return result('MODE', cart, [copy.cartRecap(cart), copy.chooseMode(modes.map((m) => m.label))])
+}
+
 export function transition(state: BotState, cart: Cart, input: string, ctx: BotContext): TransitionResult {
   const text = input.trim().toLowerCase()
 

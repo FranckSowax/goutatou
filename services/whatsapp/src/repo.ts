@@ -32,6 +32,8 @@ export interface ChannelInfo {
   restaurantName: string
   token: string
   driveEnabled: boolean
+  /** Catalogue WhatsApp natif activé côté fiche resto (migration 0021). Absent/false = photos v1. */
+  catalogEnabled?: boolean
 }
 
 /**
@@ -56,6 +58,12 @@ export interface BotRepo {
    * réel (shouldOfferSpin / notifier.ts) pour une progression honnête.
    */
   getWheelInfo(restaurantId: string, customerId: string): Promise<{ enabled: boolean; triggerOrders: number; orderCount: number }>
+  /**
+   * Le catalogue est considéré "synchronisé" dès qu'AU MOINS un plat porte un wa_product_id —
+   * count head, appelé uniquement sur la commande *menu* quand catalog_enabled est vrai (cf.
+   * spec catalogue § Conversation), jamais chargé sur chaque message.
+   */
+  hasWaProducts(restaurantId: string): Promise<boolean>
   loadConversation(restaurantId: string, customerId: string): Promise<{ state: BotState; cart: Cart }>
   saveConversation(restaurantId: string, customerId: string, state: BotState, cart: Cart): Promise<void>
   createOrder(restaurantId: string, customerId: string, cart: Cart): Promise<{ orderNumber: number; total: number }>
@@ -70,11 +78,11 @@ export function createRepo(db: SupabaseClient, tokenKey: string): BotRepo {
     async getChannel(channelUuid) {
       const { data } = await db
         .from('whapi_channels')
-        .select('id, restaurant_id, token_encrypted, status, restaurants(name, drive_enabled)')
+        .select('id, restaurant_id, token_encrypted, status, restaurants(name, drive_enabled, catalog_enabled)')
         .eq('id', channelUuid)
         .single()
       if (!data || data.status !== 'active') return null
-      const resto = data.restaurants as unknown as { name: string; drive_enabled: boolean }
+      const resto = data.restaurants as unknown as { name: string; drive_enabled: boolean; catalog_enabled: boolean }
       await db.from('whapi_channels').update({ last_webhook_at: new Date().toISOString() }).eq('id', channelUuid)
       return {
         channelUuid,
@@ -82,6 +90,7 @@ export function createRepo(db: SupabaseClient, tokenKey: string): BotRepo {
         restaurantName: resto.name,
         token: decryptToken(data.token_encrypted, tokenKey),
         driveEnabled: resto.drive_enabled,
+        catalogEnabled: resto.catalog_enabled,
       }
     },
 
@@ -169,6 +178,15 @@ export function createRepo(db: SupabaseClient, tokenKey: string): BotRepo {
         triggerOrders: resto?.wheel_trigger_orders ?? 1,
         orderCount: count ?? 0,
       }
+    },
+
+    async hasWaProducts(restaurantId) {
+      const { count } = await db
+        .from('menu_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('restaurant_id', restaurantId)
+        .not('wa_product_id', 'is', null)
+      return (count ?? 0) > 0
     },
 
     async loadConversation(restaurantId, customerId) {
