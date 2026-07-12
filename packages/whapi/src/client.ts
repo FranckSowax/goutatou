@@ -225,17 +225,57 @@ export class WhapiClient {
     return { code: res.code }
   }
 
-  async postStatusText(caption: string): Promise<{ id?: string }> {
-    const res = (await this.request('POST', '/messages/story/text', { caption })) as {
-      message?: { id?: string }
-    }
+  /**
+   * Publie un statut texte — POST /messages/story/text. `opts` étend le body avec les champs de
+   * style/ciblage confirmés par le manifeste whapi-mcp (généré depuis le schéma officiel Whapi,
+   * B_manifest.json > sendMessageStoryText, requestBody.schema.properties) : background_color et
+   * caption_color (couleurs ARGB "#RRGGBB"/"#AARRGGBB"), font_type (enum de chaînes : SYSTEM,
+   * SYSTEM_TEXT, FB_SCRIPT, SYSTEM_BOLD, MORNINGBREEZE_REGULAR, CALISTOGA_REGULAR,
+   * EXO2_EXTRABOLD, COURIERPRIME_BOLD — PAS un entier ; la colonne DB statuses.font_type est un
+   * int, la conversion index→enum est à la charge de l'appelant), contacts (ciblage : liste
+   * d'IDs, story privée à ces contacts si fournie). Chaque champ n'est envoyé que s'il est fourni
+   * (clés `undefined` supprimées par JSON.stringify), donc un appel sans `opts` produit
+   * exactement le même body qu'avant cette extension — rétrocompatible avec le status worker et
+   * les tests existants.
+   */
+  async postStatusText(
+    caption: string,
+    opts?: { backgroundColor?: string; captionColor?: string; fontType?: string; contacts?: string[] },
+  ): Promise<{ id?: string }> {
+    const res = (await this.request('POST', '/messages/story/text', {
+      caption,
+      background_color: opts?.backgroundColor,
+      caption_color: opts?.captionColor,
+      font_type: opts?.fontType,
+      contacts: opts?.contacts,
+    })) as { message?: { id?: string } }
     return { id: res.message?.id }
   }
 
-  async postStatusMedia(mediaUrl: string, caption?: string): Promise<{ id?: string }> {
-    const res = (await this.request('POST', '/messages/story/media', { media: mediaUrl, caption })) as {
-      message?: { id?: string }
-    }
+  /**
+   * Publie un statut média (image ou vidéo) — POST /messages/story/media. Signature conservée en
+   * (mediaUrl, caption?, opts?) — et NON (mediaUrl, mime, opts?) comme envisagé dans le brouillon
+   * de spec — car `caption` est déjà le 2e paramètre positionnel de la méthode existante : la
+   * réordonner aurait cassé silencieusement les appels existants (le status worker et son test
+   * passent `(mediaUrl, content)` en attendant que `content` atterrisse dans `caption`) sans
+   * erreur de compilation (mime/caption sont tous deux `string`). `opts.mime` transporte donc le
+   * nouveau champ `mime_type` (confirmé par le manifeste whapi-mcp, sendMessageStoryMedia :
+   * `mime_type` optionnel — nécessaire pour les statuts vidéo, ex. "video/mp4" ; absent jusqu'ici,
+   * le body n'envoyait aucun mime type) ; `opts.contacts` transporte `contacts` (ciblage VIP,
+   * même champ que postStatusText). Pas de background_color/caption_color/font_type ici : absents
+   * du schéma /messages/story/media (styles texte non applicables à un média).
+   */
+  async postStatusMedia(
+    mediaUrl: string,
+    caption?: string,
+    opts?: { mime?: string; contacts?: string[] },
+  ): Promise<{ id?: string }> {
+    const res = (await this.request('POST', '/messages/story/media', {
+      media: mediaUrl,
+      caption,
+      mime_type: opts?.mime,
+      contacts: opts?.contacts,
+    })) as { message?: { id?: string } }
     return { id: res.message?.id }
   }
 
