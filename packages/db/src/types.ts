@@ -33,6 +33,8 @@ export interface MenuForBot {
       id: string; name: string; price: number; supplements?: SupplementLine[]
       /** Optionnel : rétrocompatible avec les fixtures existantes qui ne le fournissent pas. */
       photoUrl?: string | null
+      /** Id produit du catalogue WhatsApp — clé de mapping des paniers natifs entrants. */
+      waProductId?: string | null
     }[]
   }[]
 }

@@ -484,10 +484,13 @@ export class WhapiClient {
     orderId: string,
     orderToken?: string,
   ): Promise<Array<{ retailer_id?: string; quantity?: number; price?: number }>> {
-    // L'API exige le jeton base64 fourni DANS le webhook du panier (erreur 403
-    // « need order token for get order items » sinon) — query param order_token.
-    const qs = orderToken ? `?order_token=${encodeURIComponent(orderToken)}` : ''
-    const res = (await this.request('GET', `/business/orders/${orderId}${qs}`)) as
+    // Endpoint atypique (cf. support.whapi.cloud get-order-items) : il exige les
+    // DEUX jetons en query — order_token (base64 du webhook, sinon 403) ET token
+    // (jeton du canal, sinon 401 « Token is unauthorized » — le Bearer est ignoré).
+    // Vérifié en réel le 2026-07-12 sur le canal SPDRMN.
+    const params = new URLSearchParams({ token: this.token })
+    if (orderToken) params.set('order_token', orderToken)
+    const res = (await this.request('GET', `/business/orders/${orderId}?${params}`)) as
       | { items?: Array<Record<string, unknown>>; products?: Array<Record<string, unknown>> }
       | Array<Record<string, unknown>>
     const list = Array.isArray(res) ? res : (res.items ?? res.products ?? [])

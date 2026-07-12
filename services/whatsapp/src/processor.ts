@@ -152,7 +152,10 @@ async function handleNativeOrder(
   for (const it of Array.isArray(items) ? items : []) {
     const qty = it.quantity ?? 0
     if (!it.retailer_id || qty <= 0) continue
-    const menuItem = menuItems.find((m) => m.id === it.retailer_id)
+    // Constaté en réel (2026-07-12) : les items de /business/orders exposent sous
+    // product_retailer_id l'ID PRODUIT WhatsApp (= notre wa_product_id), pas notre
+    // uuid de plat. On matche donc les deux clés.
+    const menuItem = menuItems.find((m) => m.id === it.retailer_id || m.waProductId === it.retailer_id)
     if (!menuItem) continue
     lines.push({ menuItemId: menuItem.id, name: menuItem.name, unitPrice: menuItem.price, qty, supplements: [] })
   }

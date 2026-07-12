@@ -35,7 +35,7 @@ export interface TransitionResult {
 
 export function flatMenuItems(
   menu: MenuForBot,
-): { id: string; name: string; price: number; supplements?: SupplementLine[]; photoUrl?: string | null }[] {
+): { id: string; name: string; price: number; supplements?: SupplementLine[]; photoUrl?: string | null; waProductId?: string | null }[] {
   return menu.categories.flatMap((c) => c.items)
 }
 

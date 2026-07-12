@@ -359,10 +359,10 @@ describe('WhapiClient', () => {
       },
     ])
     const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
-    const res = await client.getOrderItems('ORDER1')
+    const res = await client.getOrderItems('ORDER1', 'b64tok==')
     expect(res).toEqual([{ retailer_id: '50000000-0000-0000-0000-000000000003', quantity: 2, price: 3000 }])
     const [url, init] = fetchFn.mock.calls[0]
-    expect(url).toBe('https://gate.whapi.cloud/business/orders/ORDER1')
+    expect(url).toBe('https://gate.whapi.cloud/business/orders/ORDER1?token=tok123&order_token=b64tok%3D%3D')
     expect(init.method).toBe('GET')
   })
 })

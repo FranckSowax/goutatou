@@ -97,7 +97,7 @@ export function createRepo(db: SupabaseClient, tokenKey: string): BotRepo {
     async getBotContext(restaurantId, restaurantName, driveEnabled) {
       const [{ data: cats }, { data: slots }, { data: resto }] = await Promise.all([
         db.from('menu_categories')
-          .select('name, position, menu_items(id, name, price, available, position, photo_url, menu_supplements(id, name, price, available, position))')
+          .select('name, position, menu_items(id, name, price, available, position, photo_url, wa_product_id, menu_supplements(id, name, price, available, position))')
           .eq('restaurant_id', restaurantId)
           .order('position'),
         db.from('drive_slots').select('id, label, position')
@@ -125,13 +125,14 @@ export function createRepo(db: SupabaseClient, tokenKey: string): BotRepo {
             name: c.name,
             items: ((c.menu_items as {
               id: string; name: string; price: number; available: boolean; position: number
-              photo_url: string | null
+              photo_url: string | null; wa_product_id: string | null
               menu_supplements: { id: string; name: string; price: number; available: boolean; position: number }[] | null
             }[]) ?? [])
               .filter((i) => i.available)
               .sort((a, b) => a.position - b.position)
               .map((i) => ({
                 id: i.id, name: i.name, price: i.price, photoUrl: i.photo_url ?? null,
+                waProductId: i.wa_product_id ?? null,
                 supplements: (i.menu_supplements ?? [])
                   .filter((s) => s.available)
                   .sort((a, b) => a.position - b.position)

@@ -55,6 +55,7 @@ describe('createRepo — getBotContext (suppléments)', () => {
 
     expect(ctx.menu.categories[0].items[0]).toEqual({
       id: 'i1', name: 'Bo Bun', price: 4500, photoUrl: null,
+      waProductId: null,
       supplements: [
         { id: 's1', name: 'Œuf', price: 300 },
         { id: 's2', name: 'Bœuf', price: 1000 },
