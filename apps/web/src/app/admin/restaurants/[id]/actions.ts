@@ -79,6 +79,27 @@ export async function updateChannelToken(id: string, formData: FormData) {
 }
 
 /**
+ * Interrupteur du canal : status 'active' ↔ 'disabled'. Tous les consommateurs
+ * (processor webhook, notifier, workers campagnes/statuts/rappels) filtrent
+ * déjà sur status === 'active' — désactiver coupe le bot immédiatement,
+ * sans toucher au token ni au webhook.
+ */
+export async function setChannelEnabled(id: string, enabled: boolean) {
+  await assertPlatformAdmin()
+  const admin = createAdminClient()
+
+  const { data, error } = await admin
+    .from('whapi_channels')
+    .update({ status: enabled ? 'active' : 'disabled' })
+    .eq('restaurant_id', id)
+    .select('id')
+  if (error) throw new Error(error.message)
+  if (!data || data.length === 0) throw new Error('Aucun canal à activer ou désactiver.')
+
+  revalidateFiche(id)
+}
+
+/**
  * Décrypte le token DANS l'action (jamais en clair côté client) et instancie
  * le client Whapi correspondant. Lève l'erreur FR fixe si le canal n'existe
  * plus / le token est absent.

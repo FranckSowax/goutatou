@@ -7,19 +7,21 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { updateBotMessages, updateChannelToken, getPairingCode, getLoginQrAction } from './actions'
+import { updateBotMessages, updateChannelToken, getPairingCode, getLoginQrAction, setChannelEnabled } from './actions'
 import { renderBotInfosPreview, renderBotWelcomePreview } from './bot-info-preview'
 
 type ChannelStatus = 'active' | 'error' | string
 
 function badgeVariantForChannel(status: ChannelStatus | undefined) {
   if (status === 'active') return 'success' as const
+  if (status === 'disabled') return 'warning' as const
   if (status === 'error') return 'destructive' as const
   return 'muted' as const
 }
 
 function channelLabel(status: ChannelStatus | undefined) {
   if (status === 'active') return 'Actif'
+  if (status === 'disabled') return 'Désactivé'
   if (status === 'error') return 'Erreur'
   return 'Non configuré'
 }
@@ -87,6 +89,21 @@ export function BotTab({
   const [qrBase64, setQrBase64] = useState<string | null>(null)
   const [qrError, setQrError] = useState<string | null>(null)
   const [qrLoading, setQrLoading] = useState(false)
+
+  const [toggleError, setToggleError] = useState<string | null>(null)
+  const [toggling, setToggling] = useState(false)
+
+  async function handleToggleChannel() {
+    setToggling(true)
+    setToggleError(null)
+    try {
+      await setChannelEnabled(restaurantId, channelStatus !== 'active')
+    } catch (e) {
+      setToggleError(errorMessage(e, "Impossible de changer l'état du canal."))
+    } finally {
+      setToggling(false)
+    }
+  }
 
   async function handleGetPairingCode() {
     setPairingLoading(true)
@@ -160,12 +177,41 @@ export function BotTab({
           <CardTitle className="font-display text-base">Canal WhatsApp</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 px-0">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge variant={badgeVariantForChannel(channelStatus)}>{channelLabel(channelStatus)}</Badge>
             <span className="text-xs text-muted-foreground">
               Dernier webhook : {lastWebhookAt ?? 'jamais'}
             </span>
+            {hasChannel && (channelStatus === 'active' || channelStatus === 'disabled') && (
+              <Button
+                type="button"
+                size="sm"
+                variant={channelStatus === 'active' ? 'outline' : 'default'}
+                disabled={toggling}
+                onClick={handleToggleChannel}
+              >
+                {toggling
+                  ? 'Changement…'
+                  : channelStatus === 'active'
+                    ? 'Désactiver le bot'
+                    : 'Réactiver le bot'}
+              </Button>
+            )}
           </div>
+          {channelStatus === 'disabled' && (
+            <p className="text-xs text-muted-foreground">
+              Bot coupé : les messages entrants sont ignorés et aucun envoi (notifications,
+              campagnes, statuts, rappels) ne part pour ce restaurant.
+            </p>
+          )}
+          {toggleError && (
+            <div
+              role="alert"
+              className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
+              {toggleError}
+            </div>
+          )}
 
           {tokenError && (
             <div

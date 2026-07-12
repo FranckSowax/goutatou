@@ -24,13 +24,14 @@ type WhapiChannelStatus = 'active' | 'error' | string
 
 function badgeVariantForChannel(status: WhapiChannelStatus | undefined) {
   if (status === 'active') return 'success' as const
-  if (status === 'qr') return 'warning' as const
+  if (status === 'qr' || status === 'disabled') return 'warning' as const
   if (status === 'error') return 'destructive' as const
   return 'muted' as const
 }
 
 function channelLabel(status: WhapiChannelStatus | undefined) {
   if (status === 'active') return 'Actif'
+  if (status === 'disabled') return 'Désactivé'
   if (status === 'qr') return 'QR à scanner'
   if (status === 'error') return 'Erreur'
   return 'Non configuré'
