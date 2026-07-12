@@ -421,6 +421,65 @@ export class WhapiClient {
     return { id: res.message?.id }
   }
 
+  /**
+   * Crée un groupe WhatsApp — POST /groups. Endpoint et méthode confirmés par le code généré du
+   * serveur MCP whapi-mcp (createGroup.js) et par whapi.readme.io/reference/creategroup.
+   *
+   * ATTENTION — ÉCART AVEC LA CONSIGNE INITIALE DE LA TÂCHE : la brief demandait
+   * `createGroup(name: string)` sans participants ("participants optionnels : ne pas en passer").
+   * Vérification faite (4 sources indépendantes convergentes) :
+   *   1. Code généré whapi-mcp (createGroup.js) : le body POST est construit avec `subject` (pas
+   *      `name`) et `participants` — les deux clés sont lues depuis args sans valeur par défaut.
+   *   2. B_manifest.json (schéma OpenAPI officiel Whapi tel que généré) : requestBody.schema.required
+   *      = ["subject", "participants"], `participants` est un array avec minItems: 1.
+   *   3. whapi.readme.io/reference/creategroup (doc publique) : mêmes champs requis confirmés
+   *      ("subject" string requis, "participants" array minItems 1 requis).
+   *   4. .agents/skills/whapi/references/groups-management.md : exemple explicite "Incorrect (no
+   *      participants)" annoté "Fails — WhatsApp requires at least one member besides yourself", ET
+   *      note anti-hallucination dédiée : "`name` in createGroup — the field is `subject`".
+   * Conclusion (confiance haute) : `participants` n'est PAS optionnel côté API Whapi — un body sans
+   * participants sera rejeté (400). Le champ est `subject`, pas `name`. Le client expose donc
+   * `createGroup(subject, participants)` avec `participants` requis (non vide), contrairement à la
+   * consigne initiale. L'appelant (bot/web) doit fournir au moins un numéro autre que le canal lui-même.
+   *
+   * Forme de la réponse NON documentée avec un exemple JSON (outputSchema du manifeste MCP = enveloppe
+   * générique {status, content}, pas le corps réel ; la doc readme.io ne montre pas d'exemple de
+   * réponse malgré vérification). Parsing défensif de l'id créé, par analogie avec createNewsletter
+   * (id à la racine) et avec les patterns `{ xxx: { id } }` observés ailleurs dans ce client.
+   * Confiance : haute sur la requête, basse sur la forme exacte de la réponse — à vérifier contre un
+   * vrai appel avant usage en prod.
+   */
+  async createGroup(subject: string, participants: string[]): Promise<{ id?: string }> {
+    const res = (await this.request('POST', '/groups', { subject, participants })) as {
+      id?: string
+      group_id?: string
+      group?: { id?: string }
+    }
+    return { id: res.id ?? res.group_id ?? res.group?.id }
+  }
+
+  /**
+   * Récupère le lien d'invitation d'un groupe — GET /groups/{GroupID}/invite. Endpoint, méthode et
+   * paramètre de chemin (`GroupID`, PascalCase) confirmés par le code généré whapi-mcp
+   * (getGroupInvite.js), par B_manifest.json (inputSchema requis: ["GroupID"]) et par
+   * whapi.readme.io/reference/getgroupinvite.
+   *
+   * Forme de la réponse NON documentée par un exemple JSON sur whapi.readme.io ni dans le manifeste
+   * MCP (outputSchema générique {status, content}). Seule source sur le nom du champ :
+   * support.whapi.cloud/help-desk/groups/add-new-member-to-group décrit le résultat comme le
+   * paramètre `invite_code`. Parsing défensif : `invite_code` en priorité, repli sur `link`/`invite`
+   * (noms vus sur d'autres endpoints Whapi de type "invite"). Confiance : haute sur la requête,
+   * moyenne sur le nom exact du champ de réponse — à vérifier contre un vrai appel avant usage en prod.
+   */
+  async getGroupInvite(groupId: string): Promise<{ invite?: string }> {
+    const res = (await this.request('GET', `/groups/${groupId}/invite`)) as {
+      invite_code?: string
+      link?: string
+      invite?: string
+    }
+    return { invite: res.invite_code ?? res.link ?? res.invite }
+  }
+
   async getOrderItems(orderId: string): Promise<Array<{ retailer_id?: string; quantity?: number; price?: number }>> {
     const res = (await this.request('GET', `/business/orders/${orderId}`)) as
       | { items?: Array<Record<string, unknown>>; products?: Array<Record<string, unknown>> }

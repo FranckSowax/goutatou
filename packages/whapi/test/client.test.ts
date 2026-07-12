@@ -313,6 +313,44 @@ describe('WhapiClient', () => {
     })
   })
 
+  it('createGroup : POST /groups avec subject + participants (requis), parse id', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { id: '120363194050948049@g.us' } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.createGroup('Staff Goutatou', ['24177000001@s.whatsapp.net'])
+    expect(res).toEqual({ id: '120363194050948049@g.us' })
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/groups')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body)).toEqual({
+      subject: 'Staff Goutatou',
+      participants: ['24177000001@s.whatsapp.net'],
+    })
+  })
+
+  it('createGroup : parse id en repli sous `group.id` si absent à la racine', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { group: { id: '120363000000000000@g.us' } } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.createGroup('Staff Goutatou', ['24177000001@s.whatsapp.net'])
+    expect(res).toEqual({ id: '120363000000000000@g.us' })
+  })
+
+  it('getGroupInvite : GET /groups/{GroupID}/invite, parse `invite_code`', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { invite_code: 'ABC123xyz' } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.getGroupInvite('120363194050948049@g.us')
+    expect(res).toEqual({ invite: 'ABC123xyz' })
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/groups/120363194050948049@g.us/invite')
+    expect(init.method).toBe('GET')
+  })
+
+  it('getGroupInvite : parse en repli sur `link` si `invite_code` absent', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { link: 'https://chat.whatsapp.com/ABC123xyz' } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.getGroupInvite('120363194050948049@g.us')
+    expect(res).toEqual({ invite: 'https://chat.whatsapp.com/ABC123xyz' })
+  })
+
   it('getOrderItems : GET /business/orders/{id}, parse liste sous `items` (retailer_id/quantity/price)', async () => {
     const fetchFn = mockFetch([
       {
