@@ -17,6 +17,8 @@ export interface CatalogRepo {
   getChannel(restaurantId: string): Promise<CatalogChannel | null>
   /** Plats DISPONIBLES avec photo (contrainte Whapi : `images` requis par produit) — position catégorie puis plat. */
   getSyncableItems(restaurantId: string): Promise<CatalogItem[]>
+  /** TOUS les ids de plats du resto (disponibles ou non) — périmètre de suppression du sync. */
+  getAllItemIds(restaurantId: string): Promise<Set<string>>
   setWaProductId(itemId: string, waId: string | null): Promise<void>
   /** Efface wa_product_id sur le(s) plat(s) qui pointaient vers ce produit Whapi supprimé (plat devenu indisponible). */
   clearWaProductId(waId: string): Promise<void>
@@ -71,6 +73,11 @@ export function createCatalogRepo(db: SupabaseClient, tokenKey: string): Catalog
         .eq('restaurant_id', restaurantId).single()
       if (!data) return null
       return { token: decryptToken(data.token_encrypted, tokenKey), status: data.status }
+    },
+
+    async getAllItemIds(restaurantId) {
+      const { data } = await db.from('menu_items').select('id').eq('restaurant_id', restaurantId)
+      return new Set(((data ?? []) as { id: string }[]).map((r) => r.id))
     },
 
     async getSyncableItems(restaurantId) {

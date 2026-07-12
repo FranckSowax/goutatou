@@ -25,9 +25,11 @@ export async function syncRestaurantCatalog(restaurantId: string, deps: CatalogW
   const whapi = deps.makeWhapi(channel.token)
 
   let items: CatalogItem[]
+  let allItemIds: Set<string>
   let remote: RemoteProduct[]
   try {
     items = await deps.repo.getSyncableItems(restaurantId)
+    allItemIds = await deps.repo.getAllItemIds(restaurantId)
     remote = await whapi.getProducts()
   } catch (err) {
     console.error('[catalog-sync]', err)
@@ -75,9 +77,18 @@ export async function syncRestaurantCatalog(restaurantId: string, deps: CatalogW
     await throttle()
   }
 
-  for (const product of remote) {
+  // Suppression STRICTEMENT limitée à notre périmètre : uniquement les produits dont le
+  // retailer_id est un plat de CE restaurant (disponible ou non). Les produits créés à la
+  // main par le restaurateur dans WhatsApp Business (retailer_id inconnu de Goutatou) ne
+  // sont JAMAIS touchés. Garde pagination : si la page Whapi est pleine (100), on saute
+  // toute la phase de suppression — un produit hors page passerait pour orphelin.
+  if (remote.length >= 100) {
+    console.error('[catalog-sync] page produits pleine — phase de suppression sautée par prudence')
+  }
+  for (const product of remote.length >= 100 ? [] : remote) {
     if (!product.retailer_id || !product.id) continue
     if (localIds.has(product.retailer_id)) continue
+    if (!allItemIds.has(product.retailer_id)) continue
     try {
       await whapi.deleteProduct(product.id)
       // Le plat a pu devenir indisponible / perdre sa photo : on efface la référence locale

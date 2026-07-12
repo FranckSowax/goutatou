@@ -27,6 +27,9 @@ function makeDeps(over: Partial<CatalogWorkerDeps> = {}): {
     claimSyncRequests: vi.fn(),
     getChannel: vi.fn().mockResolvedValue({ token: 'tok', status: 'active' }),
     getSyncableItems: vi.fn().mockResolvedValue([item()]),
+    // Périmètre de suppression : item1 (synchronisable) + item-disparu (plat du resto
+    // devenu indisponible) appartiennent au resto ; tout autre retailer_id est étranger.
+    getAllItemIds: vi.fn().mockResolvedValue(new Set(['item1', 'item-disparu'])),
     setWaProductId: vi.fn().mockResolvedValue(undefined),
     clearWaProductId: vi.fn().mockResolvedValue(undefined),
     finishSync: vi.fn().mockResolvedValue(undefined),
@@ -68,13 +71,37 @@ describe('syncRestaurantCatalog', () => {
     expect(repo.finishSync).toHaveBeenCalledWith(RID, null)
   })
 
-  it('produit distant orphelin (retailer_id sans plat local synchronisable) → deleteProduct + clearWaProductId', async () => {
+  it('produit distant orphelin (plat du resto devenu non synchronisable) → deleteProduct + clearWaProductId', async () => {
     const { deps, getProducts, deleteProduct, repo } = makeDeps({})
     repo.getSyncableItems = vi.fn().mockResolvedValue([]) // aucun plat synchronisable ce tour
     getProducts.mockResolvedValue([{ id: 'wa-gone', retailer_id: 'item-disparu' }])
     await syncRestaurantCatalog(RID, deps)
     expect(deleteProduct).toHaveBeenCalledWith('wa-gone')
     expect(repo.clearWaProductId).toHaveBeenCalledWith('wa-gone')
+    expect(repo.finishSync).toHaveBeenCalledWith(RID, null)
+  })
+
+  it('produit créé HORS Goutatou (retailer_id étranger au resto) → JAMAIS supprimé', async () => {
+    const { deps, getProducts, deleteProduct, repo } = makeDeps({})
+    repo.getSyncableItems = vi.fn().mockResolvedValue([])
+    getProducts.mockResolvedValue([
+      { id: 'wa-manuel', retailer_id: 'SKU-MAISON-42' },
+      { id: 'wa-autre', retailer_id: 'produit perso' },
+    ])
+    await syncRestaurantCatalog(RID, deps)
+    expect(deleteProduct).not.toHaveBeenCalled()
+    expect(repo.clearWaProductId).not.toHaveBeenCalled()
+    expect(repo.finishSync).toHaveBeenCalledWith(RID, null)
+  })
+
+  it('page produits pleine (100) → phase de suppression sautée par prudence', async () => {
+    const { deps, getProducts, deleteProduct, repo } = makeDeps({})
+    repo.getSyncableItems = vi.fn().mockResolvedValue([])
+    getProducts.mockResolvedValue(
+      Array.from({ length: 100 }, (_, i) => ({ id: `wa-${i}`, retailer_id: 'item-disparu' }))
+    )
+    await syncRestaurantCatalog(RID, deps)
+    expect(deleteProduct).not.toHaveBeenCalled()
     expect(repo.finishSync).toHaveBeenCalledWith(RID, null)
   })
 
