@@ -153,4 +153,50 @@ describe('WhapiClient', () => {
     expect(url).toBe('https://gate.whapi.cloud/users/login/24177000001')
     expect(init.method).toBe('GET')
   })
+
+  it('sendTyping : PUT /presences/{EntryID} avec presence "typing"', async () => {
+    const fetchFn = mockFetch([{ status: 200 }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    await client.sendTyping('24177000001@s.whatsapp.net')
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/presences/24177000001@s.whatsapp.net')
+    expect(init.method).toBe('PUT')
+    expect(JSON.parse(init.body)).toEqual({ presence: 'typing' })
+  })
+
+  it('markAsRead : PUT /messages/{MessageID}, sans body', async () => {
+    const fetchFn = mockFetch([{ status: 200 }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    await client.markAsRead('p.w30M7fgwWD4XwHu.g4CA-gBgTwl0rVw')
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/messages/p.w30M7fgwWD4XwHu.g4CA-gBgTwl0rVw')
+    expect(init.method).toBe('PUT')
+    expect(init.body).toBeUndefined()
+  })
+
+  it('react : PUT /messages/{MessageID}/reaction avec le bon emoji', async () => {
+    const fetchFn = mockFetch([{ status: 200 }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    await client.react('p.w30M7fgwWD4XwHu.g4CA-gBgTwl0rVw', '👍')
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/messages/p.w30M7fgwWD4XwHu.g4CA-gBgTwl0rVw/reaction')
+    expect(init.method).toBe('PUT')
+    expect(JSON.parse(init.body)).toEqual({ emoji: '👍' })
+  })
+
+  it('sendLocation : POST /messages/location avec lat/lng/name, parse id', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { message: { id: 'LOC1' } } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.sendLocation('24177000001@s.whatsapp.net', 0.4162, 9.4673, 'Restaurant Goutatou')
+    expect(res).toEqual({ id: 'LOC1' })
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/messages/location')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body)).toEqual({
+      to: '24177000001@s.whatsapp.net',
+      latitude: 0.4162,
+      longitude: 9.4673,
+      name: 'Restaurant Goutatou',
+    })
+  })
 })

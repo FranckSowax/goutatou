@@ -179,4 +179,56 @@ export class WhapiClient {
       return false
     }
   }
+
+  /**
+   * Indicateur de présence « en train d'écrire » — PUT /presences/{EntryID}, body { presence }.
+   * Endpoint, méthode et champs (presence: 'typing'|'recording'|'pause', delay optionnel)
+   * confirmés par whapi.readme.io/reference/sendpresence ET recroisés avec le code généré du
+   * serveur MCP whapi-mcp (généré depuis le schéma officiel Whapi). Confiance : haute.
+   */
+  async sendTyping(to: string): Promise<void> {
+    await this.request('PUT', `/presences/${to}`, { presence: 'typing' })
+  }
+
+  /**
+   * Marque un message entrant comme lu — PUT /messages/{MessageID}, sans body. Endpoint et
+   * méthode confirmés par le code généré du serveur MCP whapi-mcp (généré depuis le schéma
+   * officiel Whapi, cf. outil MCP markMessageAsRead). La page whapi.readme.io/reference/
+   * markmessageasread était inaccessible au moment de la vérification (bloquée par la
+   * protection anti-bot du site readme.io) : pas de recroisement avec la doc publique.
+   * Confiance : moyenne-haute (source unique, mais fiable — mêmes générateurs qui ont produit
+   * les schémas confirmés à l'identique pour sendPresence et sendMessageLocation ci-dessous).
+   */
+  async markAsRead(messageId: string): Promise<void> {
+    await this.request('PUT', `/messages/${messageId}`)
+  }
+
+  /**
+   * Réagit à un message avec un emoji — PUT /messages/{MessageID}/reaction, body { emoji }.
+   * Chemin et méthode confirmés par le code généré du serveur MCP whapi-mcp (généré depuis le
+   * schéma officiel Whapi). Champs (MessageID, emoji) recroisés avec references/msg-text.md
+   * (outil MCP reactToMessage). Idem markAsRead : doc whapi.readme.io/reference/reacttomessage
+   * inaccessible au moment de la vérification (protection anti-bot). Confiance : moyenne-haute.
+   */
+  async react(messageId: string, emoji: string): Promise<void> {
+    await this.request('PUT', `/messages/${messageId}/reaction`, { emoji })
+  }
+
+  /**
+   * Envoie une localisation fixe — POST /messages/location, body { to, latitude, longitude,
+   * name? }. Endpoint, méthode et champs confirmés par whapi.readme.io/reference/
+   * sendmessagelocation ET recroisés avec le code généré du serveur MCP whapi-mcp. Forme de la
+   * réponse ({ message: { id } }) INFÉRÉE par analogie avec les autres endpoints /messages/*
+   * (sendText, sendImage) — la doc ne montre pas d'exemple JSON de réponse pour cet endpoint.
+   * Confiance : haute sur la requête, moyenne sur la forme de la réponse.
+   */
+  async sendLocation(to: string, lat: number, lng: number, name?: string): Promise<{ id?: string }> {
+    const res = (await this.request('POST', '/messages/location', {
+      to,
+      latitude: lat,
+      longitude: lng,
+      name,
+    })) as { message?: { id?: string } }
+    return { id: res.message?.id }
+  }
 }
