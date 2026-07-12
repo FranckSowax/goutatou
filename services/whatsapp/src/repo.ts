@@ -10,6 +10,8 @@ interface RestaurantProfileRow {
   delivery_info: string | null
   bot_welcome: string | null
   bot_info_extra: string | null
+  location_lat: number | null
+  location_lng: number | null
 }
 
 /** Fiche pratique (champs null/vides omis) — undefined si la fiche est entièrement vide. */
@@ -32,9 +34,18 @@ export interface ChannelInfo {
   driveEnabled: boolean
 }
 
+/**
+ * BotContext enrichi de la position GPS du restaurant (migration 0020). N'étend PAS
+ * BotContext dans bot/machine.ts (contrat figé, cf. spec bot-vivant) : la machine pure
+ * ignore ce champ, seul le processor le lit pour l'effet carte sur la commande "infos".
+ */
+export interface BotContextWithGps extends BotContext {
+  gps?: { lat: number; lng: number }
+}
+
 export interface BotRepo {
   getChannel(channelUuid: string): Promise<ChannelInfo | null>
-  getBotContext(restaurantId: string, restaurantName: string, driveEnabled: boolean): Promise<BotContext>
+  getBotContext(restaurantId: string, restaurantName: string, driveEnabled: boolean): Promise<BotContextWithGps>
   upsertCustomer(restaurantId: string, phone: string, chatId: string, name?: string): Promise<{ id: string }>
   setOptedOut(restaurantId: string, customerId: string): Promise<void>
   /** Opt-in marketing explicite (mot-clé PROMOS) : n'altère PAS opted_out (critère audience v1). */
@@ -83,18 +94,23 @@ export function createRepo(db: SupabaseClient, tokenKey: string): BotRepo {
         db.from('drive_slots').select('id, label, position')
           .eq('restaurant_id', restaurantId).eq('active', true).order('position'),
         db.from('restaurants')
-          .select('address, contact_phone, hours_text, delivery_info, bot_welcome, bot_info_extra')
+          .select('address, contact_phone, hours_text, delivery_info, bot_welcome, bot_info_extra, location_lat, location_lng')
           .eq('id', restaurantId)
           .maybeSingle(),
       ])
-      const profile = mapProfile((resto as RestaurantProfileRow | null) ?? null)
-      const botWelcome = (resto as RestaurantProfileRow | null)?.bot_welcome?.trim() || undefined
+      const restoRow = (resto as RestaurantProfileRow | null) ?? null
+      const profile = mapProfile(restoRow)
+      const botWelcome = restoRow?.bot_welcome?.trim() || undefined
+      const gps = restoRow?.location_lat != null && restoRow?.location_lng != null
+        ? { lat: restoRow.location_lat, lng: restoRow.location_lng }
+        : undefined
       return {
         restaurantName,
         driveEnabled,
         driveSlots: (slots ?? []).map((s) => ({ id: s.id, label: s.label })),
         ...(profile ? { profile } : {}),
         ...(botWelcome ? { botWelcome } : {}),
+        ...(gps ? { gps } : {}),
         menu: {
           categories: (cats ?? []).map((c) => ({
             name: c.name,

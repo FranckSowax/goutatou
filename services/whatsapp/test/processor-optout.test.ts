@@ -36,7 +36,7 @@ describe('processor opt-out', () => {
   })
 
   it('mot-clé STOP → setOptedOut + confirmation, pas de transition', async () => {
-    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn() }), deps)
+    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn(), sendTyping: vi.fn().mockResolvedValue(undefined), markAsRead: vi.fn().mockResolvedValue(undefined), react: vi.fn().mockResolvedValue(undefined), sendLocation: vi.fn().mockResolvedValue(undefined) }), deps)
     await process('c', payload('STOP'))
     expect(repo.setOptedOut).toHaveBeenCalledWith('r1', 'cust1')
     expect(sendText).toHaveBeenCalledWith('24177000001@s.whatsapp.net', expect.stringContaining('désabonné'))
@@ -44,7 +44,7 @@ describe('processor opt-out', () => {
   })
 
   it('message normal → pas de setOptedOut', async () => {
-    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn() }), deps)
+    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn(), sendTyping: vi.fn().mockResolvedValue(undefined), markAsRead: vi.fn().mockResolvedValue(undefined), react: vi.fn().mockResolvedValue(undefined), sendLocation: vi.fn().mockResolvedValue(undefined) }), deps)
     await process('c', payload('menu'))
     expect(repo.setOptedOut).not.toHaveBeenCalled()
   })

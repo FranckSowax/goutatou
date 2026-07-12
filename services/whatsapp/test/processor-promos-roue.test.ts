@@ -41,21 +41,21 @@ describe('processor — mot-clé "promos" (opt-in marketing)', () => {
   })
 
   it('mot-clé promos → setMarketingOptIn appelé + réponse envoyée', async () => {
-    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn() }), deps)
+    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn(), sendTyping: vi.fn().mockResolvedValue(undefined), markAsRead: vi.fn().mockResolvedValue(undefined), react: vi.fn().mockResolvedValue(undefined), sendLocation: vi.fn().mockResolvedValue(undefined) }), deps)
     await process('c', payload('promos'))
     expect(repo.setMarketingOptIn).toHaveBeenCalledWith('r1', 'cust1')
     expect(sendText).toHaveBeenCalledWith(CHAT_ID, expect.stringContaining(`C'est noté`))
   })
 
   it('message normal (ex: menu) → pas de setMarketingOptIn', async () => {
-    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn() }), deps)
+    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn(), sendTyping: vi.fn().mockResolvedValue(undefined), markAsRead: vi.fn().mockResolvedValue(undefined), react: vi.fn().mockResolvedValue(undefined), sendLocation: vi.fn().mockResolvedValue(undefined) }), deps)
     await process('c', payload('menu'))
     expect(repo.setMarketingOptIn).not.toHaveBeenCalled()
   })
 
   it('état HUMAIN → "promos" avalé silencieusement, pas de setMarketingOptIn', async () => {
     repo.loadConversation = vi.fn().mockResolvedValue({ state: 'HUMAIN', cart: EMPTY_CART })
-    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn() }), deps)
+    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn(), sendTyping: vi.fn().mockResolvedValue(undefined), markAsRead: vi.fn().mockResolvedValue(undefined), react: vi.fn().mockResolvedValue(undefined), sendLocation: vi.fn().mockResolvedValue(undefined) }), deps)
     await process('c', payload('promos'))
     expect(repo.setMarketingOptIn).not.toHaveBeenCalled()
     expect(sendText).not.toHaveBeenCalled()
@@ -63,7 +63,7 @@ describe('processor — mot-clé "promos" (opt-in marketing)', () => {
 
   it('setMarketingOptIn échoue → best-effort, la réponse part quand même, pas de crash', async () => {
     repo.setMarketingOptIn = vi.fn().mockRejectedValue(new Error('db down'))
-    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn() }), deps)
+    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn(), sendTyping: vi.fn().mockResolvedValue(undefined), markAsRead: vi.fn().mockResolvedValue(undefined), react: vi.fn().mockResolvedValue(undefined), sendLocation: vi.fn().mockResolvedValue(undefined) }), deps)
     await expect(process('c', payload('promos'))).resolves.toBeUndefined()
     expect(sendText).toHaveBeenCalledWith(CHAT_ID, expect.stringContaining(`C'est noté`))
   })
@@ -90,21 +90,21 @@ describe('processor — mot-clé "roue" (contexte progression)', () => {
   })
 
   it('mot-clé roue → getWheelInfo appelé et progression injectée dans la réponse', async () => {
-    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn() }), deps)
+    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn(), sendTyping: vi.fn().mockResolvedValue(undefined), markAsRead: vi.fn().mockResolvedValue(undefined), react: vi.fn().mockResolvedValue(undefined), sendLocation: vi.fn().mockResolvedValue(undefined) }), deps)
     await process('c', payload('roue'))
     expect(repo.getWheelInfo).toHaveBeenCalledWith('r1', 'cust1')
     expect(sendText).toHaveBeenCalledWith(CHAT_ID, expect.stringContaining('Plus que 3 commandes avant votre tour de roue !'))
   })
 
   it('message normal (ex: menu) → pas d’appel getWheelInfo (chargé uniquement sur "roue")', async () => {
-    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn() }), deps)
+    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn(), sendTyping: vi.fn().mockResolvedValue(undefined), markAsRead: vi.fn().mockResolvedValue(undefined), react: vi.fn().mockResolvedValue(undefined), sendLocation: vi.fn().mockResolvedValue(undefined) }), deps)
     await process('c', payload('menu'))
     expect(repo.getWheelInfo).not.toHaveBeenCalled()
   })
 
   it('état HUMAIN → "roue" avalé silencieusement, pas d’appel getWheelInfo', async () => {
     repo.loadConversation = vi.fn().mockResolvedValue({ state: 'HUMAIN', cart: EMPTY_CART })
-    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn() }), deps)
+    const process = createProcessor(repo, () => ({ sendText, sendImage: vi.fn(), sendTyping: vi.fn().mockResolvedValue(undefined), markAsRead: vi.fn().mockResolvedValue(undefined), react: vi.fn().mockResolvedValue(undefined), sendLocation: vi.fn().mockResolvedValue(undefined) }), deps)
     await process('c', payload('roue'))
     expect(repo.getWheelInfo).not.toHaveBeenCalled()
     expect(sendText).not.toHaveBeenCalled()

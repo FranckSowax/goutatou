@@ -13,6 +13,13 @@ interface WhapiMessage {
   from: string
   from_name?: string
   text?: { body?: string }
+  /**
+   * Message de localisation entrant — messages[n].location.{latitude,longitude} (+ preview
+   * base64 ignoré). Shape confirmée via support.whapi.cloud/help-desk/receiving/webhooks/
+   * incoming-webhooks-format/incoming-message (exemple JSON officiel Whapi, type "location").
+   * Confiance : haute.
+   */
+  location?: { latitude: number; longitude: number }
 }
 
 export interface ProcessorDeps {
@@ -23,7 +30,10 @@ export interface ProcessorDeps {
   menuPhotosMax: number
 }
 
-type ProcessorWhapi = Pick<WhapiClient, 'sendText' | 'sendImage'>
+type ProcessorWhapi = Pick<
+  WhapiClient,
+  'sendText' | 'sendImage' | 'sendTyping' | 'markAsRead' | 'react' | 'sendLocation'
+>
 
 /**
  * Envoi des photos des plats disponibles après la réponse texte à la commande *menu*.
@@ -89,16 +99,26 @@ export function createProcessor(
     const whapi = makeWhapi(channel.token)
 
     for (const msg of messages) {
-      if (msg.from_me || msg.type !== 'text' || !msg.text?.body) continue
+      if (msg.from_me) continue
+
+      // Un message location est converti en lien Google Maps et traité EXACTEMENT comme un
+      // texte libre (adresse de livraison en état ADRESSE, "pas compris" ailleurs) — cf.
+      // spec bot-vivant § GPS entrant. Tout autre type non-text/non-location reste ignoré
+      // (comportement v1 inchangé).
+      const body =
+        msg.type === 'text' ? msg.text?.body :
+        msg.type === 'location' && msg.location ? `https://maps.google.com/?q=${msg.location.latitude},${msg.location.longitude}` :
+        undefined
+      if (!body) continue
 
       // Idempotence : si ce message Whapi a déjà été loggé, on skip.
-      const fresh = await repo.logMessage(channel.restaurantId, 'in', msg.chat_id, msg.text.body, msg.id)
+      const fresh = await repo.logMessage(channel.restaurantId, 'in', msg.chat_id, body, msg.id)
       if (!fresh) continue
 
       try {
         const customer = await repo.upsertCustomer(channel.restaurantId, msg.from, msg.chat_id, msg.from_name)
 
-        if (isOptOutKeyword(msg.text.body)) {
+        if (isOptOutKeyword(body)) {
           await repo.setOptedOut(channel.restaurantId, customer.id)
           const bye = 'Vous êtes désabonné(e) des messages de ce restaurant. Tapez *menu* pour commander à nouveau quand vous voulez. 👋'
           try {
@@ -111,13 +131,23 @@ export function createProcessor(
         }
 
         const conv = await repo.loadConversation(channel.restaurantId, customer.id)
+
+        // Bot vivant : présence "en train d'écrire" + accusé de lecture sur chaque message
+        // traité, fire-and-forget (jamais attendus, jamais bloquants pour la réponse) — hors
+        // état HUMAIN où un opérateur a la main (cf. spec bot-vivant § Bot humain).
+        if (conv.state !== 'HUMAIN') {
+          whapi.sendTyping(msg.chat_id).catch((err) => console.error('[presence]', err))
+          whapi.markAsRead(msg.id).catch((err) => console.error('[presence]', err))
+        }
+
         const baseCtx = await repo.getBotContext(channel.restaurantId, channel.restaurantName, channel.driveEnabled)
 
         // Détection précise des commandes globales (cf. bot/machine.ts, routage global) :
         // mêmes conditions que celles évaluées par la machine.
-        const isMenuCommand = msg.text.body.trim().toLowerCase() === 'menu'
-        const isRoueCommand = msg.text.body.trim().toLowerCase() === 'roue'
-        const isPromosCommand = msg.text.body.trim().toLowerCase() === 'promos'
+        const isMenuCommand = body.trim().toLowerCase() === 'menu'
+        const isRoueCommand = body.trim().toLowerCase() === 'roue'
+        const isPromosCommand = body.trim().toLowerCase() === 'promos'
+        const isInfosCommand = body.trim().toLowerCase() === 'infos'
 
         // Contexte roue chargé UNIQUEMENT sur le mot-clé 'roue', et jamais en état HUMAIN
         // (où la commande serait de toute façon avalée silencieusement par la machine) :
@@ -126,7 +156,7 @@ export function createProcessor(
           ? { ...baseCtx, wheel: await repo.getWheelInfo(channel.restaurantId, customer.id) }
           : baseCtx
 
-        const res = transition(conv.state, conv.cart, msg.text.body, ctx)
+        const res = transition(conv.state, conv.cart, body, ctx)
         const replies = [...res.replies]
         let nextCart = res.cart
 
@@ -134,6 +164,9 @@ export function createProcessor(
           const order = await repo.createOrder(channel.restaurantId, customer.id, res.cart)
           replies.push(orderConfirmedCopy(order.orderNumber, order.total, res.cart))
           nextCart = EMPTY_CART
+          // Réaction ✅ UNIQUEMENT quand la commande a bien été créée (awaited best-effort :
+          // un échec Whapi ne doit jamais faire échouer la conversation — cf. spec).
+          await whapi.react(msg.id, '✅').catch((err) => console.error('[react]', err))
         }
 
         await repo.saveConversation(channel.restaurantId, customer.id, res.state, nextCart)
@@ -154,6 +187,19 @@ export function createProcessor(
             await sendMenuPhotos(whapi, repo, channel.restaurantId, msg.chat_id, ctx.menu, deps)
           } catch (err) {
             console.error('[menu-photos] erreur inattendue', err)
+          }
+        }
+
+        // Carte du restaurant sur "infos" quand les coordonnées GPS sont renseignées (fiche
+        // admin / réglages) : envoyée EN PLUS, après le bloc texte (même pattern que les
+        // photos du menu), best-effort — cf. spec bot-vivant § GPS sortant. res.replies non
+        // vide confirme le même routage global que pour 'menu'/'promos' (pas avalé par HUMAIN).
+        if (isInfosCommand && res.replies.length > 0 && ctx.gps) {
+          try {
+            const sent = await whapi.sendLocation(msg.chat_id, ctx.gps.lat, ctx.gps.lng, channel.restaurantName)
+            await repo.logMessage(channel.restaurantId, 'out', msg.chat_id, '📍 Position partagée', sent.id)
+          } catch (err) {
+            console.error('[gps]', err)
           }
         }
 

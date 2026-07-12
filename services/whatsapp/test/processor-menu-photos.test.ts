@@ -53,7 +53,13 @@ describe('processor — photos du menu', () => {
   })
 
   function process() {
-    return createProcessor(repo, () => ({ sendText, sendImage }), deps)
+    return createProcessor(repo, () => ({
+      sendText, sendImage,
+      sendTyping: vi.fn().mockResolvedValue(undefined),
+      markAsRead: vi.fn().mockResolvedValue(undefined),
+      react: vi.fn().mockResolvedValue(undefined),
+      sendLocation: vi.fn().mockResolvedValue(undefined),
+    }), deps)
   }
 
   it('menu sans photos → aucun sendImage (non-régression)', async () => {
