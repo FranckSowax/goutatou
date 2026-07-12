@@ -371,6 +371,56 @@ export class WhapiClient {
    * `quantity`, `item_price`/`price`). Confiance : basse sur la forme exacte — à vérifier contre
    * un vrai panier WhatsApp avant usage en prod (cf. limite documentée dans la spec catalogue).
    */
+  /**
+   * Envoie un sondage — POST /messages/poll, body { to, title, options, count? }. Endpoint,
+   * méthode et champs (to/title/options requis ; options minItems 2, maxItems 12 ; count optionnel
+   * 0-1, "0 = choix multiple, 1 = choix unique") confirmés à l'identique par DEUX sources
+   * indépendantes : le code généré du serveur MCP whapi-mcp (généré depuis le schéma officiel
+   * Whapi, ~/.npm/_npx/.../whapi-mcp/generated-mcp/sendMessagePoll.js + B_manifest.json) ET
+   * .agents/skills/whapi/references/msg-interactive.md (section "Polls (Stable — Use This First)",
+   * même body exact avec exemples). Confiance : haute sur la requête (count fixé à 1 = choix
+   * unique, cf. spec sondages qui ne modélise pas le multi-choix).
+   *
+   * Forme de la réponse NON documentée par les deux sources (outputSchema du manifeste MCP =
+   * enveloppe générique {status, content}, pas le corps réel). Parsing défensif de `message.id`
+   * par analogie avec les autres endpoints `/messages/*` (sendText, sendLocation). Confiance :
+   * moyenne sur la forme de la réponse — à vérifier contre un vrai appel avant usage en prod.
+   */
+  async sendPoll(to: string, question: string, options: string[]): Promise<{ id?: string }> {
+    const res = (await this.request('POST', '/messages/poll', {
+      to,
+      title: question,
+      options,
+      count: 1,
+    })) as { message?: { id?: string } }
+    return { id: res.message?.id }
+  }
+
+  /**
+   * Envoie un quiz (sondage avec bonne réponse) — POST /messages/quiz, body { to, title, options,
+   * correct_option_index }. Endpoint, méthode et champs (to/title/options/correct_option_index
+   * requis ; options minItems 2, maxItems 12 ; correct_option_index = index 0-based de la bonne
+   * réponse) confirmés par le code généré du serveur MCP whapi-mcp (généré depuis le schéma
+   * officiel Whapi, ~/.npm/_npx/.../whapi-mcp/generated-mcp/sendMessageQuiz.js + B_manifest.json —
+   * même générateur que sendPoll ci-dessus, et que sendTyping/react/sendLocation, tous confirmés
+   * "haute confiance" dans ce fichier). PAS de recroisement avec .agents/skills/whapi (le quiz n'y
+   * est pas documenté, seul le poll l'est) : source unique mais fiable. Confiance : haute sur la
+   * requête.
+   *
+   * Forme de la réponse NON documentée (même limite que sendPoll ci-dessus). Parsing défensif de
+   * `message.id` par analogie. Confiance : moyenne sur la forme de la réponse — à vérifier contre
+   * un vrai appel avant usage en prod.
+   */
+  async sendQuiz(to: string, question: string, options: string[], correctIndex: number): Promise<{ id?: string }> {
+    const res = (await this.request('POST', '/messages/quiz', {
+      to,
+      title: question,
+      options,
+      correct_option_index: correctIndex,
+    })) as { message?: { id?: string } }
+    return { id: res.message?.id }
+  }
+
   async getOrderItems(orderId: string): Promise<Array<{ retailer_id?: string; quantity?: number; price?: number }>> {
     const res = (await this.request('GET', `/business/orders/${orderId}`)) as
       | { items?: Array<Record<string, unknown>>; products?: Array<Record<string, unknown>> }

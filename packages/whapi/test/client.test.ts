@@ -281,6 +281,38 @@ describe('WhapiClient', () => {
     expect(JSON.parse(init.body)).toEqual({ to: '24177000001@s.whatsapp.net' })
   })
 
+  it('sendPoll : POST /messages/poll avec title/options/count=1, parse id', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { message: { id: 'POLL1' } } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.sendPoll('24177000001@s.whatsapp.net', 'Quel plat préférez-vous ?', ['Poulet', 'Poisson'])
+    expect(res).toEqual({ id: 'POLL1' })
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/messages/poll')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body)).toEqual({
+      to: '24177000001@s.whatsapp.net',
+      title: 'Quel plat préférez-vous ?',
+      options: ['Poulet', 'Poisson'],
+      count: 1,
+    })
+  })
+
+  it('sendQuiz : POST /messages/quiz avec title/options/correct_option_index, parse id', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { message: { id: 'QUIZ1' } } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.sendQuiz('24177000001@s.whatsapp.net', 'Capitale du Gabon ?', ['Libreville', 'Douala', 'Yaoundé'], 0)
+    expect(res).toEqual({ id: 'QUIZ1' })
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/messages/quiz')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body)).toEqual({
+      to: '24177000001@s.whatsapp.net',
+      title: 'Capitale du Gabon ?',
+      options: ['Libreville', 'Douala', 'Yaoundé'],
+      correct_option_index: 0,
+    })
+  })
+
   it('getOrderItems : GET /business/orders/{id}, parse liste sous `items` (retailer_id/quantity/price)', async () => {
     const fetchFn = mockFetch([
       {
