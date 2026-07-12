@@ -21,6 +21,7 @@ export function loadConfig() {
     lpFramesPollMs: Number(process.env.LP_FRAMES_POLL_MS ?? 60000),
     menuPhotosMax: Math.max(0, Number(process.env.MENU_PHOTOS_MAX ?? 8)),
     wheelReminderPollMs: Number(process.env.WHEEL_REMINDER_POLL_MS ?? 6 * 3600 * 1000),
+    catalogSyncPollMs: Number(process.env.CATALOG_SYNC_POLL_MS ?? 60000),
   }
 }
 export type Config = ReturnType<typeof loadConfig>

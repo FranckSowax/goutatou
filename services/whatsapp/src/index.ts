@@ -13,6 +13,8 @@ import { createLpFramesRepo } from './lpframes/repo.js'
 import { createFfmpegRunner, startLpFramesWorker } from './lpframes/worker.js'
 import { createWheelReminderRepo } from './wheel/repo.js'
 import { startWheelReminderWorker } from './wheel/worker.js'
+import { createCatalogRepo } from './catalog/repo.js'
+import { startCatalogWorker } from './catalog/worker.js'
 
 const config = loadConfig()
 const db = createServiceClient(config.supabaseUrl, config.serviceRoleKey)
@@ -49,6 +51,15 @@ startWheelReminderWorker({
   repo: wheelReminderRepo,
   makeWhapi: (token) => new WhapiClient(token),
   pollMs: config.wheelReminderPollMs,
+})
+const catalogRepo = createCatalogRepo(db, config.tokenKey)
+startCatalogWorker({
+  repo: catalogRepo,
+  makeWhapi: (token) => new WhapiClient(token),
+  sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+  sendDelayMinMs: config.sendDelayMinMs,
+  sendDelayMaxMs: config.sendDelayMaxMs,
+  pollMs: config.catalogSyncPollMs,
 })
 const processWebhook = createProcessor(repo, (token) => new WhapiClient(token), {
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
