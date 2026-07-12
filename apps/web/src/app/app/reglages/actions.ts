@@ -1,5 +1,7 @@
 'use server'
 import { revalidatePath } from 'next/cache'
+import { decryptToken } from '@goutatou/db/crypto'
+import { WhapiClient } from '@goutatou/whapi'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { parseLatLng } from '@/lib/gps'
@@ -52,6 +54,91 @@ export async function updateMyRestaurantProfile(formData: FormData) {
     .eq('id', restaurantId)
     .select('id')
   if (error || !data || data.length === 0) throw new Error('Enregistrement impossible.')
+  revalidatePath('/app/reglages')
+}
+
+/**
+ * Crée le groupe WhatsApp « Cuisine {Resto} » : garde membre, décryptage du
+ * token du canal DANS l'action (jamais transmis au client, mirror
+ * chaine/actions.ts loadToken), createGroup + getGroupInvite (best-effort),
+ * écriture conditionnelle via client admin (pattern 3A, anti double-clic).
+ */
+export async function createStaffGroup() {
+  const supabase = await createSupabaseServer()
+  const { data: member, error: memberErr } = await supabase
+    .from('restaurant_members')
+    .select('restaurant_id')
+    .limit(1)
+    .single()
+  if (memberErr || !member) throw new Error('Aucun restaurant associé à ce compte')
+  const restaurantId = member.restaurant_id as string
+
+  const { data: resto, error: restoErr } = await supabase
+    .from('restaurants')
+    .select('name, contact_phone, staff_group_id')
+    .eq('id', restaurantId)
+    .single()
+  if (restoErr || !resto) throw new Error('Restaurant introuvable.')
+  if (resto.staff_group_id) {
+    // Déjà créé (course gagnée par un autre appel) : rien à faire.
+    revalidatePath('/app/reglages')
+    return
+  }
+
+  // WhatsApp exige au moins un participant autre que soi-même à la création
+  // (whapi.createGroup(subject, participants) — voir packages/whapi/src/client.ts,
+  // participants requis non vide). On utilise le téléphone de contact du
+  // restaurant (Fiche pratique) comme premier membre du groupe : le patron
+  // rejoint donc directement le groupe qu'il vient de créer.
+  const contactPhone = resto.contact_phone?.trim()
+  const digits = contactPhone?.replace(/\D/g, '') ?? ''
+  if (!digits) {
+    throw new Error(
+      "Renseignez d'abord votre téléphone de contact dans la fiche pratique — il sera le premier membre du groupe."
+    )
+  }
+
+  const { data: channel } = await supabase
+    .from('whapi_channels')
+    .select('token_encrypted')
+    .eq('restaurant_id', restaurantId)
+    .maybeSingle()
+  if (!channel) throw new Error("Connectez d'abord votre canal WhatsApp.")
+  const token = decryptToken(channel.token_encrypted, process.env.TOKEN_ENCRYPTION_KEY!)
+
+  const whapi = new WhapiClient(token)
+  let groupId: string
+  try {
+    const created = await whapi.createGroup(`Cuisine ${resto.name}`, [`${digits}@s.whatsapp.net`])
+    if (!created.id) throw new Error('id manquant')
+    groupId = created.id
+  } catch {
+    throw new Error('Impossible de créer le groupe — vérifiez que votre canal WhatsApp est connecté.')
+  }
+
+  // Lien d'invitation best-effort : un échec ici ne doit pas annuler la
+  // création du groupe (le patron pourra toujours inviter depuis WhatsApp).
+  let invite: string | undefined
+  try {
+    const inviteRes = await whapi.getGroupInvite(groupId)
+    invite = inviteRes.invite
+  } catch {
+    invite = undefined
+  }
+
+  const admin = createAdminClient()
+  // Écriture conditionnelle anti double-clic : si un appel concurrent a déjà
+  // posé un staff_group_id, on ne l'écrase pas (course perdue = succès, le
+  // groupe surnuméraire reste orphelin côté Whapi, sans effet chez nous).
+  const { error } = await admin
+    .from('restaurants')
+    .update({ staff_group_id: groupId, staff_group_invite: invite ?? null })
+    .eq('id', restaurantId)
+    .is('staff_group_id', null)
+  if (error) {
+    throw new Error('Impossible de créer le groupe — vérifiez que votre canal WhatsApp est connecté.')
+  }
+
   revalidatePath('/app/reglages')
 }
 

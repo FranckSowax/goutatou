@@ -1,7 +1,9 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { qrSvg } from '@/lib/qr'
 import { Card } from '@/components/ui/card'
 import { PracticalInfoForm } from './practical-info-form'
 import { BotMessagesForm } from './bot-messages-form'
+import { StaffGroupCard } from './staff-group-card'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,9 +20,19 @@ export default async function ReglagesPage() {
   const restaurantId = member.restaurant_id
 
   const { data: restaurant } = await supabase.from('restaurants')
-    .select('address, contact_phone, hours_text, delivery_info, bot_welcome, bot_info_extra, location_lat, location_lng')
+    .select(
+      'name, address, contact_phone, hours_text, delivery_info, bot_welcome, bot_info_extra, location_lat, location_lng, staff_group_id, staff_group_invite'
+    )
     .eq('id', restaurantId)
     .single()
+
+  const { data: channel } = await supabase
+    .from('whapi_channels')
+    .select('id')
+    .eq('restaurant_id', restaurantId)
+    .maybeSingle()
+
+  const staffGroupSvg = restaurant?.staff_group_invite ? await qrSvg(restaurant.staff_group_invite) : null
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8">
@@ -46,6 +58,20 @@ export default async function ReglagesPage() {
           <BotMessagesForm
             botWelcome={restaurant?.bot_welcome ?? null}
             botInfoExtra={restaurant?.bot_info_extra ?? null}
+          />
+        </Card>
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="font-display text-lg font-semibold">Groupe cuisine</h2>
+        <Card className="rounded-2xl p-4">
+          <StaffGroupCard
+            restaurantName={restaurant?.name ?? ''}
+            channelConnected={!!channel}
+            contactPhone={restaurant?.contact_phone ?? null}
+            staffGroupId={restaurant?.staff_group_id ?? null}
+            invite={restaurant?.staff_group_invite ?? null}
+            svg={staffGroupSvg}
           />
         </Card>
       </section>
