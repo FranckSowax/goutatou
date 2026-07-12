@@ -62,6 +62,90 @@ describe('WhapiClient', () => {
     })
   })
 
+  it('sendQuickReplies : POST /messages/interactive type "button" avec title/id à plat', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { message: { id: 'QR1' } } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.sendQuickReplies('24177000001@s.whatsapp.net', 'Sur place ou à emporter ?', [
+      { id: 'in:1', title: 'Sur place' },
+      { id: 'in:2', title: 'À emporter' },
+    ])
+    expect(res).toEqual({ id: 'QR1' })
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/messages/interactive')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body)).toEqual({
+      to: '24177000001@s.whatsapp.net',
+      type: 'button',
+      body: { text: 'Sur place ou à emporter ?' },
+      action: {
+        buttons: [
+          { type: 'quick_reply', title: 'Sur place', id: 'in:1' },
+          { type: 'quick_reply', title: 'À emporter', id: 'in:2' },
+        ],
+      },
+    })
+  })
+
+  it('sendQuickReplies : lève une Error si buttons est vide', async () => {
+    const client = new WhapiClient('tok123', { fetchFn: vi.fn(), retryDelayMs: 0 })
+    await expect(client.sendQuickReplies('24177000001@s.whatsapp.net', 'Question ?', [])).rejects.toThrow()
+  })
+
+  it('sendQuickReplies : lève une Error si buttons dépasse 3', async () => {
+    const client = new WhapiClient('tok123', { fetchFn: vi.fn(), retryDelayMs: 0 })
+    await expect(
+      client.sendQuickReplies('24177000001@s.whatsapp.net', 'Question ?', [
+        { id: 'in:1', title: 'A' },
+        { id: 'in:2', title: 'B' },
+        { id: 'in:3', title: 'C' },
+        { id: 'in:4', title: 'D' },
+      ]),
+    ).rejects.toThrow()
+  })
+
+  it('sendList : POST /messages/interactive type "list" avec action.list.label + sections[0].rows', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { message: { id: 'LI1' } } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.sendList('24177000001@s.whatsapp.net', 'Choisissez un supplément', 'Voir les options', [
+      { id: 'in:1', title: 'Sauce piquante' },
+      { id: 'in:2', title: 'Frites', description: '+500 XAF' },
+    ])
+    expect(res).toEqual({ id: 'LI1' })
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/messages/interactive')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body)).toEqual({
+      to: '24177000001@s.whatsapp.net',
+      type: 'list',
+      body: { text: 'Choisissez un supplément' },
+      action: {
+        list: {
+          label: 'Voir les options',
+          sections: [
+            {
+              title: '',
+              rows: [
+                { id: 'in:1', title: 'Sauce piquante' },
+                { id: 'in:2', title: 'Frites', description: '+500 XAF' },
+              ],
+            },
+          ],
+        },
+      },
+    })
+  })
+
+  it('sendList : lève une Error si rows est vide', async () => {
+    const client = new WhapiClient('tok123', { fetchFn: vi.fn(), retryDelayMs: 0 })
+    await expect(client.sendList('24177000001@s.whatsapp.net', 'Question ?', 'Ouvrir', [])).rejects.toThrow()
+  })
+
+  it('sendList : lève une Error si rows dépasse 10', async () => {
+    const client = new WhapiClient('tok123', { fetchFn: vi.fn(), retryDelayMs: 0 })
+    const rows = Array.from({ length: 11 }, (_, i) => ({ id: `in:${i}`, title: `Option ${i}` }))
+    await expect(client.sendList('24177000001@s.whatsapp.net', 'Question ?', 'Ouvrir', rows)).rejects.toThrow()
+  })
+
   it('checkContact : numéro enregistré (status valid) → true', async () => {
     const fetchFn = mockFetch([{ status: 200, body: { contacts: [{ input: '24177000001', status: 'valid', wa_id: '24177000001@s.whatsapp.net' }] } }])
     const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })

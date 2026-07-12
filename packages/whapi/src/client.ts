@@ -78,6 +78,80 @@ export class WhapiClient {
   }
 
   /**
+   * Envoie des boutons quick-reply (jusqu'à 3) — POST /messages/interactive, type "button",
+   * action.buttons[] avec type/title/id À PLAT (jamais imbriqués dans un objet `reply` — piège
+   * documenté par .agents/skills/whapi/references/msg-interactive.md, section "Incorrect —
+   * nested `reply` object (causes 400 error)" + règles anti-hallucination en bas de fichier).
+   * body.text porte le texte de la question (inchangé par rapport au texte machine). Confiance :
+   * haute sur la requête (payload identique à l'exemple "Correct — quick-reply buttons" du
+   * skill) ; endpoint stable est signalé "unstable" par Whapi côté rendu WhatsApp (le fallback
+   * texte reste obligatoire côté appelant, cf. spec bot-boutons).
+   *
+   * Lève une Error si `buttons` est vide ou compte plus de 3 entrées (WhatsApp n'affiche que 3
+   * quick-reply buttons max — bug de l'appelant, pas une erreur réseau).
+   */
+  async sendQuickReplies(
+    to: string,
+    bodyText: string,
+    buttons: Array<{ id: string; title: string }>,
+  ): Promise<{ id?: string }> {
+    if (buttons.length === 0 || buttons.length > 3) {
+      throw new Error(`sendQuickReplies : buttons.length doit être entre 1 et 3 (reçu ${buttons.length})`)
+    }
+    const res = (await this.request('POST', '/messages/interactive', {
+      to,
+      type: 'button',
+      body: { text: bodyText },
+      action: {
+        buttons: buttons.map((b) => ({ type: 'quick_reply', title: b.title, id: b.id })),
+      },
+    })) as { message?: { id?: string } }
+    return { id: res.message?.id }
+  }
+
+  /**
+   * Envoie une liste interactive (jusqu'à 10 lignes) — POST /messages/interactive, type "list",
+   * action.list = { label, sections: [{ title, rows }] }. `sections` DOIT être imbriqué dans
+   * `action.list` (jamais directement dans `action`) et `label` (texte du bouton "ouvrir le
+   * menu") est dans `action.list.label`, pas `action.button` — cf.
+   * .agents/skills/whapi/references/msg-interactive.md, section "Incorrect — sections directly
+   * in action (causes 400 error)" + règles anti-hallucination.
+   *
+   * Section unique avec `title: ''` : le skill ne montre que l'exemple correct avec un titre de
+   * section non vide ("Support Topics") et ne précise nulle part que ce champ serait omettable —
+   * par prudence (anti-hallucination : ne pas inventer un champ optionnel non documenté), le
+   * champ est envoyé mais vide, plutôt qu'omis, puisque Goutatou n'a qu'une seule section sans
+   * nom à afficher. Chaque row : `id`, `title`, `description?` (noms de champs confirmés par la
+   * doc). Confiance : haute sur la requête, sauf sur l'omission éventuelle de `title` de section
+   * (non vérifiée en réel).
+   *
+   * Lève une Error si `rows` est vide ou compte plus de 10 entrées (limite usuelle WhatsApp pour
+   * les listes — bug de l'appelant).
+   */
+  async sendList(
+    to: string,
+    bodyText: string,
+    buttonLabel: string,
+    rows: Array<{ id: string; title: string; description?: string }>,
+  ): Promise<{ id?: string }> {
+    if (rows.length === 0 || rows.length > 10) {
+      throw new Error(`sendList : rows.length doit être entre 1 et 10 (reçu ${rows.length})`)
+    }
+    const res = (await this.request('POST', '/messages/interactive', {
+      to,
+      type: 'list',
+      body: { text: bodyText },
+      action: {
+        list: {
+          label: buttonLabel,
+          sections: [{ title: '', rows }],
+        },
+      },
+    })) as { message?: { id?: string } }
+    return { id: res.message?.id }
+  }
+
+  /**
    * Vérifie si un numéro est enregistré sur WhatsApp (POST /contacts, méthode recommandée par
    * Whapi — cf. "Check phones"). Réponse : { contacts: [{ input, status: 'valid'|'invalid', wa_id? }] }.
    */
