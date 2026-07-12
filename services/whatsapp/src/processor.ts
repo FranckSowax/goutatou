@@ -1,5 +1,6 @@
-import { EMPTY_CART, formatFcfa, type CartItem } from '@goutatou/db'
+import { EMPTY_CART, formatFcfa, type BotState, type Cart, type CartItem } from '@goutatou/db'
 import type { WhapiClient } from '@goutatou/whapi'
+import { buttonsForState, type ButtonChoice } from './bot/buttons.js'
 import { beginCheckout, flatMenuItems, transition, type BotContext } from './bot/machine.js'
 import { isOptOutKeyword } from './campaigns/optout.js'
 import { nextSendDelayMs } from './campaigns/throttle.js'
@@ -29,6 +30,19 @@ interface WhapiMessage {
    * reste basse confiance côté client whapi (cf. packages/whapi/src/client.ts getOrderItems).
    */
   order?: { order_id?: string; token?: string }
+  /**
+   * Réponse à un message interactif (bouton ou liste) entrant — messages[n].type 'reply'.
+   * Bouton : reply.type === 'buttons_reply', reply.buttons_reply.{id,title} — shape confirmée
+   * par support.whapi.cloud (doc incoming officielle), id retransmis verbatim (confiance
+   * haute). Liste : reply.type === 'list_reply', reply.list_reply.{id,title} — shape ASSUMÉE
+   * par analogie (confiance BASSE, jamais vérifiée en réel) : le payload brut est loggé
+   * (cf. boucle principale) pour confirmer/corriger au premier tap réel d'une liste.
+   */
+  reply?: {
+    type?: string
+    buttons_reply?: { id?: string; title?: string }
+    list_reply?: { id?: string; title?: string }
+  }
 }
 
 export interface ProcessorDeps {
@@ -39,10 +53,16 @@ export interface ProcessorDeps {
   menuPhotosMax: number
 }
 
+// sendQuickReplies/sendList OPTIONNELS (contrairement aux autres méthodes) : la couche
+// boutons est un ajout best-effort par-dessus le texte, jamais une dépendance dure — un
+// whapi/mock qui ne les fournit pas doit continuer à fonctionner en texte (cf. fallback
+// dans sendOneReply). C'est aussi ce qui permet aux mocks des tests existants (sans ces
+// deux méthodes) de rester valides sans modification.
 type ProcessorWhapi = Pick<
   WhapiClient,
   'sendText' | 'sendImage' | 'sendTyping' | 'markAsRead' | 'react' | 'sendLocation' | 'sendCatalog' | 'getOrderItems'
->
+> &
+  Partial<Pick<WhapiClient, 'sendQuickReplies' | 'sendList'>>
 
 const CART_UNAVAILABLE_FR =
   'Ces articles ne sont plus disponibles — tapez *menu* pour voir la carte.'
@@ -96,21 +116,90 @@ function orderConfirmedCopy(orderNumber: number, total: number, cart: {
   )
 }
 
-/** Envoi séquentiel des réponses texte d'une transition, chacune loggée (succès ou échec Whapi). */
+/** Contexte nécessaire pour tenter un envoi interactif sur la DERNIÈRE réponse d'un lot. */
+interface InteractiveContext {
+  state: BotState
+  cart: Cart
+  ctx: BotContext
+}
+
+// Limites observées/documentées (cf. .agents/skills/whapi/references/msg-interactive.md +
+// packages/whapi/src/client.ts) : 3 boutons quick-reply max, 10 lignes de liste max. Les
+// titres sont tronqués défensivement (aucune limite officielle documentée pour les quick-reply,
+// mais les boutons WhatsApp les coupent visuellement au-delà d'une vingtaine de caractères).
+const QUICK_REPLY_TITLE_MAX = 20
+const LIST_ROW_TITLE_MAX = 24
+
+function truncateTitle(title: string, max: number): string {
+  return title.length > max ? `${title.slice(0, Math.max(0, max - 1))}…` : title
+}
+
+/**
+ * Envoie UNE réponse : interactive (boutons/liste) si `choices` est fourni et de taille
+ * envoyable, sinon texte simple. body = le texte de la réponse INCHANGÉ dans les deux cas
+ * (les boutons ne le remplacent pas, ils s'affichent en plus). Tout échec d'envoi interactif
+ * (méthode absente du mock/whapi, rejet réseau, dépassement de limite) retombe sur le texte —
+ * jamais de message perdu. logMessage 'out' ne logge qu'UNE fois, le texte, quel que soit le
+ * transport effectivement utilisé (cf. spec bot-boutons § Processor).
+ */
+async function sendOneReply(
+  whapi: ProcessorWhapi,
+  repo: BotRepo,
+  restaurantId: string,
+  chatId: string,
+  reply: string,
+  choices: ButtonChoice[] | null,
+): Promise<void> {
+  if (choices && choices.length > 0 && choices.length <= 10) {
+    try {
+      let sent: { id?: string }
+      if (choices.length <= 3) {
+        if (!whapi.sendQuickReplies) throw new Error('sendQuickReplies indisponible')
+        sent = await whapi.sendQuickReplies(
+          chatId, reply,
+          choices.map((c) => ({ id: c.id, title: truncateTitle(c.title, QUICK_REPLY_TITLE_MAX) })),
+        )
+      } else {
+        if (!whapi.sendList) throw new Error('sendList indisponible')
+        sent = await whapi.sendList(
+          chatId, reply, 'Choisir',
+          choices.map((c) => ({ id: c.id, title: truncateTitle(c.title, LIST_ROW_TITLE_MAX) })),
+        )
+      }
+      await repo.logMessage(restaurantId, 'out', chatId, reply, sent.id)
+      return
+    } catch (err) {
+      console.error('[buttons] échec envoi interactif, repli texte', err)
+    }
+  }
+  try {
+    const sent = await whapi.sendText(chatId, reply)
+    await repo.logMessage(restaurantId, 'out', chatId, reply, sent.id)
+  } catch (err) {
+    await repo.logMessage(restaurantId, 'out', chatId, reply, undefined, String(err))
+  }
+}
+
+/**
+ * Envoi séquentiel des réponses d'une transition, chacune loggée (succès ou échec Whapi).
+ * Si `interactive` est fourni et que son état fait partie des choix fermés standard (MODE/
+ * CRENEAU/SUPPLEMENTS/SUPPLEMENTS_CHECKOUT/CONFIRMATION), la DERNIÈRE réponse du lot est
+ * tentée en interactif (boutons/liste) — toutes les autres partent en texte comme aujourd'hui.
+ */
 async function sendReplies(
   whapi: ProcessorWhapi,
   repo: BotRepo,
   restaurantId: string,
   chatId: string,
   replies: string[],
+  interactive?: InteractiveContext,
 ): Promise<void> {
-  for (const reply of replies) {
-    try {
-      const sent = await whapi.sendText(chatId, reply)
-      await repo.logMessage(restaurantId, 'out', chatId, reply, sent.id)
-    } catch (err) {
-      await repo.logMessage(restaurantId, 'out', chatId, reply, undefined, String(err))
-    }
+  for (let i = 0; i < replies.length; i++) {
+    const isLast = i === replies.length - 1
+    const choices = isLast && interactive
+      ? buttonsForState(interactive.state, interactive.cart, interactive.ctx)
+      : null
+    await sendOneReply(whapi, repo, restaurantId, chatId, replies[i], choices)
   }
 }
 
@@ -167,7 +256,7 @@ async function handleNativeOrder(
 
   const res = beginCheckout({ items: lines }, ctx)
   await repo.saveConversation(restaurantId, customerId, res.state, res.cart)
-  await sendReplies(whapi, repo, restaurantId, chatId, res.replies)
+  await sendReplies(whapi, repo, restaurantId, chatId, res.replies, { state: res.state, cart: res.cart, ctx })
 }
 
 export function createProcessor(
@@ -189,22 +278,43 @@ export function createProcessor(
     for (const msg of messages) {
       if (msg.from_me) continue
 
+      // Tap sur un bouton/liste envoyé par le bot — messages[n].type 'reply'. Payload brut
+      // TOUJOURS loggé (console) : la shape bouton (buttons_reply) est confirmée par la doc
+      // Whapi, mais celle de liste (list_reply) est ASSUMÉE par analogie (cf. WhapiMessage.reply)
+      // — ce log documente la réalité au premier tap réel d'une liste. Convention id `in:<texte>`
+      // (cf. src/bot/buttons.ts) : retraduite en entrée machine texte ; sans préfixe → le
+      // titre du bouton sert de repli (bouton/liste non généré par ce bot, ou format inattendu).
+      const isReplyMessage = msg.type === 'reply'
+      if (isReplyMessage) {
+        console.log('[buttons] reply payload', JSON.stringify(msg.reply))
+      }
+      const replyId = msg.reply?.buttons_reply?.id ?? msg.reply?.list_reply?.id
+      const replyTitle = msg.reply?.buttons_reply?.title ?? msg.reply?.list_reply?.title
+
       // Un message location est converti en lien Google Maps et traité EXACTEMENT comme un
       // texte libre (adresse de livraison en état ADRESSE, "pas compris" ailleurs) — cf.
       // spec bot-vivant § GPS entrant. Un message 'order' (panier WhatsApp natif) n'a pas de
       // texte : body sert uniquement au log entrant, le routage réel se fait via isOrderMessage
-      // ci-dessous (pas d'appel à transition()). Tout autre type non-text/non-location/non-order
-      // reste ignoré (comportement v1 inchangé).
+      // ci-dessous (pas d'appel à transition()). Un message 'reply' est converti en ENTRÉE
+      // MACHINE (id sans préfixe `in:` → titre en repli) et traité EXACTEMENT comme un texte
+      // libre à partir d'ici (opt-out, mots-clés globaux, transition — même pipeline). Tout
+      // autre type non-text/non-location/non-order/non-reply reste ignoré (comportement v1
+      // inchangé).
       const isOrderMessage = msg.type === 'order'
       const body =
         msg.type === 'text' ? msg.text?.body :
         msg.type === 'location' && msg.location ? `https://maps.google.com/?q=${msg.location.latitude},${msg.location.longitude}` :
         isOrderMessage ? '🛒 Panier WhatsApp' :
+        isReplyMessage ? (replyId?.startsWith('in:') ? replyId.slice(3) : (replyTitle ?? undefined)) :
         undefined
       if (!body) continue
 
+      // Le log entrant affiche le texte LISIBLE (titre du bouton/ligne tapé), pas l'id
+      // technique `in:x` retraduit en entrée machine — cf. spec bot-boutons § Processor.
+      const logBody = isReplyMessage ? (replyTitle ?? body) : body
+
       // Idempotence : si ce message Whapi a déjà été loggé, on skip.
-      const fresh = await repo.logMessage(channel.restaurantId, 'in', msg.chat_id, body, msg.id)
+      const fresh = await repo.logMessage(channel.restaurantId, 'in', msg.chat_id, logBody, msg.id)
       if (!fresh) continue
 
       try {
@@ -271,7 +381,11 @@ export function createProcessor(
 
         await repo.saveConversation(channel.restaurantId, customer.id, res.state, nextCart)
 
-        await sendReplies(whapi, repo, channel.restaurantId, msg.chat_id, replies)
+        // Interactif tenté sur la DERNIÈRE réponse du lot UNIQUEMENT (res.replies, pas le
+        // texte de confirmation de commande ajouté au-dessus — res.state vaut alors ACCUEIL,
+        // hors des états à choix fermés, donc buttonsForState renvoie null : comportement
+        // déjà correct sans condition supplémentaire ici).
+        await sendReplies(whapi, repo, channel.restaurantId, msg.chat_id, replies, { state: res.state, cart: res.cart, ctx })
 
         // res.state === 'MENU' confirme que la transition a bien emprunté le routage
         // global 'menu' (et non un état HUMAIN qui l'aurait avalé silencieusement). Catalogue
