@@ -178,3 +178,39 @@ export function computeState(mode: StatusPublishMode, index: number): 'draft' | 
   if (mode === 'chain' && index === 0) return 'posting'
   return 'scheduled'
 }
+
+// --- Statuts Auto (premium) : validation pure des créneaux/quota ---------
+
+export const AUTO_STATUS_MAX_TIMES = 2
+export const AUTO_STATUS_COUNT_MIN = 1
+export const AUTO_STATUS_COUNT_MAX = 3
+export const AUTO_STATUS_TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/
+
+export type ValidateAutoStatusTimesResult = { ok: true; times: string[] } | { ok: false; error: string }
+
+/**
+ * Valide la liste de créneaux HH:MM (Africa/Libreville, cf. spec) : 1 à 2
+ * entrées, format HH:MM (00-23 / 00-59), sans doublon. Les entrées vides
+ * (second créneau non renseigné) sont ignorées avant validation.
+ */
+export function validateAutoStatusTimes(times: string[]): ValidateAutoStatusTimesResult {
+  const cleaned = times.map((t) => t.trim()).filter((t) => t !== '')
+  if (cleaned.length === 0) return { ok: false, error: 'Choisissez au moins un créneau.' }
+  if (cleaned.length > AUTO_STATUS_MAX_TIMES) {
+    return { ok: false, error: `Limitez-vous à ${AUTO_STATUS_MAX_TIMES} créneaux.` }
+  }
+  for (const t of cleaned) {
+    if (!AUTO_STATUS_TIME_REGEX.test(t)) {
+      return { ok: false, error: `Créneau invalide : « ${t} » (format HH:MM).` }
+    }
+  }
+  if (new Set(cleaned).size !== cleaned.length) {
+    return { ok: false, error: 'Les créneaux doivent être différents.' }
+  }
+  return { ok: true, times: cleaned }
+}
+
+/** Nombre de statuts générés par créneau : entier entre 1 et 3. */
+export function validateAutoStatusCount(count: number): boolean {
+  return Number.isInteger(count) && count >= AUTO_STATUS_COUNT_MIN && count <= AUTO_STATUS_COUNT_MAX
+}

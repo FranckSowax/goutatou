@@ -1,11 +1,14 @@
 'use server'
 import { revalidatePath } from 'next/cache'
 import { createSupabaseServer } from '@/lib/supabase/server'
-import { assertPlan, isPremium } from '@/lib/premium'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { assertPlan, assertPremium, isPremium } from '@/lib/premium'
 import {
   MAX_CARDS,
   computeScheduledAt,
   computeState,
+  validateAutoStatusCount,
+  validateAutoStatusTimes,
   validateCard,
   type RawStatusCard,
   type StatusPublishMode,
@@ -144,6 +147,39 @@ export async function cancelStatus(id: string) {
   const { error } = await supabase.from('statuses').update({ state: 'canceled' })
     .eq('id', id).in('state', ['scheduled', 'posting'])
   if (error) throw new Error(error.message)
+  revalidatePath('/app/marketing/statuts')
+}
+
+/**
+ * Enregistre les réglages « Statuts Auto » (premium) : garde membre +
+ * premium (spec §Statuts Auto — publication quotidienne des plats), écriture
+ * `restaurants` via client admin (pas de policy RLS UPDATE membre sur cette
+ * table, pattern 3A — cf. updateMyRestaurantProfile dans /app/reglages).
+ */
+export async function updateAutoStatus(formData: FormData) {
+  const { supabase, restaurantId } = await myRestaurantId()
+  await assertPremium(supabase, restaurantId)
+
+  const enabled = formData.get('enabled') === 'on'
+  const rawTimes = [String(formData.get('time_1') ?? ''), String(formData.get('time_2') ?? '')]
+  const timesResult = validateAutoStatusTimes(rawTimes)
+  if (!timesResult.ok) throw new Error(timesResult.error)
+
+  const count = Number.parseInt(String(formData.get('count') ?? ''), 10)
+  if (!validateAutoStatusCount(count)) {
+    throw new Error('Nombre de statuts par créneau invalide (1 à 3).')
+  }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin.from('restaurants')
+    .update({
+      auto_status_enabled: enabled,
+      auto_status_times: timesResult.times,
+      auto_status_count: count,
+    })
+    .eq('id', restaurantId)
+    .select('id')
+  if (error || !data || data.length === 0) throw new Error('Enregistrement impossible.')
   revalidatePath('/app/marketing/statuts')
 }
 

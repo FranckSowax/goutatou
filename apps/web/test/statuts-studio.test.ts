@@ -9,9 +9,15 @@ import {
   fontStyleFor,
   isHexColor,
   isValidFontType,
+  validateAutoStatusCount,
+  validateAutoStatusTimes,
   validateCard,
   type RawStatusCard,
 } from '../src/app/app/marketing/statuts/shared'
+import {
+  AUTO_STATUS_CAPTION_TEMPLATE_COUNT,
+  buildStatusCaptionPreview,
+} from '../src/app/app/marketing/statuts/auto-caption-preview'
 
 const RID = 'resto-1'
 
@@ -151,4 +157,75 @@ describe('computeScheduledAt', () => {
 
 it('MAX_CARDS est raisonnable', () => {
   expect(MAX_CARDS).toBe(10)
+})
+
+describe('validateAutoStatusTimes', () => {
+  it('accepte un seul créneau valide', () => {
+    const res = validateAutoStatusTimes(['11:30', ''])
+    expect(res.ok).toBe(true)
+    if (res.ok) expect(res.times).toEqual(['11:30'])
+  })
+  it('accepte deux créneaux valides et distincts', () => {
+    const res = validateAutoStatusTimes(['11:30', '18:30'])
+    expect(res.ok).toBe(true)
+    if (res.ok) expect(res.times).toEqual(['11:30', '18:30'])
+  })
+  it('rejette une liste vide', () => {
+    expect(validateAutoStatusTimes(['', '']).ok).toBe(false)
+  })
+  it('rejette plus de deux créneaux', () => {
+    expect(validateAutoStatusTimes(['08:00', '12:00', '18:00']).ok).toBe(false)
+  })
+  it('rejette un format invalide', () => {
+    expect(validateAutoStatusTimes(['8:00']).ok).toBe(false)
+    expect(validateAutoStatusTimes(['24:00']).ok).toBe(false)
+    expect(validateAutoStatusTimes(['12:60']).ok).toBe(false)
+    expect(validateAutoStatusTimes(['midi']).ok).toBe(false)
+  })
+  it('accepte les bornes 00:00 et 23:59', () => {
+    expect(validateAutoStatusTimes(['00:00']).ok).toBe(true)
+    expect(validateAutoStatusTimes(['23:59']).ok).toBe(true)
+  })
+  it('rejette deux créneaux identiques', () => {
+    expect(validateAutoStatusTimes(['11:30', '11:30']).ok).toBe(false)
+  })
+})
+
+describe('validateAutoStatusCount', () => {
+  it('accepte 1, 2 et 3', () => {
+    expect(validateAutoStatusCount(1)).toBe(true)
+    expect(validateAutoStatusCount(2)).toBe(true)
+    expect(validateAutoStatusCount(3)).toBe(true)
+  })
+  it('rejette 0, 4 et les non-entiers', () => {
+    expect(validateAutoStatusCount(0)).toBe(false)
+    expect(validateAutoStatusCount(4)).toBe(false)
+    expect(validateAutoStatusCount(1.5)).toBe(false)
+    expect(validateAutoStatusCount(Number.NaN)).toBe(false)
+  })
+})
+
+describe('buildStatusCaptionPreview', () => {
+  const dish = { name: 'Poulet DG', price: 5000 }
+  it('inclut le nom du plat, le prix formaté et le CTA WhatsApp', () => {
+    const caption = buildStatusCaptionPreview(dish, 0)
+    expect(caption).toContain('Poulet DG')
+    expect(caption).toContain('5 000 FCFA')
+    expect(caption).toContain('Commandez-nous sur WhatsApp')
+  })
+  it('expose au moins 6 gabarits', () => {
+    expect(AUTO_STATUS_CAPTION_TEMPLATE_COUNT).toBeGreaterThanOrEqual(6)
+  })
+  it('tourne sur les gabarits par modulo (y compris index négatif)', () => {
+    const a = buildStatusCaptionPreview(dish, 0)
+    const b = buildStatusCaptionPreview(dish, AUTO_STATUS_CAPTION_TEMPLATE_COUNT)
+    expect(a).toBe(b)
+    expect(() => buildStatusCaptionPreview(dish, -1)).not.toThrow()
+  })
+  it('produit des gabarits variés', () => {
+    const captions = new Set(
+      Array.from({ length: AUTO_STATUS_CAPTION_TEMPLATE_COUNT }, (_, i) => buildStatusCaptionPreview(dish, i)),
+    )
+    expect(captions.size).toBe(AUTO_STATUS_CAPTION_TEMPLATE_COUNT)
+  })
 })
