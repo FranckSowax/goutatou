@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { statusMessage, handleOrderUpdate, type OrderRow } from '../src/notifier.js'
+import { statusMessage, handleOrderUpdate, handleOrderInsert, buildStaffTicket, type OrderRow } from '../src/notifier.js'
 
 describe('statusMessage', () => {
   it('couvre chaque statut notifiable selon le mode', () => {
@@ -115,5 +115,135 @@ describe('handleOrderUpdate', () => {
     await handleOrderUpdate(db as never, 'k'.repeat(64), oldRow,
       { ...oldRow, status: 'recuperee' }, () => ({ sendText }), decrypt, 's'.repeat(32), 'https://x.test')
     expect(sendText).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('buildStaffTicket', () => {
+  const newRow: OrderRow = {
+    id: 'o1', restaurant_id: 'r1', customer_id: 'c1', order_number: 12, status: 'recue', mode: 'drive',
+    total: 7500, delivery_address: null,
+  }
+
+  it('formate l’en-tête, les lignes (avec ↳ sans qty×), le total et le client', () => {
+    const items = [
+      { name: 'Poulet DG', unit_price: 6000, qty: 1 },
+      { name: '↳ Frites', unit_price: 1500, qty: 1 },
+    ]
+    const ticket = buildStaffTicket(newRow, items, { name: 'Awa', phone: '24177000000' })
+    expect(ticket).toBe(
+      '🧾 *Commande #12* — Retrait\n' +
+      '1× Poulet DG\n' +
+      '↳ Frites\n' +
+      'Total : 7 500 FCFA\n' +
+      'Client : Awa',
+    )
+  })
+
+  it('sans nom client → utilise le téléphone', () => {
+    const ticket = buildStaffTicket(newRow, [], { name: null, phone: '24177000000' })
+    expect(ticket).toContain('Client : 24177000000')
+  })
+
+  it('avec delivery_address → ligne supplémentaire en fin de ticket', () => {
+    const ticket = buildStaffTicket(
+      { ...newRow, mode: 'livraison', delivery_address: 'Rue des Palmiers, Libreville' },
+      [{ name: 'Poulet DG', unit_price: 6000, qty: 2 }],
+      { name: 'Awa', phone: '24177000000' },
+    )
+    expect(ticket.split('\n')).toEqual([
+      '🧾 *Commande #12* — Livraison',
+      '2× Poulet DG',
+      'Total : 7 500 FCFA',
+      'Client : Awa',
+      'Rue des Palmiers, Libreville',
+    ])
+  })
+
+  it('sans delivery_address → pas de ligne en trop', () => {
+    const ticket = buildStaffTicket(newRow, [], { name: 'Awa', phone: '24177000000' })
+    expect(ticket.split('\n')).toHaveLength(3) // en-tête + total + client, pas d'item ni d'adresse
+  })
+})
+
+describe('handleOrderInsert', () => {
+  const newRow: OrderRow = {
+    id: 'o1', restaurant_id: 'r1', customer_id: 'c1', order_number: 12, status: 'recue', mode: 'drive',
+    total: 7500, delivery_address: null,
+  }
+
+  function fakeInsertDb(opts: {
+    staffGroupId?: string | null
+    channelStatus?: 'active' | 'error' | null
+    items?: { name: string; unit_price: number; qty: number }[]
+    customer?: { name: string | null; phone: string } | null
+  }) {
+    const { staffGroupId = 'grp1@g.us', channelStatus = 'active', items = [], customer = { name: 'Awa', phone: '241770' } } = opts
+    return {
+      from: vi.fn((table: string) => {
+        if (table === 'restaurants') {
+          return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: { staff_group_id: staffGroupId } }) }) }) }
+        }
+        if (table === 'whapi_channels') {
+          return {
+            select: () => ({
+              eq: () => ({
+                single: () => Promise.resolve({
+                  data: channelStatus === null ? null : { token_encrypted: 'enc', status: channelStatus },
+                }),
+              }),
+            }),
+          }
+        }
+        if (table === 'order_items') {
+          return { select: () => ({ eq: () => ({ order: () => Promise.resolve({ data: items }) }) }) }
+        }
+        if (table === 'customers') {
+          return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: customer }) }) }) }
+        }
+        throw new Error(`table inattendue : ${table}`)
+      }),
+    }
+  }
+
+  it('sans staff_group_id → aucun envoi', async () => {
+    const sendText = vi.fn()
+    const db = fakeInsertDb({ staffGroupId: null })
+    await handleOrderInsert(db as never, 'k'.repeat(64), newRow, () => ({ sendText }))
+    expect(sendText).not.toHaveBeenCalled()
+  })
+
+  it('canal inactif → aucun envoi', async () => {
+    const sendText = vi.fn()
+    const db = fakeInsertDb({ channelStatus: 'error' })
+    await handleOrderInsert(db as never, 'k'.repeat(64), newRow, () => ({ sendText }))
+    expect(sendText).not.toHaveBeenCalled()
+  })
+
+  it('canal absent → aucun envoi', async () => {
+    const sendText = vi.fn()
+    const db = fakeInsertDb({ channelStatus: null })
+    await handleOrderInsert(db as never, 'k'.repeat(64), newRow, () => ({ sendText }))
+    expect(sendText).not.toHaveBeenCalled()
+  })
+
+  it('groupe + canal actif → envoie le ticket au staff_group_id', async () => {
+    const sendText = vi.fn().mockResolvedValue({ id: 'x' })
+    const decrypt = vi.fn().mockReturnValue('tok')
+    const db = fakeInsertDb({ items: [{ name: 'Poulet DG', unit_price: 6000, qty: 1 }] })
+    await handleOrderInsert(db as never, 'k'.repeat(64), newRow, () => ({ sendText }), decrypt)
+    expect(sendText).toHaveBeenCalledTimes(1)
+    expect(sendText).toHaveBeenCalledWith('grp1@g.us', expect.stringContaining('Commande #12'))
+    expect(sendText).toHaveBeenCalledWith('grp1@g.us', expect.stringContaining('1× Poulet DG'))
+  })
+
+  it('échec sendText → ne lève pas (best-effort)', async () => {
+    const sendText = vi.fn().mockRejectedValue(new Error('whapi 500'))
+    const db = fakeInsertDb({})
+    await expect(handleOrderInsert(db as never, 'k'.repeat(64), newRow, () => ({ sendText }))).resolves.toBeUndefined()
+  })
+
+  it('échec requête DB (restaurants) → ne lève pas (best-effort)', async () => {
+    const db = { from: vi.fn(() => { throw new Error('db down') }) }
+    await expect(handleOrderInsert(db as never, 'k'.repeat(64), newRow)).resolves.toBeUndefined()
   })
 })
