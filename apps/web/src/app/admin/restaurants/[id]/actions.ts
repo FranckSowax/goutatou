@@ -1,7 +1,7 @@
 'use server'
 import { revalidatePath } from 'next/cache'
 import { encryptToken, decryptToken } from '@goutatou/db/crypto'
-import { WhapiClient } from '@goutatou/whapi'
+import { WhapiClient, WhapiError } from '@goutatou/whapi'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertPlatformAdmin } from '../../actions'
 
@@ -110,7 +110,13 @@ export async function getPairingCode(id: string, phone: string): Promise<{ code:
     const admin = createAdminClient()
     await admin.from('whapi_channels').update({ phone: trimmedPhone }).eq('restaurant_id', id)
     return { code }
-  } catch {
+  } catch (e) {
+    if (e instanceof WhapiError && e.status === 409) {
+      // Canal déjà authentifié : rien à appairer — on mémorise quand même le numéro.
+      const admin = createAdminClient()
+      await admin.from('whapi_channels').update({ phone: trimmedPhone }).eq('restaurant_id', id)
+      throw new Error('Ce canal est déjà connecté à un numéro WhatsApp — aucun appairage nécessaire.')
+    }
     throw new Error('Impossible de contacter Whapi — le canal n’existe peut-être plus.')
   }
 }
@@ -124,7 +130,10 @@ export async function getLoginQrAction(id: string): Promise<{ base64: string }> 
     const { base64 } = await whapi.getLoginQr()
     if (!base64) throw new Error('base64 manquant')
     return { base64 }
-  } catch {
+  } catch (e) {
+    if (e instanceof WhapiError && e.status === 409) {
+      throw new Error('Ce canal est déjà connecté à un numéro WhatsApp — aucun appairage nécessaire.')
+    }
     throw new Error('Impossible de contacter Whapi — le canal n’existe peut-être plus.')
   }
 }
