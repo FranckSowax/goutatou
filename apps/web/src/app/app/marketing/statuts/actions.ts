@@ -170,12 +170,23 @@ export async function updateAutoStatus(formData: FormData) {
     throw new Error('Nombre de statuts par créneau invalide (1 à 3).')
   }
 
+  // Ancrage anti-rattrapage (revue finale) : à l'enregistrement, on pose
+  // auto_status_last_slot sur le dernier créneau déjà passé AUJOURD'HUI
+  // (heure de Libreville, UTC+1 fixe). Le worker ne publie qu'après le
+  // PROCHAIN créneau — activer à 19 h ne déclenche pas le statut de 11 h 30.
+  const lbv = new Date(Date.now() + 3600_000)
+  const dateKey = lbv.toISOString().slice(0, 10)
+  const hhmm = lbv.toISOString().slice(11, 16)
+  const pastSlots = timesResult.times.filter((t) => t <= hhmm).sort()
+  const anchor = pastSlots.length > 0 ? `${dateKey} ${pastSlots[pastSlots.length - 1]}` : null
+
   const admin = createAdminClient()
   const { data, error } = await admin.from('restaurants')
     .update({
       auto_status_enabled: enabled,
       auto_status_times: timesResult.times,
       auto_status_count: count,
+      auto_status_last_slot: anchor,
     })
     .eq('id', restaurantId)
     .select('id')

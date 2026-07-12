@@ -5,18 +5,11 @@
 // pratiques.
 //
 // SOURCE DE VÉRITÉ : services/whatsapp/src/autostatus/captions.ts
-// (`buildStatusCaption(dish, templateIndex)`). Au moment de l'écriture de ce
-// fichier (tâche ST4), ce module bot était en cours de construction en
-// parallèle (tâche concurrente) et n'existait PAS ENCORE dans l'arbre : les
-// gabarits ci-dessous sont donc une IMPLÉMENTATION DU CONTRAT défini par la
-// spec (§ Statuts Auto : ≥ 6 gabarits FR variés « accroche + nom du plat +
-// prix formatFcfa + CTA 📲 Commandez-nous sur WhatsApp ! », rotation par
-// templateIndex modulo), et PAS un mirroir exact du fichier bot final.
-//
-// ⚠️ TODO ST5 : reconcilier ce fichier avec services/whatsapp/src/autostatus/
-// captions.ts une fois celui-ci mergé — comparer gabarit par gabarit et
-// copier les textes exacts ici pour que l'aperçu web soit fidèle à ce qui
-// sera réellement publié sur WhatsApp.
+// (`buildStatusCaption(dish, templateIndex)`). Ce fichier bot a été construit
+// en parallèle (tâche concurrente) pendant ST4 ; les 7 gabarits ci-dessous
+// sont un MIRROIR EXACT du fichier bot tel qu'il existait au moment de cet
+// export (relire les deux fichiers texte par texte si le bot évolue encore
+// avant merge — ⚠️ ST5 doit reconfirmer l'identité des deux listes).
 import { formatFcfa } from '@goutatou/db/types'
 
 export interface AutoStatusDishPreview {
@@ -26,13 +19,14 @@ export interface AutoStatusDishPreview {
 
 const CTA = '📲 Commandez-nous sur WhatsApp !'
 
-const TEMPLATES: ((name: string, price: string) => string)[] = [
-  (name, price) => `🔥 Aujourd’hui, on vous régale avec ${name} à ${price} !\n${CTA}`,
-  (name, price) => `😋 Envie d’un bon plat ? ${name} vous attend à ${price}.\n${CTA}`,
-  (name, price) => `👨‍🍳 Fraîchement préparé pour vous : ${name} — ${price} seulement.\n${CTA}`,
-  (name, price) => `⭐ Le coup de cœur du jour : ${name} à ${price}.\n${CTA}`,
-  (name, price) => `🍽️ On a pensé à vous : ${name} à ${price}, à ne pas manquer !\n${CTA}`,
-  (name, price) => `✨ Nouveau sur la carte aujourd’hui : ${name} à ${price}.\n${CTA}`,
+const TEMPLATES: ((dish: AutoStatusDishPreview) => string)[] = [
+  (dish) => `🔥 À ne pas manquer aujourd'hui !\n${dish.name} — ${formatFcfa(dish.price)}\n${CTA}`,
+  (dish) => `😋 Envie de se régaler ?\n${dish.name} à seulement ${formatFcfa(dish.price)}.\n${CTA}`,
+  (dish) => `👀 Notre coup de cœur du jour : ${dish.name}\nÀ ${formatFcfa(dish.price)} seulement !\n${CTA}`,
+  (dish) => `⏰ Disponible maintenant : ${dish.name}\nPrix : ${formatFcfa(dish.price)}\n${CTA}`,
+  (dish) => `🍽️ ${dish.name}, ça vous tente ?\n${formatFcfa(dish.price)} — préparé avec soin.\n${CTA}`,
+  (dish) => `✨ Fraîchement préparé : ${dish.name}\nÀ déguster pour ${formatFcfa(dish.price)}.\n${CTA}`,
+  (dish) => `🙌 Toujours aussi populaire : ${dish.name}\n${formatFcfa(dish.price)} — servi chaud !\n${CTA}`,
 ]
 
 export const AUTO_STATUS_CAPTION_TEMPLATE_COUNT = TEMPLATES.length
@@ -40,5 +34,5 @@ export const AUTO_STATUS_CAPTION_TEMPLATE_COUNT = TEMPLATES.length
 /** Rendu pur de la légende d'aperçu — `templateIndex` tourne (modulo) sur les gabarits. */
 export function buildStatusCaptionPreview(dish: AutoStatusDishPreview, templateIndex: number): string {
   const index = ((templateIndex % TEMPLATES.length) + TEMPLATES.length) % TEMPLATES.length
-  return TEMPLATES[index](dish.name, formatFcfa(dish.price))
+  return TEMPLATES[index](dish)
 }

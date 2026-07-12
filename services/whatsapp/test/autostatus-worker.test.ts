@@ -92,14 +92,36 @@ describe('runAutoStatusOnce — créneau dû / non dû / déjà exécuté', () =
     expect(repo.bumpCursor).not.toHaveBeenCalled()
   })
 
-  it('deux créneaux dus dans le même tick → les deux sont traités', async () => {
+  it('deux créneaux dus dans le même tick → SEUL le plus récent est traité (pas de rattrapage)', async () => {
     const repo = makeRepo({}, [candidate({ autoStatusTimes: ['08:00', '11:30'] })])
     await runAutoStatusOnce({ repo, now: () => NOW_1135_LIBREVILLE })
 
-    expect(repo.claimSlot).toHaveBeenCalledTimes(2)
-    expect(repo.claimSlot).toHaveBeenNthCalledWith(1, 'r1', '2026-07-13 08:00', null)
-    expect(repo.claimSlot).toHaveBeenNthCalledWith(2, 'r1', '2026-07-13 11:30', '2026-07-13 08:00')
-    expect(repo.insertGeneratedStatuses).toHaveBeenCalledTimes(2)
+    expect(repo.claimSlot).toHaveBeenCalledTimes(1)
+    expect(repo.claimSlot).toHaveBeenCalledWith('r1', '2026-07-13 11:30', null)
+    expect(repo.insertGeneratedStatuses).toHaveBeenCalledTimes(1)
+  })
+
+  it('RÉGRESSION revue : dernier créneau déjà exécuté → le créneau plus ancien ne re-déclenche JAMAIS', async () => {
+    // Bug d'origine : last_slot = "… 11:30" ≠ "… 08:00" → 08:00 re-partait à chaque
+    // tick jusqu'à minuit. Le tri chronologique du format YYYY-MM-DD HH:MM garantit
+    // désormais slotKey <= lastSlot pour tout créneau passé.
+    const repo = makeRepo({}, [
+      candidate({ autoStatusTimes: ['08:00', '11:30'], autoStatusLastSlot: '2026-07-13 11:30' }),
+    ])
+    await runAutoStatusOnce({ repo, now: () => NOW_1135_LIBREVILLE })
+
+    expect(repo.claimSlot).not.toHaveBeenCalled()
+    expect(repo.insertGeneratedStatuses).not.toHaveBeenCalled()
+  })
+
+  it('premier créneau exécuté, deuxième atteint → seul le deuxième part', async () => {
+    const repo = makeRepo({}, [
+      candidate({ autoStatusTimes: ['08:00', '11:30'], autoStatusLastSlot: '2026-07-13 08:00' }),
+    ])
+    await runAutoStatusOnce({ repo, now: () => NOW_1135_LIBREVILLE })
+
+    expect(repo.claimSlot).toHaveBeenCalledTimes(1)
+    expect(repo.claimSlot).toHaveBeenCalledWith('r1', '2026-07-13 11:30', '2026-07-13 08:00')
   })
 })
 

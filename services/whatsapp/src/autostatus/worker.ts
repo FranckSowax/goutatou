@@ -29,17 +29,25 @@ export async function runAutoStatusOnce(deps: AutoStatusWorkerDeps): Promise<voi
 
   for (const c of candidates) {
     let cursor = c.autoStatusCursor
-    let lastSlot = c.autoStatusLastSlot
+    const lastSlot = c.autoStatusLastSlot
     const times = [...c.autoStatusTimes].sort()
 
-    for (const slot of times) {
-      if (hhmm < slot) continue
+    // UN SEUL créneau par tick : le plus récent déjà atteint. Fixe deux dangers
+    // relevés en revue finale : (a) re-déclenchement en boucle — un last_slot ne
+    // mémorise qu'une valeur, donc comparer par ÉGALITÉ re-déclenchait l'autre
+    // créneau à chaque tick une fois les deux passés ; le format "YYYY-MM-DD HH:MM"
+    // trie chronologiquement, on skippe donc TOUT créneau <= last_slot. (b) pas de
+    // rattrapage des créneaux périmés de la journée (activer à 19 h ne publie pas
+    // le statut « déjeuner » de 11 h 30).
+    const dueSlots = times.filter((slot) => hhmm >= slot)
+    if (dueSlots.length === 0) continue
+    const slot = dueSlots[dueSlots.length - 1]
+    {
       const slotKey = `${dateKey} ${slot}`
-      if (lastSlot === slotKey) continue // déjà exécuté aujourd'hui pour ce créneau
+      if (lastSlot !== null && slotKey <= lastSlot) continue // déjà exécuté (ou créneau plus ancien)
 
       const claimed = await deps.repo.claimSlot(c.restaurantId, slotKey, lastSlot)
       if (!claimed) continue // claim perdu (créneau déjà pris entre-temps)
-      lastSlot = slotKey
 
       const dishes = await deps.repo.getPhotoDishes(c.restaurantId)
       if (dishes.length === 0) {
