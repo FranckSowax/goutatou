@@ -28,7 +28,7 @@ interface WhapiMessage {
    * Confiance : haute sur order_id ; le corps de la réponse GET /business/orders/{id} (items)
    * reste basse confiance côté client whapi (cf. packages/whapi/src/client.ts getOrderItems).
    */
-  order?: { order_id?: string }
+  order?: { order_id?: string; token?: string }
 }
 
 export interface ProcessorDeps {
@@ -130,12 +130,15 @@ async function handleNativeOrder(
   customerId: string,
   chatId: string,
   orderId: string | undefined,
+  orderToken: string | undefined,
   ctx: BotContext,
 ): Promise<void> {
   let items: Array<{ retailer_id?: string; quantity?: number }>
   try {
     if (!orderId) throw new Error('order.order_id manquant dans le webhook')
-    items = await whapi.getOrderItems(orderId)
+    // order_token requis par l'API (403 « need order token » sinon) — fourni
+    // dans le webhook du panier, transmis en query.
+    items = await whapi.getOrderItems(orderId, orderToken)
   } catch (err) {
     console.error('[order] getOrderItems échoué', err)
     await sendReplies(whapi, repo, restaurantId, chatId, [CART_READ_FAILED_FR])
@@ -208,7 +211,7 @@ export function createProcessor(
         // de sens pour ce type de message) — traitement dédié puis message suivant.
         if (isOrderMessage) {
           const orderCtx = await repo.getBotContext(channel.restaurantId, channel.restaurantName, channel.driveEnabled)
-          await handleNativeOrder(whapi, repo, channel.restaurantId, customer.id, msg.chat_id, msg.order?.order_id, orderCtx)
+          await handleNativeOrder(whapi, repo, channel.restaurantId, customer.id, msg.chat_id, msg.order?.order_id, msg.order?.token, orderCtx)
           continue
         }
 

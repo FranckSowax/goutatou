@@ -13,7 +13,7 @@ function orderPayload(orderId: string | null = 'ORD-1', overrides: Record<string
     messages: [{
       id: 'MSG-ORDER', from_me: false, type: 'order',
       chat_id: CHAT_ID, from: '24177000001', from_name: 'Client',
-      order: orderId === null ? {} : { order_id: orderId },
+      order: orderId === null ? {} : { order_id: orderId, token: 'ord-tok-b64' },
       ...overrides,
     }],
     channel_id: 'CH',
@@ -81,7 +81,7 @@ describe('processor — panier WhatsApp natif entrant (message type "order")', (
         { menuItemId: 'i2', name: 'Nems', unitPrice: 2500, qty: 1, supplements: [] },
       ],
     }
-    expect(getOrderItems).toHaveBeenCalledWith('ORD-1')
+    expect(getOrderItems).toHaveBeenCalledWith('ORD-1', 'ord-tok-b64')
     expect(repo.saveConversation).toHaveBeenCalledWith('resto-1', 'cust-1', 'MODE', expectedCart)
     // Récap + question mode envoyés (comme une transition normale), texte byte-identique
     // aux helpers copy.cartRecap/copy.chooseMode (mêmes textes que le flux "valider").
