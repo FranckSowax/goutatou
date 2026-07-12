@@ -2,6 +2,7 @@ export type OrderMode = 'drive' | 'livraison' | 'sur_place'
 export type OrderStatus = 'recue' | 'en_preparation' | 'prete' | 'recuperee' | 'annulee'
 export type BotState =
   | 'ACCUEIL' | 'MENU' | 'MODE' | 'CRENEAU' | 'ADRESSE' | 'CONFIRMATION' | 'HUMAIN' | 'SUPPLEMENTS'
+  | 'SUPPLEMENTS_CHECKOUT'
 
 export interface SupplementLine {
   id: string
@@ -16,6 +17,13 @@ export interface CartItem {
   qty: number
   /** Suppléments choisis pour cet item (défaut : absent = aucun, rétrocompatible). */
   supplements?: SupplementLine[]
+  /**
+   * Marque que la question suppléments a déjà été posée pour cet item dans le cadre de
+   * SUPPLEMENTS_CHECKOUT (panier importé). Transient, défaut absent = pas encore demandé.
+   * Ignoré par cartTotal/cartRecap et tout autre consommateur — sert uniquement à la
+   * rotation interne de la machine (cf. machine.ts, nextUnaskedSupplementIndex).
+   */
+  suppAsked?: boolean
 }
 
 export interface Cart {

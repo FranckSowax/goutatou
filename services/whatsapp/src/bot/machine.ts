@@ -86,16 +86,56 @@ function addToCart(
   return { ...cart, items }
 }
 
-/** Dernier item du panier + suppléments disponibles pour ce plat (menu). */
-function lastItemWithSupplements(
-  cart: Cart, ctx: BotContext,
+/** Item du panier à `index` + suppléments disponibles pour ce plat (menu), null si absent. */
+function itemWithSupplements(
+  cart: Cart, ctx: BotContext, index: number,
 ): { item: Cart['items'][number]; index: number; supplements: SupplementLine[] } | null {
-  const index = cart.items.length - 1
   const item = cart.items[index]
   if (!item) return null
   const menuItem = flatMenuItems(ctx.menu).find((m) => m.id === item.menuItemId)
   const supplements = menuItem?.supplements ?? []
   return { item, index, supplements }
+}
+
+/** Dernier item du panier + suppléments disponibles pour ce plat (menu). */
+function lastItemWithSupplements(
+  cart: Cart, ctx: BotContext,
+): { item: Cart['items'][number]; index: number; supplements: SupplementLine[] } | null {
+  return itemWithSupplements(cart, ctx, cart.items.length - 1)
+}
+
+/**
+ * Index du premier item du panier ayant des suppléments disponibles (menu) et pas encore
+ * demandés (suppAsked absent/false) — -1 si aucun. Sert à SUPPLEMENTS_CHECKOUT/beginCheckout
+ * pour enchaîner les plats importés sans suppléments choisis.
+ */
+function nextUnaskedSupplementIndex(cart: Cart, ctx: BotContext): number {
+  const menuItems = flatMenuItems(ctx.menu)
+  return cart.items.findIndex((it) => {
+    if (it.suppAsked) return false
+    const menuItem = menuItems.find((m) => m.id === it.menuItemId)
+    return (menuItem?.supplements?.length ?? 0) > 0
+  })
+}
+
+/** Déplace l'item à `index` en dernière position du panier (no-op s'il y est déjà). */
+function moveToLast(cart: Cart, index: number): Cart {
+  if (index < 0 || index === cart.items.length - 1) return cart
+  const items = [...cart.items]
+  const [item] = items.splice(index, 1)
+  items.push(item)
+  return { ...cart, items }
+}
+
+/**
+ * Place l'item à `index` en dernière position et construit le prompt suppléments pour lui
+ * (cible garantie = dernier item, comme SUPPLEMENTS). Retourne le panier réordonné + la
+ * réplique à envoyer.
+ */
+function promptForSupplementAt(cart: Cart, ctx: BotContext, index: number): { cart: Cart; reply: string } {
+  const moved = moveToLast(cart, index)
+  const target = itemWithSupplements(moved, ctx, moved.items.length - 1)!
+  return { cart: moved, reply: copy.supplementsPrompt(target.item.name, target.supplements) }
 }
 
 /**
@@ -106,9 +146,20 @@ function lastItemWithSupplements(
  * le client n'a rien vu construire le panier : le récap (copy.cartRecap, texte identique à
  * celui de "panier"/CONFIRMATION) précède donc la question du mode (copy.chooseMode, mêmes
  * libellés/helpers que "valider" — availableModes(ctx)).
+ *
+ * Si le panier contient au moins un item avec des suppléments disponibles (menu) pas encore
+ * demandés, on ne saute PAS directement au mode : on cible ce plat en dernière position et on
+ * bascule sur SUPPLEMENTS_CHECKOUT (mêmes règles de sélection que SUPPLEMENTS), avec le récap
+ * du panier tel qu'importé (ordre inchangé) suivi de la question suppléments. Le flux texte
+ * MENU→"valider" n'est PAS branché ici : il continue d'aller droit à MODE (zéro régression).
  */
 export function beginCheckout(cart: Cart, ctx: BotContext): TransitionResult {
   if (!cart.items.length) return result('MENU', cart, [copy.emptyCart])
+  const idx = nextUnaskedSupplementIndex(cart, ctx)
+  if (idx !== -1) {
+    const { cart: moved, reply } = promptForSupplementAt(cart, ctx, idx)
+    return result('SUPPLEMENTS_CHECKOUT', moved, [copy.cartRecap(cart), reply])
+  }
   const modes = availableModes(ctx)
   return result('MODE', cart, [copy.cartRecap(cart), copy.chooseMode(modes.map((m) => m.label))])
 }
@@ -189,6 +240,51 @@ export function transition(state: BotState, cart: Cart, input: string, ctx: BotC
         ? copy.supplementsAgain(supplements)
         : copy.supplementsPrompt(item.name, supplements)
       return result('SUPPLEMENTS', cart, [prompt])
+    }
+
+    // Variante de SUPPLEMENTS pour un panier importé (beginCheckout) : mêmes règles de
+    // sélection/dédup/invalide, mais la sortie (0/non) enchaîne sur le PROCHAIN item du panier
+    // ayant des suppléments dispo non demandés (au lieu de revenir direct au flux MENU), et ne
+    // revient à MODE (avec récap) que lorsque plus aucun item n'a de suppléments en attente.
+    case 'SUPPLEMENTS_CHECKOUT': {
+      const ctxItem = lastItemWithSupplements(cart, ctx)
+      if (!ctxItem || ctxItem.supplements.length === 0) {
+        // Garde-fou : rien à proposer, on repart comme beginCheckout sans suppléments.
+        const modes = availableModes(ctx)
+        return result('MODE', cart, [copy.cartRecap(cart), copy.chooseMode(modes.map((m) => m.label))])
+      }
+      const { item, index, supplements } = ctxItem
+      const chosen = item.supplements ?? []
+
+      if (text === '0' || text === 'non') {
+        const items = cart.items.map((it, i) => (i === index ? { ...it, suppAsked: true } : it))
+        const updatedCart = { ...cart, items }
+        const nextIdx = nextUnaskedSupplementIndex(updatedCart, ctx)
+        if (nextIdx !== -1) {
+          const { cart: moved, reply } = promptForSupplementAt(updatedCart, ctx, nextIdx)
+          return result('SUPPLEMENTS_CHECKOUT', moved, [reply])
+        }
+        const modes = availableModes(ctx)
+        return result('MODE', updatedCart, [copy.cartRecap(updatedCart), copy.chooseMode(modes.map((m) => m.label))])
+      }
+
+      const idx = Number(text) - 1
+      const pick = text !== '' && Number.isInteger(idx) ? supplements[idx] : undefined
+      if (pick) {
+        const alreadyChosen = chosen.some((s) => s.id === pick.id)
+        if (!alreadyChosen) {
+          const updatedItem = { ...item, supplements: [...chosen, pick] }
+          const items = cart.items.map((it, i) => (i === index ? updatedItem : it))
+          return result('SUPPLEMENTS_CHECKOUT', { ...cart, items }, [copy.supplementsAgain(supplements)])
+        }
+        return result('SUPPLEMENTS_CHECKOUT', cart, [copy.supplementsAgain(supplements)])
+      }
+
+      // Entrée invalide : on redemande (même prompt que celui affiché en dernier).
+      const prompt = chosen.length > 0
+        ? copy.supplementsAgain(supplements)
+        : copy.supplementsPrompt(item.name, supplements)
+      return result('SUPPLEMENTS_CHECKOUT', cart, [prompt])
     }
 
     case 'MODE': {
