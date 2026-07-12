@@ -15,6 +15,8 @@ import { createWheelReminderRepo } from './wheel/repo.js'
 import { startWheelReminderWorker } from './wheel/worker.js'
 import { createCatalogRepo } from './catalog/repo.js'
 import { startCatalogWorker } from './catalog/worker.js'
+import { createPollRepo } from './polls/repo.js'
+import { startPollWorker } from './polls/worker.js'
 
 const config = loadConfig()
 const db = createServiceClient(config.supabaseUrl, config.serviceRoleKey)
@@ -60,6 +62,15 @@ startCatalogWorker({
   sendDelayMinMs: config.sendDelayMinMs,
   sendDelayMaxMs: config.sendDelayMaxMs,
   pollMs: config.catalogSyncPollMs,
+})
+const pollRepo = createPollRepo(db, config.tokenKey)
+startPollWorker({
+  repo: pollRepo,
+  makeWhapi: (token) => new WhapiClient(token),
+  sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+  sendDelayMinMs: config.sendDelayMinMs,
+  sendDelayMaxMs: config.sendDelayMaxMs,
+  pollMs: config.pollWorkerPollMs,
 })
 const processWebhook = createProcessor(repo, (token) => new WhapiClient(token), {
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
