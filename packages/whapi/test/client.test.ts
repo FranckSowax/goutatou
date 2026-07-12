@@ -199,4 +199,100 @@ describe('WhapiClient', () => {
       name: 'Restaurant Goutatou',
     })
   })
+
+  it('createProduct : POST /business/products avec le body exact, image en tableau, parse id', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { id: 'PROD1' } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.createProduct({
+      name: 'Poulet braisé',
+      price: 3000,
+      currency: 'XAF',
+      retailer_id: '50000000-0000-0000-0000-000000000003',
+      description: 'Poulet grillé, riz, plantain',
+      imageUrl: 'https://cdn.example.com/poulet.jpg',
+    })
+    expect(res).toEqual({ id: 'PROD1' })
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/business/products')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body)).toEqual({
+      product_retailer_id: '50000000-0000-0000-0000-000000000003',
+      currency: 'XAF',
+      name: 'Poulet braisé',
+      description: 'Poulet grillé, riz, plantain',
+      price: 3000,
+      images: ['https://cdn.example.com/poulet.jpg'],
+    })
+  })
+
+  it('updateProduct : PATCH /business/products/{id} avec images en tableau', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: {} }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    await client.updateProduct('PROD1', { name: 'Poulet braisé XL', price: 3500, imageUrl: 'https://cdn.example.com/poulet2.jpg' })
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/business/products/PROD1')
+    expect(init.method).toBe('PATCH')
+    expect(JSON.parse(init.body)).toEqual({
+      name: 'Poulet braisé XL',
+      price: 3500,
+      images: ['https://cdn.example.com/poulet2.jpg'],
+    })
+  })
+
+  it('deleteProduct : DELETE /business/products/{id}, sans body', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: {} }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    await client.deleteProduct('PROD1')
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/business/products/PROD1')
+    expect(init.method).toBe('DELETE')
+    expect(init.body).toBeUndefined()
+  })
+
+  it('getProducts : GET /business/products, parse liste sous `products` (id + retailer_id)', async () => {
+    const fetchFn = mockFetch([
+      {
+        status: 200,
+        body: {
+          products: [
+            { id: 'PROD1', product_retailer_id: '50000000-0000-0000-0000-000000000003', name: 'Poulet braisé', price: 3000 },
+          ],
+        },
+      },
+    ])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.getProducts()
+    expect(res).toEqual([
+      { id: 'PROD1', retailer_id: '50000000-0000-0000-0000-000000000003', name: 'Poulet braisé', price: 3000 },
+    ])
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/business/products')
+    expect(init.method).toBe('GET')
+  })
+
+  it('sendCatalog : POST /business/catalogs/{to} avec to au chemin et au body, parse id', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { message: { id: 'CAT1' } } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.sendCatalog('24177000001@s.whatsapp.net')
+    expect(res).toEqual({ id: 'CAT1' })
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/business/catalogs/24177000001@s.whatsapp.net')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body)).toEqual({ to: '24177000001@s.whatsapp.net' })
+  })
+
+  it('getOrderItems : GET /business/orders/{id}, parse liste sous `items` (retailer_id/quantity/price)', async () => {
+    const fetchFn = mockFetch([
+      {
+        status: 200,
+        body: { items: [{ product_retailer_id: '50000000-0000-0000-0000-000000000003', quantity: 2, item_price: 3000 }] },
+      },
+    ])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.getOrderItems('ORDER1')
+    expect(res).toEqual([{ retailer_id: '50000000-0000-0000-0000-000000000003', quantity: 2, price: 3000 }])
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/business/orders/ORDER1')
+    expect(init.method).toBe('GET')
+  })
 })

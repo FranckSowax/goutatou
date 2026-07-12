@@ -231,4 +231,162 @@ export class WhapiClient {
     })) as { message?: { id?: string } }
     return { id: res.message?.id }
   }
+
+  /**
+   * Crée un produit du catalogue WhatsApp Business — POST /business/products. Endpoint, méthode
+   * et schéma du body (product_retailer_id, currency, images, availability, name, url,
+   * description, price, is_hidden) confirmés à l'identique par le code généré du serveur MCP
+   * whapi-mcp (généré depuis le schéma officiel Whapi — ~/.npm/_npx/.../whapi-mcp/generated-mcp/
+   * createProduct.js + B_manifest.json) : requestBody.schema liste `currency`, `description`,
+   * `images`, `name`, `price` comme REQUIS. Confiance : haute sur la requête.
+   *
+   * ATTENTION `images` est requis par le schéma Whapi (array, minItems 1) : un plat sans photo
+   * ne peut pas être créé dans le catalogue tel quel. Cette méthode envoie `images: [imageUrl]`
+   * si `imageUrl` est fourni, sinon omet le champ — l'appelant (worker de sync) doit filtrer les
+   * plats sans photo en amont ou s'attendre à une erreur 400 de Whapi.
+   *
+   * Forme de la réponse (id du produit créé) NON documentée par whapi.readme.io/reference/
+   * createproduct (page accessible mais sans exemple JSON affiché) et non détaillée dans le
+   * manifeste MCP (outputSchema générique `{status, content}` = enveloppe de l'outil MCP, pas le
+   * corps réel de l'API Whapi). Parsing défensif de `id` (racine ou sous `product`). Confiance :
+   * moyenne sur la réponse — à vérifier contre un vrai appel avant usage en prod.
+   */
+  async createProduct(input: {
+    name: string
+    price: number
+    currency: string
+    retailer_id: string
+    description?: string
+    imageUrl?: string
+  }): Promise<{ id?: string }> {
+    const res = (await this.request('POST', '/business/products', {
+      product_retailer_id: input.retailer_id,
+      currency: input.currency,
+      name: input.name,
+      description: input.description,
+      price: input.price,
+      images: input.imageUrl ? [input.imageUrl] : undefined,
+    })) as { id?: string; product?: { id?: string } }
+    return { id: res.id ?? res.product?.id }
+  }
+
+  /**
+   * Met à jour un produit du catalogue — PATCH /business/products/{ProductID}. Endpoint, méthode
+   * et champs confirmés par le code généré whapi-mcp (updateProduct.js) et le manifeste MCP :
+   * même schéma que createProduct. Confiance : haute sur la requête.
+   *
+   * ATTENTION (doc officielle, summary de l'outil MCP updateProduct) : « The *images* field is
+   * required and must contain all images » — même en PATCH, Whapi attend le tableau `images`
+   * complet à chaque mise à jour (pas de merge côté serveur). Cette méthode envoie
+   * `images: [imageUrl]` si fourni ; si `imageUrl` est absent, aucun champ `images` n'est envoyé
+   * et Whapi renverra probablement une erreur 400 — l'appelant doit toujours fournir `imageUrl`
+   * pour un update réussi (le worker de sync doit garantir une photo par plat synchronisé).
+   */
+  async updateProduct(
+    productId: string,
+    fields: { name?: string; price?: number; currency?: string; description?: string; imageUrl?: string },
+  ): Promise<void> {
+    await this.request('PATCH', `/business/products/${productId}`, {
+      currency: fields.currency,
+      name: fields.name,
+      description: fields.description,
+      price: fields.price,
+      images: fields.imageUrl ? [fields.imageUrl] : undefined,
+    })
+  }
+
+  /**
+   * Supprime un produit du catalogue — DELETE /business/products/{ProductID}, sans body.
+   * Endpoint et méthode confirmés par le code généré whapi-mcp (deleteProduct.js) et le manifeste
+   * MCP. Confiance : haute.
+   */
+  async deleteProduct(productId: string): Promise<void> {
+    await this.request('DELETE', `/business/products/${productId}`)
+  }
+
+  /**
+   * Liste les produits du catalogue — GET /business/products (query `count`, défaut 100 côté
+   * Whapi ; `offset` pour la pagination — non gérée automatiquement ici, à itérer par l'appelant
+   * si plus de 100 produits). Endpoint, méthode et query params confirmés par le code généré
+   * whapi-mcp (getProducts.js) et le manifeste MCP. Confiance : haute sur la requête.
+   *
+   * Forme de la réponse NON documentée (pas d'exemple JSON sur whapi.readme.io/reference/
+   * getproducts ni dans le manifeste MCP, qui ne détaille que l'enveloppe générique de l'outil).
+   * Parsing défensif : liste sous `products`, sinon réponse déjà un tableau, sinon vide. Chaque
+   * item : `id` (id Whapi) et `retailer_id` (notre id, champ `product_retailer_id` envoyé à la
+   * création, lu ici en repli sur `retailer_id`). Confiance : moyenne — à vérifier contre un vrai
+   * appel avant usage en prod.
+   */
+  async getProducts(): Promise<Array<{ id?: string; retailer_id?: string; name?: string; price?: number }>> {
+    const res = (await this.request('GET', '/business/products')) as
+      | { products?: Array<Record<string, unknown>> }
+      | Array<Record<string, unknown>>
+    const list = Array.isArray(res) ? res : (res.products ?? [])
+    return list.map((item) => ({
+      id: typeof item.id === 'string' ? item.id : undefined,
+      retailer_id:
+        typeof item.product_retailer_id === 'string'
+          ? item.product_retailer_id
+          : typeof item.retailer_id === 'string'
+            ? item.retailer_id
+            : undefined,
+      name: typeof item.name === 'string' ? item.name : undefined,
+      price: typeof item.price === 'number' ? item.price : undefined,
+    }))
+  }
+
+  /**
+   * Envoie la carte catalogue en conversation — POST /business/catalogs/{ContactID}, body { to }.
+   * Endpoint, méthode et body confirmés par le code généré whapi-mcp (sendCatalog.js) et le
+   * manifeste MCP : `to` est requis dans le body EN PLUS de `ContactID` dans le chemin — le
+   * manifeste ne précise pas si les deux doivent être identiques, mais c'est l'usage observé dans
+   * tous les autres endpoints `/messages/*` de ce client (le contact cible apparaît une seule
+   * fois en pratique) ; cette méthode envoie la même valeur aux deux emplacements par prudence.
+   * Confiance : haute sur le chemin/la méthode, moyenne sur la redondance ContactID/`to`.
+   *
+   * Forme de la réponse INFÉRÉE par analogie avec les autres endpoints `/messages/*`
+   * (`{ message: { id } }`) — non documentée pour cet endpoint spécifique. Confiance : moyenne.
+   */
+  async sendCatalog(to: string): Promise<{ id?: string }> {
+    const res = (await this.request('POST', `/business/catalogs/${to}`, { to })) as {
+      message?: { id?: string }
+      id?: string
+    }
+    return { id: res.message?.id ?? res.id }
+  }
+
+  /**
+   * Récupère les articles d'un panier WhatsApp natif entrant — GET /business/orders/{OrderID}.
+   * Endpoint et méthode confirmés par le code généré whapi-mcp (getOrderItems.js) et le manifeste
+   * MCP (summary "Get order items" : « get information about the items in the shopping cart sent
+   * to you in messages »). Le paramètre optionnel `order_token` (query, "Base64 token from order
+   * for receiving information") n'est PAS utilisé ici : le message webhook 'order' entrant ne
+   * fournit qu'un `order.id` d'après la spec catalogue (processor à écrire séparément) — à
+   * ajouter si un besoin de token apparaît. Confiance : haute sur le chemin/la méthode.
+   *
+   * Forme de la réponse NON documentée (support.whapi.cloud/.../get-order-items décrit le message
+   * webhook entrant — order_id/seller/title/item_count/currency/total_price/status — mais pas le
+   * corps de CETTE réponse GET). Parsing défensif inspiré du format WhatsApp Cloud API standard
+   * (items sous `items` ou `products`, chaque item avec `product_retailer_id`/`retailer_id`,
+   * `quantity`, `item_price`/`price`). Confiance : basse sur la forme exacte — à vérifier contre
+   * un vrai panier WhatsApp avant usage en prod (cf. limite documentée dans la spec catalogue).
+   */
+  async getOrderItems(orderId: string): Promise<Array<{ retailer_id?: string; quantity?: number; price?: number }>> {
+    const res = (await this.request('GET', `/business/orders/${orderId}`)) as
+      | { items?: Array<Record<string, unknown>>; products?: Array<Record<string, unknown>> }
+      | Array<Record<string, unknown>>
+    const list = Array.isArray(res) ? res : (res.items ?? res.products ?? [])
+    return list.map((item) => ({
+      retailer_id:
+        typeof item.product_retailer_id === 'string'
+          ? item.product_retailer_id
+          : typeof item.retailer_id === 'string'
+            ? item.retailer_id
+            : typeof item.product_id === 'string'
+              ? item.product_id
+              : undefined,
+      quantity: typeof item.quantity === 'number' ? item.quantity : typeof item.qty === 'number' ? item.qty : undefined,
+      price: typeof item.item_price === 'number' ? item.item_price : typeof item.price === 'number' ? item.price : undefined,
+    }))
+  }
 }
