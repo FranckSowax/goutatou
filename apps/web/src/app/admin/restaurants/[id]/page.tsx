@@ -10,6 +10,7 @@ import { configureWebhook } from '../../actions'
 import { GeneralTab } from './general-tab'
 import { BotTab } from './bot-tab'
 import { WheelTab } from './wheel-tab'
+import { CatalogTab } from './catalog-tab'
 import { DangerTab } from './danger-tab'
 
 export const dynamic = 'force-dynamic'
@@ -23,12 +24,28 @@ export default async function AdminRestaurantDetailPage({ params }: { params: Pr
     .select(
       `id, name, slug, address, contact_phone, hours_text, delivery_info, bot_welcome, bot_info_extra,
        drive_enabled, wheel_enabled, wheel_trigger_orders, lp_config, location_lat, location_lng,
+       catalog_enabled, catalog_synced_at, catalog_sync_error,
        subscriptions(plan, status),
        whapi_channels(id, status, last_webhook_at, token_encrypted, phone)`
     )
     .eq('id', id)
     .single()
   if (error || !resto) throw new Error(`Restaurant introuvable : ${error?.message}`)
+
+  const [
+    { count: availableCount },
+    { count: availableWithPhotoCount },
+    { count: linkedCount },
+  ] = await Promise.all([
+    admin.from('menu_items').select('id', { count: 'exact', head: true }).eq('restaurant_id', id).eq('available', true),
+    admin
+      .from('menu_items')
+      .select('id', { count: 'exact', head: true })
+      .eq('restaurant_id', id)
+      .eq('available', true)
+      .not('photo_url', 'is', null),
+    admin.from('menu_items').select('id', { count: 'exact', head: true }).eq('restaurant_id', id).not('wa_product_id', 'is', null),
+  ])
 
   const subscription = resto.subscriptions as unknown as { plan: string; status: string } | null
   const channel = resto.whapi_channels as unknown as {
@@ -71,6 +88,7 @@ export default async function AdminRestaurantDetailPage({ params }: { params: Pr
           <TabsTrigger value="bot">Bot WhatsApp</TabsTrigger>
           <TabsTrigger value="site">Site</TabsTrigger>
           <TabsTrigger value="fidelite">Fidélité</TabsTrigger>
+          <TabsTrigger value="catalogue">Catalogue</TabsTrigger>
           <TabsTrigger value="danger">Danger</TabsTrigger>
         </TabsList>
 
@@ -141,6 +159,20 @@ export default async function AdminRestaurantDetailPage({ params }: { params: Pr
             restaurantId={resto.id}
             wheelEnabled={resto.wheel_enabled}
             wheelTriggerOrders={resto.wheel_trigger_orders}
+          />
+        </TabsContent>
+
+        <TabsContent value="catalogue" className="mt-4">
+          <CatalogTab
+            restaurantId={resto.id}
+            catalogEnabled={resto.catalog_enabled}
+            hasChannel={!!channel}
+            channelStatus={channel?.status}
+            availableCount={availableCount ?? 0}
+            availableWithPhotoCount={availableWithPhotoCount ?? 0}
+            linkedCount={linkedCount ?? 0}
+            catalogSyncedAt={resto.catalog_synced_at}
+            catalogSyncError={resto.catalog_sync_error}
           />
         </TabsContent>
 

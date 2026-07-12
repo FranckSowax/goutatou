@@ -174,6 +174,93 @@ export async function getLoginQrAction(id: string): Promise<{ base64: string }> 
   }
 }
 
+/**
+ * Interrupteur du catalogue WhatsApp (restaurants.catalog_enabled). N'envoie
+ * rien à Whapi : la synchronisation reste un geste manuel (bouton dédié).
+ */
+export async function setCatalogEnabled(id: string, enabled: boolean) {
+  await assertPlatformAdmin()
+  const admin = createAdminClient()
+
+  const { error } = await admin.from('restaurants').update({ catalog_enabled: enabled }).eq('id', id)
+  if (error) throw new Error(error.message)
+
+  revalidateFiche(id)
+}
+
+/**
+ * Pose catalog_sync_requested_at = now() — le worker bot `catalog-sync`
+ * (claim-first, poll) fait le travail de fond. Garde double : catalogue
+ * activé ET canal WhatsApp actif, sinon erreur FR fixe.
+ */
+export async function requestCatalogSync(id: string) {
+  await assertPlatformAdmin()
+  const admin = createAdminClient()
+
+  const { data: resto, error: restoError } = await admin
+    .from('restaurants')
+    .select('catalog_enabled')
+    .eq('id', id)
+    .single()
+  if (restoError || !resto) throw new Error('Restaurant introuvable.')
+  if (!resto.catalog_enabled) throw new Error('Activez le catalogue avant de lancer une synchronisation.')
+
+  const { data: channel } = await admin
+    .from('whapi_channels')
+    .select('status')
+    .eq('restaurant_id', id)
+    .maybeSingle()
+  if (!channel || channel.status !== 'active') {
+    throw new Error('Aucun canal WhatsApp actif pour ce restaurant — impossible de synchroniser.')
+  }
+
+  const { error } = await admin
+    .from('restaurants')
+    .update({ catalog_sync_requested_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+
+  revalidateFiche(id)
+}
+
+/**
+ * Vérifie via /health que le numéro connecté est bien un compte WhatsApp
+ * Business (prérequis catalogue). Le client @goutatou/whapi n'expose que
+ * checkHealth(): boolean (pas le détail user.is_business) — on ne touche
+ * PAS au package (scope web only, agent concurrent dessus) : appel direct
+ * en fetch brut avec le token décrypté, parsing défensif de la réponse.
+ * Seuls isBusiness/phone traversent vers le client — jamais le token.
+ */
+export async function checkBusinessAccount(id: string): Promise<{ isBusiness: boolean; phone: string | null }> {
+  await assertPlatformAdmin()
+  const admin = createAdminClient()
+
+  const { data: channel } = await admin
+    .from('whapi_channels')
+    .select('token_encrypted')
+    .eq('restaurant_id', id)
+    .maybeSingle()
+  if (!channel) throw new Error('Impossible de contacter Whapi — le canal n’existe peut-être plus.')
+  const token = decryptToken(channel.token_encrypted, process.env.TOKEN_ENCRYPTION_KEY!)
+
+  try {
+    const res = await fetch('https://gate.whapi.cloud/health', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) throw new Error(`Whapi ${res.status}`)
+    const body = (await res.json().catch(() => ({}))) as {
+      user?: { is_business?: boolean; id?: string } | null
+    }
+    const rawId = typeof body.user?.id === 'string' ? body.user.id : null
+    return {
+      isBusiness: body.user?.is_business === true,
+      phone: rawId ? rawId.split('@')[0] : null,
+    }
+  } catch {
+    throw new Error('Impossible de contacter Whapi — le canal n’existe peut-être plus.')
+  }
+}
+
 export async function updatePlan(id: string, formData: FormData) {
   await assertPlatformAdmin()
   const admin = createAdminClient()
