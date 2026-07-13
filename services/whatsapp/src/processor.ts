@@ -1,6 +1,6 @@
 import { EMPTY_CART, formatFcfa, type BotState, type Cart, type CartItem } from '@goutatou/db'
 import type { WhapiClient } from '@goutatou/whapi'
-import { buttonsForState, type ButtonChoice } from './bot/buttons.js'
+import { buttonsForState, matchButtonInput, type ButtonChoice } from './bot/buttons.js'
 import { beginCheckout, flatMenuItems, transition, type BotContext } from './bot/machine.js'
 import { isOptOutKeyword } from './campaigns/optout.js'
 import { nextSendDelayMs } from './campaigns/throttle.js'
@@ -691,7 +691,14 @@ export function createProcessor(
           ? { ...baseCtx, wheel: await repo.getWheelInfo(channel.restaurantId, customer.id) }
           : baseCtx
 
-        const res = transition(conv.state, conv.cart, body, ctx)
+        // Round-trip de l'id `in:<x>` non garanti par WhatsApp : un tap peut revenir sans id (ou
+        // en texte), body ne portant alors que le TITRE du bouton. On le retraduit en entrée
+        // machine en le matchant aux choix fermés de l'état courant (sinon re-prompt en boucle,
+        // cf. bug suppléments « Non merci »). Ne modifie body que sur un match — aucun effet sur
+        // les entrées déjà canoniques (« 2 », « oui »…) ni sur les états sans boutons.
+        const effectiveBody = matchButtonInput(conv.state, conv.cart, ctx, body) ?? body
+
+        const res = transition(conv.state, conv.cart, effectiveBody, ctx)
         const replies = [...res.replies]
         let nextCart = res.cart
 

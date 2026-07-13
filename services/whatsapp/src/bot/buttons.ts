@@ -61,3 +61,45 @@ export function buttonsForState(state: BotState, cart: Cart, ctx: BotContext): B
       return null
   }
 }
+
+/**
+ * Retraduit un TITRE de bouton entrant en entrée machine (le suffixe de l'id `in:<texte>`).
+ *
+ * Pourquoi : le round-trip de l'id `in:<x>` n'est PAS garanti par WhatsApp/Whapi sur certains
+ * canaux — un tap peut revenir sans id (ou en message texte), le processor ne dispose alors que
+ * du TITRE affiché (« Non merci », « Œuf +300 F »…). Sans cette retraduction, la machine reçoit
+ * le titre littéral, qu'elle ne reconnaît pas comme entrée valide (« 0 »/« non »/« 1 »…) →
+ * re-prompt en boucle infinie (bug observé sur SUPPLEMENTS_CHECKOUT « Non merci »).
+ *
+ * On matche `body` aux choix fermés que le bot AURAIT offerts pour l'état courant, en tolérant la
+ * troncature défensive appliquée à l'envoi (cf. processor `truncateTitle`) : le titre peut revenir
+ * complet OU tronqué selon le canal. Match exact d'abord, puis préfixe UNIQUE (sécurise contre les
+ * faux positifs). Renvoie le texte d'entrée machine (ex. « 0 », « 1 », « oui ») ou `null` si `body`
+ * ne correspond à aucun bouton de cet état — auquel cas le processor garde `body` inchangé.
+ *
+ * PURE : aucun effet de bord, aucune dépendance au transport réellement utilisé.
+ */
+export function matchButtonInput(state: BotState, cart: Cart, ctx: BotContext, body: string): string | null {
+  const choices = buttonsForState(state, cart, ctx)
+  if (!choices || choices.length === 0) return null
+  // Normalisation : trim, retrait des points de suite (« … » ou « ... » de troncature), minuscules.
+  const norm = (s: string) => s.trim().replace(/[.…]+$/u, '').trim().toLowerCase()
+  const b = norm(body)
+  if (!b) return null
+  const toInput = (c: ButtonChoice) => (c.id.startsWith('in:') ? c.id.slice(3) : c.id)
+
+  // 1) Match exact sur le titre complet normalisé (couvre les titres courts non tronqués,
+  //    ex. « Non merci », « Oui », « Œuf +300 F »).
+  const exact = choices.find((c) => norm(c.title) === b)
+  if (exact) return toInput(exact)
+
+  // 2) Match par préfixe (le titre a pu être tronqué à l'envoi OU au retour) : on ne l'accepte
+  //    que s'il est UNIQUE, pour éviter d'assigner un tap ambigu entre deux titres proches.
+  const prefixed = choices.filter((c) => {
+    const t = norm(c.title)
+    return t.length > 0 && (t.startsWith(b) || b.startsWith(t))
+  })
+  if (prefixed.length === 1) return toInput(prefixed[0])
+
+  return null
+}

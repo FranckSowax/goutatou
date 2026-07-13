@@ -233,6 +233,45 @@ describe('processor — boutons WhatsApp sur les choix fermés', () => {
       expect(repo.logMessage).toHaveBeenCalledWith('resto-1', 'in', CHAT_ID, '🛵 Livraison', 'MSG-REPLY')
     })
 
+    it('reply titre "Non merci" (id in: perdu) en SUPPLEMENTS_CHECKOUT → décline et avance, pas de boucle', async () => {
+      repo.getBotContext = vi.fn().mockResolvedValue({
+        restaurantName: 'Chez Test', driveEnabled: true,
+        driveSlots: [{ id: 's1', label: '12h00' }],
+        menu: menuWithSupplements2,
+      })
+      repo.loadConversation = vi.fn().mockResolvedValue({
+        state: 'SUPPLEMENTS_CHECKOUT',
+        cart: { items: [{ menuItemId: 'i1', name: 'Bo Bun', unitPrice: 4500, qty: 1 }] },
+      })
+      // Tap "Non merci" revenu SANS l'id in:0 (round-trip perdu) → seul le titre est disponible.
+      await process()('chan-uuid', replyPayload({
+        type: 'buttons_reply', buttons_reply: { id: 'lost-id', title: 'Non merci' },
+      }))
+
+      // Décline → plus aucun item en attente de suppléments → passage à MODE (pas de re-prompt SUPPLEMENTS_CHECKOUT).
+      expect(repo.saveConversation).toHaveBeenCalledWith('resto-1', 'cust-1', 'MODE', expect.anything())
+    })
+
+    it('reply titre "Œuf +300 F" (id in: perdu) en SUPPLEMENTS_CHECKOUT → ajoute le supplément', async () => {
+      repo.getBotContext = vi.fn().mockResolvedValue({
+        restaurantName: 'Chez Test', driveEnabled: true,
+        driveSlots: [{ id: 's1', label: '12h00' }],
+        menu: menuWithSupplements2,
+      })
+      repo.loadConversation = vi.fn().mockResolvedValue({
+        state: 'SUPPLEMENTS_CHECKOUT',
+        cart: { items: [{ menuItemId: 'i1', name: 'Bo Bun', unitPrice: 4500, qty: 1 }] },
+      })
+      await process()('chan-uuid', replyPayload({
+        type: 'buttons_reply', buttons_reply: { id: 'lost-id', title: 'Œuf +300 F' },
+      }))
+
+      // Supplément ajouté → on redemande (reste SUPPLEMENTS_CHECKOUT) avec le supplément dans le panier.
+      const call = (repo.saveConversation as ReturnType<typeof vi.fn>).mock.calls[0]
+      expect(call[2]).toBe('SUPPLEMENTS_CHECKOUT')
+      expect(call[3].items[0].supplements).toEqual([{ id: 's1', name: 'Œuf', price: 300 }])
+    })
+
     it('reply sans préfixe "in:" → le titre sert d’entrée machine', async () => {
       repo.loadConversation = vi.fn().mockResolvedValue({
         state: 'MENU',
