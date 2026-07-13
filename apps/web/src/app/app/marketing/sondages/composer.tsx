@@ -1,14 +1,23 @@
 'use client'
 import { useState } from 'react'
-import { cn } from '@/lib/utils'
+import { createBrowserClient } from '@supabase/ssr'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+// Import relatif (et non `@/lib/...`) : `validateImagePath`/`MAX_IMAGE_MB` sont réutilisés
+// tels quels depuis le composer Chaîne — même pattern d'upload DIRECT navigateur→bucket
+// `status-media` que l'image teaser ci-dessous.
+import { MAX_IMAGE_MB, validateImagePath } from '../chaine/shared'
 import { createPoll } from './actions'
-
-const MIN_OPTIONS = 2
-const MAX_OPTIONS = 12
+import {
+  POLL_MAX_OPTIONS,
+  POLL_MIN_OPTIONS,
+  normalizeSurfaces,
+  validatePollOptions,
+  validateSurfaces,
+  type PollSurface,
+} from './shared'
 
 function errorMessage(_e: unknown, fallback: string): string {
   // Next redige les messages d'erreur des Server Actions en prod (texte
@@ -18,44 +27,58 @@ function errorMessage(_e: unknown, fallback: string): string {
 
 function validate(formData: FormData, hasChannel: boolean): string | null {
   const question = String(formData.get('question') ?? '').trim()
-  if (!question) return 'Écrivez une question.'
-  const raw = formData.getAll('options').map((o) => String(o).trim()).filter(Boolean)
-  if (raw.length < MIN_OPTIONS || raw.length > MAX_OPTIONS) {
-    return `Ajoutez entre ${MIN_OPTIONS} et ${MAX_OPTIONS} options non vides.`
-  }
-  if (new Set(raw).size !== raw.length) return 'Les options doivent être différentes les unes des autres.'
+  const rawOptions = formData.getAll('options').map((o) => String(o).trim())
+  const pollResult = validatePollOptions(question, rawOptions)
+  if (!pollResult.ok) return pollResult.error
+
   const quiz = String(formData.get('quiz') ?? '') === 'on'
   if (quiz) {
     const idx = Number.parseInt(String(formData.get('quiz_correct') ?? ''), 10)
-    if (!Number.isInteger(idx) || idx < 0 || idx >= raw.length) return 'Sélectionnez la bonne réponse du quiz.'
+    if (!Number.isInteger(idx) || idx < 0 || idx >= pollResult.options.length) {
+      return 'Sélectionnez la bonne réponse du quiz.'
+    }
   }
-  const target = String(formData.get('target') ?? '')
-  if (target !== 'channel' && target !== 'optin') return 'Choisissez une cible pour le sondage.'
-  if (target === 'channel' && !hasChannel) return 'Créez d’abord votre chaîne WhatsApp.'
+
+  const rawSurfaces = formData.getAll('surfaces').map((s) => String(s)) as PollSurface[]
+  const surfaces = normalizeSurfaces(rawSurfaces)
+  const surfaceError = validateSurfaces(surfaces)
+  if (surfaceError) return surfaceError
+  if (surfaces.includes('channel') && !hasChannel) return 'Créez d’abord votre chaîne WhatsApp.'
+
   return null
 }
 
-export function Composer({ hasChannel, optinCount }: { hasChannel: boolean; optinCount: number }) {
+export function Composer({ restaurantId, hasChannel }: { restaurantId: string; hasChannel: boolean }) {
   const [question, setQuestion] = useState('')
   const [options, setOptions] = useState<string[]>(['', ''])
   const [quiz, setQuiz] = useState(false)
   const [quizCorrect, setQuizCorrect] = useState<number | null>(null)
-  const [target, setTarget] = useState<'channel' | 'optin'>(hasChannel ? 'channel' : 'optin')
+  const [surfaces, setSurfaces] = useState<PollSurface[]>(hasChannel ? ['channel'] : [])
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
+
+  // Image teaser — upload DIRECT navigateur→bucket status-media (jamais de Server Action pour le
+  // fichier lui-même — pattern chaine/composer.tsx). Seul le chemin (teaser_image_path) part vers
+  // l'action ; l'URL publique n'est qu'un aperçu local.
+  const [teaserImagePath, setTeaserImagePath] = useState('')
+  const [teaserImageUrl, setTeaserImageUrl] = useState('')
+  const [teaserImageUploading, setTeaserImageUploading] = useState(false)
+
+  const teaserSelected = surfaces.includes('status_teaser')
+  const channelLocked = teaserSelected
 
   function updateOption(idx: number, value: string) {
     setOptions((prev) => prev.map((o, i) => (i === idx ? value : o)))
   }
 
   function addOption() {
-    setOptions((prev) => (prev.length >= MAX_OPTIONS ? prev : [...prev, '']))
+    setOptions((prev) => (prev.length >= POLL_MAX_OPTIONS ? prev : [...prev, '']))
   }
 
   function removeOption(idx: number) {
     setOptions((prev) => {
-      if (prev.length <= MIN_OPTIONS) return prev
+      if (prev.length <= POLL_MIN_OPTIONS) return prev
       return prev.filter((_, i) => i !== idx)
     })
     setQuizCorrect((prev) => {
@@ -71,12 +94,64 @@ export function Composer({ hasChannel, optinCount }: { hasChannel: boolean; opti
     if (!checked) setQuizCorrect(null)
   }
 
+  function toggleSurface(surface: PollSurface) {
+    setSurfaces((prev) => {
+      // Chaîne verrouillée tant que Statut teaser est coché — « le vote a lieu sur la chaîne »
+      // (invariant serveur re-vérifié par normalizeSurfaces côté action, cf. shared.ts).
+      if (surface === 'channel' && prev.includes('status_teaser')) return prev
+      const next = prev.includes(surface) ? prev.filter((s) => s !== surface) : [...prev, surface]
+      return normalizeSurfaces(next)
+    })
+  }
+
+  function resetTeaserImage() {
+    setTeaserImagePath('')
+    setTeaserImageUrl('')
+  }
+
   function reset() {
     setQuestion('')
     setOptions(['', ''])
     setQuiz(false)
     setQuizCorrect(null)
-    setTarget(hasChannel ? 'channel' : 'optin')
+    setSurfaces(hasChannel ? ['channel'] : [])
+    resetTeaserImage()
+  }
+
+  async function onTeaserImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setError('Le fichier doit être une image.')
+      return
+    }
+    if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
+      setError(`Image trop lourde (max ${MAX_IMAGE_MB} Mo).`)
+      return
+    }
+    setTeaserImageUploading(true)
+    setError(null)
+    try {
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      )
+      const ext = (file.name.match(/\.([a-zA-Z0-9]+)$/)?.[1] ?? 'jpg').toLowerCase()
+      const path = `${restaurantId}/${crypto.randomUUID()}.${ext}`
+      const { error: uploadError } = await supabase.storage
+        .from('status-media')
+        .upload(path, file, { contentType: file.type || undefined })
+      if (uploadError) throw new Error(uploadError.message)
+      const pathError = validateImagePath(path, restaurantId)
+      if (pathError) throw new Error(pathError)
+      const publicUrl = supabase.storage.from('status-media').getPublicUrl(path).data.publicUrl
+      setTeaserImagePath(path)
+      setTeaserImageUrl(publicUrl)
+    } catch (err) {
+      setError(errorMessage(err, "L'upload de l'image a échoué. Réessayez."))
+    } finally {
+      setTeaserImageUploading(false)
+    }
   }
 
   async function onSubmit(formData: FormData) {
@@ -85,6 +160,10 @@ export function Composer({ hasChannel, optinCount }: { hasChannel: boolean; opti
     const clientError = validate(formData, hasChannel)
     if (clientError) {
       setError(clientError)
+      return
+    }
+    if (teaserSelected && teaserImageUploading) {
+      setError("Attendez la fin de l'upload.")
       return
     }
     setSending(true)
@@ -149,7 +228,7 @@ export function Composer({ hasChannel, optinCount }: { hasChannel: boolean; opti
                       Correcte
                     </label>
                   )}
-                  {options.length > MIN_OPTIONS && (
+                  {options.length > POLL_MIN_OPTIONS && (
                     <Button
                       type="button"
                       variant="ghost"
@@ -168,7 +247,7 @@ export function Composer({ hasChannel, optinCount }: { hasChannel: boolean; opti
               variant="outline"
               size="sm"
               className="mt-1 self-start"
-              disabled={options.length >= MAX_OPTIONS}
+              disabled={options.length >= POLL_MAX_OPTIONS}
               onClick={addOption}
             >
               Ajouter une option
@@ -187,34 +266,60 @@ export function Composer({ hasChannel, optinCount }: { hasChannel: boolean; opti
           </label>
 
           <div className="flex flex-col gap-2">
-            <Label>Cible</Label>
-            <label className={cn('flex items-center gap-2 text-sm', !hasChannel && 'text-muted-foreground')}>
-              <input
-                type="radio"
-                name="target"
-                value="channel"
-                checked={target === 'channel'}
-                disabled={!hasChannel}
-                onChange={() => setTarget('channel')}
-                className="accent-primary"
-              />
-              Chaîne WhatsApp
-            </label>
-            {!hasChannel && (
-              <p className="ml-6 text-xs text-muted-foreground">Créez d’abord votre chaîne.</p>
-            )}
+            <Label>Surfaces</Label>
             <label className="flex items-center gap-2 text-sm">
               <input
-                type="radio"
-                name="target"
-                value="optin"
-                checked={target === 'optin'}
-                onChange={() => setTarget('optin')}
-                className="accent-primary"
+                type="checkbox"
+                name="surfaces"
+                value="channel"
+                checked={surfaces.includes('channel')}
+                disabled={!hasChannel || channelLocked}
+                onChange={() => toggleSurface('channel')}
+                className="size-4 accent-primary"
               />
-              Clients opt-in ({optinCount})
+              {channelLocked ? 'Le vote a lieu sur la chaîne' : 'Chaîne WhatsApp'}
+            </label>
+            {channelLocked && <input type="hidden" name="surfaces" value="channel" />}
+            {!hasChannel && <p className="ml-6 text-xs text-muted-foreground">Créez d’abord votre chaîne.</p>}
+
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                name="surfaces"
+                value="group"
+                checked={surfaces.includes('group')}
+                onChange={() => toggleSurface('group')}
+                className="size-4 accent-primary"
+              />
+              Groupe staff
+            </label>
+
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                name="surfaces"
+                value="status_teaser"
+                checked={teaserSelected}
+                disabled={!hasChannel}
+                onChange={() => toggleSurface('status_teaser')}
+                className="size-4 accent-primary"
+              />
+              Statut teaser
             </label>
           </div>
+
+          {teaserSelected && (
+            <div className="flex flex-col gap-1.5 border-t border-border pt-3">
+              <Label htmlFor="poll-teaser-image">Image du teaser (optionnel)</Label>
+              <Input id="poll-teaser-image" type="file" accept="image/*" onChange={onTeaserImageChange} />
+              {teaserImageUploading && <p className="text-sm text-muted-foreground">Upload…</p>}
+              {teaserImageUrl && !teaserImageUploading && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={teaserImageUrl} alt="" className="mt-1 max-h-32 rounded-lg object-cover" />
+              )}
+              <input type="hidden" name="teaser_image_path" value={teaserImagePath} />
+            </div>
+          )}
 
           <div className="flex items-center gap-3">
             <Button type="submit" disabled={sending}>

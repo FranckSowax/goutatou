@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import type { BadgeTone } from '@/lib/status-badge'
 import { Composer } from './composer'
+import { SURFACE_LABELS, type PollSurface } from './shared'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,6 +17,7 @@ interface PollRow {
   options: string[]
   quiz_correct: number | null
   target: PollTarget
+  surfaces: PollSurface[] | null
   status: PollStatus
   sent_count: number
   error: string | null
@@ -38,6 +40,14 @@ function statusBadge(status: PollStatus, sentCount: number): { variant: BadgeTon
 
 function targetLabel(target: PollTarget): string {
   return target === 'channel' ? 'Chaîne WhatsApp' : 'Clients opt-in'
+}
+
+/** Libellé des surfaces d'un sondage ; repli sur `target` pour les lignes historiques (avant la
+ * migration 0027 multi-surfaces) qui n'ont pas de `surfaces` renseignées. */
+function surfacesLabel(p: Pick<PollRow, 'surfaces' | 'target'>): string {
+  const surfaces = (p.surfaces ?? []).filter((s): s is PollSurface => s in SURFACE_LABELS)
+  if (surfaces.length > 0) return surfaces.map((s) => SURFACE_LABELS[s]).join(' + ')
+  return targetLabel(p.target)
 }
 
 export default async function SondagesPage() {
@@ -73,16 +83,9 @@ export default async function SondagesPage() {
     .eq('id', restaurantId)
     .single()
 
-  const { count: optinCount } = await supabase
-    .from('customers')
-    .select('id', { count: 'exact', head: true })
-    .eq('restaurant_id', restaurantId)
-    .eq('marketing_opt_in', true)
-    .eq('opted_out', false)
-
   const { data: polls } = await supabase
     .from('polls')
-    .select('id, question, options, quiz_correct, target, status, sent_count, error, created_at, sent_at')
+    .select('id, question, options, quiz_correct, target, surfaces, status, sent_count, error, created_at, sent_at')
     .eq('restaurant_id', restaurantId)
     .order('created_at', { ascending: false })
     .limit(20)
@@ -93,7 +96,7 @@ export default async function SondagesPage() {
     <div className="mx-auto max-w-3xl p-6">
       <h1 className="mb-6 font-display text-2xl font-semibold">Sondages</h1>
       <div className="flex flex-col gap-6">
-        <Composer hasChannel={!!resto?.wa_channel_id} optinCount={optinCount ?? 0} />
+        <Composer restaurantId={restaurantId} hasChannel={!!resto?.wa_channel_id} />
         <div>
           <h2 className="mb-3 font-display text-lg font-semibold">Historique</h2>
           <ul className="flex flex-col gap-3">
@@ -107,7 +110,7 @@ export default async function SondagesPage() {
                       <Badge variant={badge.variant}>{badge.label}</Badge>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {targetLabel(p.target)} · {new Date(p.created_at).toLocaleString('fr-FR')}
+                      {surfacesLabel(p)} · {new Date(p.created_at).toLocaleString('fr-FR')}
                     </p>
                     {p.status === 'failed' && p.error && (
                       <p className="mt-2 text-sm text-destructive">{p.error}</p>
