@@ -1,5 +1,5 @@
 'use client'
-import { useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { statusStateLabel } from '@goutatou/db/types'
@@ -17,12 +17,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { badgeVariantForStatus } from '@/lib/status-badge'
 import { cancelStatus } from './actions'
 import { Composer } from './composer'
 import { StatusPreview } from './status-preview'
-import { fontStyleFor } from './shared'
-import type { StatusCardKind, StatusAudience } from './shared'
+import { fontStyleFor, filterStatusesByState, paginate, STATUS_FILTER_OPTIONS } from './shared'
+import type { StatusCardKind, StatusAudience, StatusFilterState } from './shared'
 
 interface Row {
   id: string
@@ -54,18 +55,55 @@ export function Board({
   isPremium: boolean
 }) {
   const router = useRouter()
+  const [filter, setFilter] = useState<StatusFilterState>('all')
+  const [page, setPage] = useState(1)
+
   useEffect(() => {
     const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
     const ch = supabase.channel('statuses').on('postgres_changes',
       { event: '*', schema: 'public', table: 'statuses' }, () => router.refresh()).subscribe()
     return () => { void supabase.removeChannel(ch) }
   }, [router])
+
+  const filtered = useMemo(() => filterStatusesByState(initial, filter), [initial, filter])
+  const { items: pageItems, page: currentPage, pageCount } = useMemo(
+    () => paginate(filtered, page),
+    [filtered, page],
+  )
+
+  function onFilterChange(value: string) {
+    setFilter(value as StatusFilterState)
+    setPage(1)
+  }
+
   return (
     <div className="mx-auto max-w-3xl p-6">
       <h1 className="mb-6 font-display text-2xl font-semibold">Statuts WhatsApp</h1>
       <Composer restaurantId={restaurantId} isPremium={isPremium} />
+
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="font-display text-lg font-semibold">Historique</h2>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="statut-filter" className="sr-only">
+            Filtrer par état
+          </label>
+          <Select value={filter} onValueChange={onFilterChange}>
+            <SelectTrigger id="statut-filter" className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_FILTER_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       <ul className="flex flex-col gap-3">
-        {initial.map((s) => (
+        {pageItems.map((s) => (
           <li key={s.id}>
             <Dialog>
               <Card className="rounded-2xl p-4">
@@ -122,7 +160,7 @@ export function Board({
                   </Dialog>
                 )}
               </Card>
-              <DialogContent className="sm:max-w-xs">
+              <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Aperçu du statut</DialogTitle>
                   <DialogDescription>
@@ -131,6 +169,7 @@ export function Board({
                   </DialogDescription>
                 </DialogHeader>
                 <StatusPreview
+                  className="max-w-xs"
                   data={{
                     kind: s.kind,
                     content: s.content,
@@ -144,8 +183,38 @@ export function Board({
             </Dialog>
           </li>
         ))}
-        {initial.length === 0 && <p className="text-muted-foreground">Aucun statut pour l’instant.</p>}
+        {filtered.length === 0 && (
+          <p className="text-muted-foreground">
+            {initial.length === 0 ? 'Aucun statut pour l’instant.' : 'Aucun statut pour ce filtre.'}
+          </p>
+        )}
       </ul>
+
+      {filtered.length > 0 && pageCount > 1 && (
+        <div className="mt-4 flex items-center justify-center gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={currentPage <= 1}
+            onClick={() => setPage((p) => p - 1)}
+          >
+            Précédent
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Page {currentPage} / {pageCount}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={currentPage >= pageCount}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Suivant
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

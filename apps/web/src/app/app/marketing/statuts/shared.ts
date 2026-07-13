@@ -9,9 +9,13 @@ export type StatusPublishMode = 'chain' | 'schedule' | 'draft'
 
 export const MAX_CARDS = 10
 export const MAX_VIDEO_MB = 16
+export const MAX_IMAGE_MB = 8
 export const CHAIN_STEP_MINUTES = 2
 export const FONT_TYPE_MIN = 0
 export const FONT_TYPE_MAX = 5
+
+/** Extensions image acceptées pour le chemin de stockage (upload direct, accept="image/*"). */
+export const IMAGE_EXTENSION_REGEX = /\.(jpe?g|png|gif|webp|heic|heif)$/i
 
 export interface BgColorOption {
   value: string
@@ -99,8 +103,9 @@ export type ValidateCardResult =
 
 /**
  * Validation pure d'une carte. `restaurantId` sert uniquement à vérifier le
- * préfixe du chemin de stockage vidéo (upload direct navigateur→bucket) —
- * la résolution de l'URL publique reste faite côté action (accès Supabase).
+ * préfixe du chemin de stockage image/vidéo (upload direct navigateur→bucket
+ * pour les deux types de média) — la résolution de l'URL publique reste
+ * faite côté action (accès Supabase).
  */
 export function validateCard(
   raw: RawStatusCard,
@@ -126,8 +131,14 @@ export function validateCard(
   let mediaPath: string | null = null
 
   if (raw.kind === 'image') {
-    mediaUrl = (raw.mediaUrl ?? '').trim() || null
-    if (!mediaUrl) return { ok: false, error: 'Ajoutez une image pour cette carte.' }
+    mediaPath = (raw.mediaPath ?? '').trim() || null
+    if (!mediaPath) return { ok: false, error: 'Ajoutez une image pour cette carte.' }
+    if (!mediaPath.startsWith(`${ctx.restaurantId}/`)) {
+      return { ok: false, error: 'Chemin image invalide.' }
+    }
+    if (!IMAGE_EXTENSION_REGEX.test(mediaPath)) {
+      return { ok: false, error: "Format d'image non supporté." }
+    }
   }
   if (raw.kind === 'video') {
     mediaPath = (raw.mediaPath ?? '').trim() || null
@@ -213,4 +224,49 @@ export function validateAutoStatusTimes(times: string[]): ValidateAutoStatusTime
 /** Nombre de statuts générés par créneau : entier entre 1 et 3. */
 export function validateAutoStatusCount(count: number): boolean {
   return Number.isInteger(count) && count >= AUTO_STATUS_COUNT_MIN && count <= AUTO_STATUS_COUNT_MAX
+}
+
+// --- Historique (board.tsx) : filtre par état + pagination pure ----------
+
+/** Filtre d'état proposé dans l'historique. 'all' n'exclut aucun état (y compris posting/canceled). */
+export type StatusFilterState = 'all' | 'draft' | 'scheduled' | 'posted' | 'failed'
+
+export const STATUS_FILTER_OPTIONS: { value: StatusFilterState; label: string }[] = [
+  { value: 'all', label: 'Tous' },
+  { value: 'draft', label: 'Brouillon' },
+  { value: 'scheduled', label: 'Programmé' },
+  { value: 'posted', label: 'Publié' },
+  { value: 'failed', label: 'Échec' },
+]
+
+export const STATUS_PAGE_SIZE = 8
+
+/** Filtre pur une liste de statuts par état ; 'all' renvoie la liste telle quelle. */
+export function filterStatusesByState<T extends { state: string }>(
+  rows: T[],
+  filter: StatusFilterState,
+): T[] {
+  if (filter === 'all') return rows
+  return rows.filter((r) => r.state === filter)
+}
+
+export interface PaginateResult<T> {
+  items: T[]
+  /** Page courante, toujours dans [1, pageCount] (recadrée si hors bornes). */
+  page: number
+  pageCount: number
+  total: number
+}
+
+/**
+ * Pagination pure côté client sur une liste déjà chargée. `page` hors bornes
+ * (ex : filtre réduisant le total) est recadrée sur la dernière page valide,
+ * jamais moins de 1.
+ */
+export function paginate<T>(rows: T[], page: number, pageSize: number = STATUS_PAGE_SIZE): PaginateResult<T> {
+  const total = rows.length
+  const pageCount = Math.max(1, Math.ceil(total / pageSize))
+  const clampedPage = Math.min(Math.max(1, page), pageCount)
+  const start = (clampedPage - 1) * pageSize
+  return { items: rows.slice(start, start + pageSize), page: clampedPage, pageCount, total }
 }

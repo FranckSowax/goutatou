@@ -36,18 +36,18 @@ function readRawCard(formData: FormData): RawStatusCard {
 }
 
 /**
- * Résout `media_url` pour l'insertion : image = URL déjà résolue par
- * `uploadStatusMedia` (Server Action existante, inchangée) ; vidéo = chemin
- * de stockage uploadé en DIRECT navigateur→bucket (jamais via Server
- * Action — les fichiers vidéo dépassent la limite de corps), le chemin est
- * revalidé ici (préfixe `${restaurantId}/`, déjà fait par `validateCard`)
- * puis résolu en URL publique côté serveur, comme `setHeroMedia` (hero LP).
+ * Résout `media_url` pour l'insertion : image ET vidéo sont uploadées en
+ * DIRECT navigateur→bucket `status-media` (jamais via Server Action — plus
+ * de 404 dû à un id de Server Action périmé sur un onglet resté ouvert), le
+ * composer ne transmet que le chemin de stockage. Le chemin est revalidé
+ * ici (préfixe `${restaurantId}/`, déjà fait par `validateCard`) puis résolu
+ * en URL publique côté serveur, comme `setHeroMedia` (hero LP).
  */
 function resolveMediaUrl(
   supabase: Awaited<ReturnType<typeof createSupabaseServer>>,
   card: { kind: string; mediaUrl: string | null; mediaPath: string | null },
 ): string | null {
-  if (card.kind === 'video' && card.mediaPath) {
+  if ((card.kind === 'video' || card.kind === 'image') && card.mediaPath) {
     return supabase.storage.from('status-media').getPublicUrl(card.mediaPath).data.publicUrl
   }
   return card.mediaUrl
@@ -192,17 +192,4 @@ export async function updateAutoStatus(formData: FormData) {
     .select('id')
   if (error || !data || data.length === 0) throw new Error('Enregistrement impossible.')
   revalidatePath('/app/marketing/statuts')
-}
-
-/** Upload d'image via Server Action (inchangé) — la vidéo passe en DIRECT côté composer. */
-export async function uploadStatusMedia(formData: FormData): Promise<string> {
-  const { supabase, restaurantId } = await myRestaurantId()
-  await assertPlan(supabase, restaurantId, ['pro', 'premium'])
-  const file = formData.get('media') as File | null
-  if (!file || file.size === 0) throw new Error('Aucun fichier')
-  const safeName = file.name.replace(/^.*[\\/]/, '').replace(/[^a-zA-Z0-9._-]/g, '_')
-  const path = `${restaurantId}/${Date.now()}-${safeName}`
-  const { error } = await supabase.storage.from('status-media').upload(path, file)
-  if (error) throw new Error(error.message)
-  return supabase.storage.from('status-media').getPublicUrl(path).data.publicUrl
 }

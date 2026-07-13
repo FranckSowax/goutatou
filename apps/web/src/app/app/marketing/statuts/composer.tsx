@@ -8,13 +8,15 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
-import { createStatusBatch, uploadStatusMedia } from './actions'
+import { createStatusBatch } from './actions'
 import { StatusPreview } from './status-preview'
 import {
   BG_COLORS,
   CAPTION_COLORS,
   FONT_STYLES,
+  IMAGE_EXTENSION_REGEX,
   MAX_CARDS,
+  MAX_IMAGE_MB,
   MAX_VIDEO_MB,
 } from './shared'
 import type { StatusAudience, StatusCardKind, StatusPublishMode } from './shared'
@@ -47,6 +49,16 @@ function newCard(): ComposerCard {
     scheduledAt: '',
     uploading: false,
   }
+}
+
+/** Extension de fichier acceptée pour l'upload direct image (nom de fichier, puis type MIME en repli). */
+function imageExtension(file: File): string | null {
+  const fromName = file.name.match(/\.([a-zA-Z0-9]+)$/)?.[1]?.toLowerCase()
+  if (fromName && IMAGE_EXTENSION_REGEX.test(`.${fromName}`)) return fromName
+  const fromType = file.type.split('/')[1]?.toLowerCase()
+  const normalized = fromType === 'jpeg' ? 'jpg' : fromType
+  if (normalized && IMAGE_EXTENSION_REGEX.test(`.${normalized}`)) return normalized
+  return null
 }
 
 function errorMessage(_e: unknown, fallback: string): string {
@@ -92,12 +104,33 @@ export function Composer({ restaurantId, isPremium }: { restaurantId: string; is
   async function onImageUpload(id: string, e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    const ext = imageExtension(file)
+    if (!ext) {
+      setError('Format d’image non supporté (jpg, png, gif, webp, heic).')
+      return
+    }
+    if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
+      setError(`Image trop lourde (max ${MAX_IMAGE_MB} Mo).`)
+      return
+    }
     updateCard(id, { uploading: true })
+    setError(null)
     try {
-      const fd = new FormData()
-      fd.set('media', file)
-      const url = await uploadStatusMedia(fd)
-      updateCard(id, { mediaUrl: url })
+      // Upload DIRECT navigateur → bucket status-media (jamais de Server
+      // Action pour l'image — même pattern que la vidéo : l'id d'une Server
+      // Action change à chaque build, un onglet resté ouvert produirait un
+      // 404 sur l'upload).
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      )
+      const path = `${restaurantId}/${crypto.randomUUID()}.${ext}`
+      const { error: uploadError } = await supabase.storage
+        .from('status-media')
+        .upload(path, file, { contentType: file.type || undefined })
+      if (uploadError) throw new Error(uploadError.message)
+      const publicUrl = supabase.storage.from('status-media').getPublicUrl(path).data.publicUrl
+      updateCard(id, { mediaPath: path, mediaUrl: publicUrl })
     } catch (err) {
       setError(errorMessage(err, "L'upload de l'image a échoué. Réessayez."))
     } finally {
@@ -144,7 +177,7 @@ export function Composer({ restaurantId, isPremium }: { restaurantId: string; is
     for (let i = 0; i < cards.length; i++) {
       const c = cards[i]
       if (!c.content.trim()) return `Carte ${i + 1} : écrivez un contenu.`
-      if (c.kind === 'image' && !c.mediaUrl) return `Carte ${i + 1} : ajoutez une image.`
+      if (c.kind === 'image' && !c.mediaPath) return `Carte ${i + 1} : ajoutez une image.`
       if (c.kind === 'video' && !c.mediaPath) return `Carte ${i + 1} : ajoutez une vidéo.`
       if (c.uploading) return `Carte ${i + 1} : attendez la fin de l’upload.`
       if (mode === 'schedule' && !c.scheduledAt.trim()) return `Carte ${i + 1} : choisissez une date et une heure.`
@@ -165,8 +198,10 @@ export function Composer({ restaurantId, isPremium }: { restaurantId: string; is
       const payload = cards.map((c) => ({
         kind: c.kind,
         content: c.content,
-        mediaUrl: c.kind === 'image' ? c.mediaUrl : null,
-        mediaPath: c.kind === 'video' ? c.mediaPath : null,
+        // Image ET vidéo transmettent le chemin de stockage (upload direct
+        // navigateur→bucket) ; le serveur résout l'URL publique.
+        mediaUrl: null,
+        mediaPath: c.kind === 'video' || c.kind === 'image' ? c.mediaPath : null,
         bgColor: c.bgColor,
         captionColor: c.captionColor,
         fontType: c.fontType,
@@ -202,7 +237,7 @@ export function Composer({ restaurantId, isPremium }: { restaurantId: string; is
           {error}
         </div>
       )}
-      <div className="grid gap-6 lg:grid-cols-[1fr_auto]">
+      <div className="grid gap-6 lg:grid-cols-2">
         <div className="flex flex-col gap-4">
           {cards.map((card, index) => (
             <div
@@ -462,9 +497,10 @@ export function Composer({ restaurantId, isPremium }: { restaurantId: string; is
           </div>
         </div>
 
-        <div className="flex flex-col items-center gap-2">
+        <div className="flex w-full flex-col items-center gap-2">
           <span className="text-xs font-medium text-muted-foreground">Aperçu</span>
           <StatusPreview
+            className="max-w-sm"
             data={{
               kind: active.kind,
               content: active.content,

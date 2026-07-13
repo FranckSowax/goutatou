@@ -1,4 +1,5 @@
 'use client'
+import { cn } from '@/lib/utils'
 import { fontStyleFor } from './shared'
 import type { StatusCardKind } from './shared'
 
@@ -21,10 +22,10 @@ export function StatusPreview({ data, className }: { data: StatusPreviewData; cl
   const font = fontStyleFor(data.fontType)
   return (
     <div
-      className={
-        'relative mx-auto aspect-9/16 w-full max-w-56 overflow-hidden rounded-2xl bg-black ring-1 ring-foreground/10 ' +
-        (className ?? '')
-      }
+      className={cn(
+        'relative mx-auto aspect-9/16 w-full max-w-56 overflow-hidden rounded-2xl bg-black ring-1 ring-foreground/10',
+        className,
+      )}
     >
       {data.kind === 'text' && (
         <div

@@ -4,11 +4,14 @@ import {
   CAPTION_COLORS,
   FONT_STYLES,
   MAX_CARDS,
+  STATUS_FILTER_OPTIONS,
   computeScheduledAt,
   computeState,
+  filterStatusesByState,
   fontStyleFor,
   isHexColor,
   isValidFontType,
+  paginate,
   validateAutoStatusCount,
   validateAutoStatusTimes,
   validateCard,
@@ -84,15 +87,40 @@ describe('validateCard', () => {
     expect(res.ok).toBe(true)
   })
   it('carte image sans média est rejetée', () => {
-    const res = validateCard(baseCard({ kind: 'image', mediaUrl: '' }), { restaurantId: RID, isPremium: false })
+    const res = validateCard(baseCard({ kind: 'image', mediaPath: '' }), { restaurantId: RID, isPremium: false })
     expect(res.ok).toBe(false)
   })
-  it('carte image avec URL est acceptée', () => {
-    const res = validateCard(
-      baseCard({ kind: 'image', mediaUrl: 'https://example.com/x.jpg' }),
+  it('carte image exige un chemin préfixé par le restaurant (upload direct, comme la vidéo)', () => {
+    const wrongPrefix = validateCard(
+      baseCard({ kind: 'image', mediaPath: 'autre-resto/x.jpg' }),
       { restaurantId: RID, isPremium: false },
     )
-    expect(res.ok).toBe(true)
+    expect(wrongPrefix.ok).toBe(false)
+
+    const unsupportedExt = validateCard(
+      baseCard({ kind: 'image', mediaPath: `${RID}/x.pdf` }),
+      { restaurantId: RID, isPremium: false },
+    )
+    expect(unsupportedExt.ok).toBe(false)
+
+    const ok = validateCard(
+      baseCard({ kind: 'image', mediaPath: `${RID}/x.jpg` }),
+      { restaurantId: RID, isPremium: false },
+    )
+    expect(ok.ok).toBe(true)
+    if (ok.ok) {
+      expect(ok.card.mediaPath).toBe(`${RID}/x.jpg`)
+      expect(ok.card.mediaUrl).toBeNull()
+    }
+  })
+  it('carte image accepte les extensions courantes (png, webp, gif, heic)', () => {
+    for (const ext of ['png', 'webp', 'gif', 'heic', 'jpeg']) {
+      const res = validateCard(
+        baseCard({ kind: 'image', mediaPath: `${RID}/x.${ext}` }),
+        { restaurantId: RID, isPremium: false },
+      )
+      expect(res.ok, `extension .${ext} devrait être acceptée`).toBe(true)
+    }
   })
   it('carte vidéo exige un chemin préfixé par le restaurant', () => {
     const wrongPrefix = validateCard(
@@ -227,5 +255,67 @@ describe('buildStatusCaptionPreview', () => {
       Array.from({ length: AUTO_STATUS_CAPTION_TEMPLATE_COUNT }, (_, i) => buildStatusCaptionPreview(dish, i)),
     )
     expect(captions.size).toBe(AUTO_STATUS_CAPTION_TEMPLATE_COUNT)
+  })
+})
+
+describe('filterStatusesByState (historique)', () => {
+  const rows = [
+    { id: '1', state: 'draft' },
+    { id: '2', state: 'scheduled' },
+    { id: '3', state: 'posted' },
+    { id: '4', state: 'posted' },
+    { id: '5', state: 'failed' },
+    { id: '6', state: 'posting' },
+    { id: '7', state: 'canceled' },
+  ]
+  it("'all' renvoie toutes les lignes, y compris posting/canceled", () => {
+    expect(filterStatusesByState(rows, 'all')).toEqual(rows)
+  })
+  it('filtre exactement sur un état donné', () => {
+    expect(filterStatusesByState(rows, 'posted').map((r) => r.id)).toEqual(['3', '4'])
+    expect(filterStatusesByState(rows, 'draft').map((r) => r.id)).toEqual(['1'])
+    expect(filterStatusesByState(rows, 'failed').map((r) => r.id)).toEqual(['5'])
+  })
+  it('renvoie une liste vide si aucun statut ne correspond', () => {
+    expect(filterStatusesByState([{ id: '1', state: 'draft' }], 'failed')).toEqual([])
+  })
+  it('expose les 5 options de filtre attendues (Tous/Brouillon/Programmé/Publié/Échec)', () => {
+    expect(STATUS_FILTER_OPTIONS.map((o) => o.value)).toEqual(['all', 'draft', 'scheduled', 'posted', 'failed'])
+    expect(STATUS_FILTER_OPTIONS.map((o) => o.label)).toEqual(['Tous', 'Brouillon', 'Programmé', 'Publié', 'Échec'])
+  })
+})
+
+describe('paginate (historique)', () => {
+  const rows = Array.from({ length: 20 }, (_, i) => i)
+  it('découpe en pages de taille donnée', () => {
+    const res = paginate(rows, 1, 8)
+    expect(res.items).toEqual([0, 1, 2, 3, 4, 5, 6, 7])
+    expect(res.page).toBe(1)
+    expect(res.pageCount).toBe(3)
+    expect(res.total).toBe(20)
+  })
+  it('renvoie la dernière page partielle', () => {
+    const res = paginate(rows, 3, 8)
+    expect(res.items).toEqual([16, 17, 18, 19])
+  })
+  it('recadre une page hors bornes (trop grande) sur la dernière page', () => {
+    const res = paginate(rows, 99, 8)
+    expect(res.page).toBe(3)
+    expect(res.items).toEqual([16, 17, 18, 19])
+  })
+  it('recadre une page hors bornes (< 1) sur la page 1', () => {
+    const res = paginate(rows, 0, 8)
+    expect(res.page).toBe(1)
+    expect(res.items).toEqual([0, 1, 2, 3, 4, 5, 6, 7])
+  })
+  it('gère une liste vide : 1 page, aucune ligne', () => {
+    const res = paginate([], 1, 8)
+    expect(res.pageCount).toBe(1)
+    expect(res.page).toBe(1)
+    expect(res.items).toEqual([])
+  })
+  it('utilise STATUS_PAGE_SIZE (8) par défaut', () => {
+    const res = paginate(rows, 1)
+    expect(res.items.length).toBe(8)
   })
 })
