@@ -261,6 +261,63 @@ export async function checkBusinessAccount(id: string): Promise<{ isBusiness: bo
   }
 }
 
+export type DetectedChannel = { id: string; name?: string; picture?: string; subscribers?: number }
+
+/**
+ * Liste les chaînes WhatsApp (newsletters) possédées par le numéro connecté —
+ * whapi.getNewsletters(). Filtre PERMISSIF sur `role` (champ non confirmé côté
+ * doc Whapi, cf. commentaire de getNewsletters dans @goutatou/whapi) : on
+ * considère une chaîne rattachable si role vaut 'owner'/'admin' OU si le champ
+ * est absent (mieux vaut proposer une chaîne en trop qu'en cacher une par excès
+ * de prudence sur un champ dont on n'est pas sûr du nom). Seuls id/name/picture/
+ * subscribers traversent vers le client — jamais le token.
+ */
+export async function detectChannels(id: string): Promise<DetectedChannel[]> {
+  await assertPlatformAdmin()
+  const whapi = await whapiClientForRestaurant(id)
+
+  try {
+    const newsletters = await whapi.getNewsletters()
+    return newsletters
+      .filter((n) => !!n.id && (n.role === 'owner' || n.role === 'admin' || n.role === undefined))
+      .map((n) => ({ id: n.id!, name: n.name, picture: n.picture, subscribers: n.subscribers }))
+  } catch {
+    throw new Error('Impossible de lister vos chaînes — vérifiez que votre canal WhatsApp est connecté.')
+  }
+}
+
+/**
+ * Rattache une chaîne WhatsApp existante au restaurant : écrit
+ * wa_channel_id + wa_channel_invite (invite récupérée en best-effort via
+ * getNewsletter — un échec de cette récupération ne bloque pas le
+ * rattachement, seul l'id compte pour publier). Écrasement volontaire, SANS
+ * garde `.is('wa_channel_id', null)` : c'est un re-choix admin explicite
+ * (changer de chaîne rattachée doit être possible).
+ */
+export async function attachChannel(id: string, newsletterId: string): Promise<void> {
+  await assertPlatformAdmin()
+  const trimmed = newsletterId.trim()
+  if (!trimmed) throw new Error('Identifiant de chaîne requis.')
+
+  let invite: string | null = null
+  try {
+    const whapi = await whapiClientForRestaurant(id)
+    const detail = await whapi.getNewsletter(trimmed)
+    invite = detail.invite ?? null
+  } catch {
+    // Best-effort : l'invite n'est pas bloquante pour le rattachement.
+  }
+
+  const admin = createAdminClient()
+  const { error } = await admin
+    .from('restaurants')
+    .update({ wa_channel_id: trimmed, wa_channel_invite: invite })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+
+  revalidateFiche(id)
+}
+
 export async function updatePlan(id: string, formData: FormData) {
   await assertPlatformAdmin()
   const admin = createAdminClient()

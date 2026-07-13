@@ -7,7 +7,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { updateBotMessages, updateChannelToken, getPairingCode, getLoginQrAction, setChannelEnabled } from './actions'
+import {
+  updateBotMessages,
+  updateChannelToken,
+  getPairingCode,
+  getLoginQrAction,
+  setChannelEnabled,
+  detectChannels,
+  attachChannel,
+  type DetectedChannel,
+} from './actions'
 import { renderBotInfosPreview, renderBotWelcomePreview } from './bot-info-preview'
 
 type ChannelStatus = 'active' | 'error' | string
@@ -59,6 +68,8 @@ export function BotTab({
   channelPhone,
   botWelcome,
   botInfoExtra,
+  waChannelId,
+  waChannelInvite,
   profile,
 }: {
   restaurantId: string
@@ -69,6 +80,8 @@ export function BotTab({
   channelPhone: string | null
   botWelcome: string | null
   botInfoExtra: string | null
+  waChannelId: string | null
+  waChannelInvite: string | null
   profile: BotTabProfile
 }) {
   const [tokenError, setTokenError] = useState<string | null>(null)
@@ -92,6 +105,45 @@ export function BotTab({
 
   const [toggleError, setToggleError] = useState<string | null>(null)
   const [toggling, setToggling] = useState(false)
+
+  const [attachedChannelId, setAttachedChannelId] = useState(waChannelId)
+  const [attachedChannelName, setAttachedChannelName] = useState<string | null>(null)
+  const [attachedChannelInvite, setAttachedChannelInvite] = useState(waChannelInvite)
+  const [detecting, setDetecting] = useState(false)
+  const [detectError, setDetectError] = useState<string | null>(null)
+  const [detectedChannels, setDetectedChannels] = useState<DetectedChannel[] | null>(null)
+  const [attachingId, setAttachingId] = useState<string | null>(null)
+  const [attachError, setAttachError] = useState<string | null>(null)
+
+  async function handleDetectChannels() {
+    setDetecting(true)
+    setDetectError(null)
+    try {
+      const channels = await detectChannels(restaurantId)
+      setDetectedChannels(channels)
+    } catch (e) {
+      setDetectError(
+        errorMessage(e, 'Impossible de lister vos chaînes — vérifiez que votre canal WhatsApp est connecté.')
+      )
+    } finally {
+      setDetecting(false)
+    }
+  }
+
+  async function handleAttachChannel(channel: DetectedChannel) {
+    setAttachingId(channel.id)
+    setAttachError(null)
+    try {
+      await attachChannel(restaurantId, channel.id)
+      setAttachedChannelId(channel.id)
+      setAttachedChannelName(channel.name ?? null)
+      setAttachedChannelInvite(null)
+    } catch (e) {
+      setAttachError(errorMessage(e, 'Impossible de rattacher cette chaîne.'))
+    } finally {
+      setAttachingId(null)
+    }
+  }
 
   async function handleToggleChannel() {
     setToggling(true)
@@ -308,6 +360,111 @@ export function BotTab({
                 </div>
               )}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {hasChannel && (
+        <Card className="rounded-2xl p-4">
+          <CardHeader className="px-0 pt-0">
+            <CardTitle className="font-display text-base">Chaîne WhatsApp</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 px-0">
+            {attachedChannelId ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="success">
+                  {attachedChannelName ? `Chaîne rattachée : ${attachedChannelName}` : 'Chaîne rattachée'}
+                </Badge>
+                {attachedChannelInvite && (
+                  <a
+                    href={attachedChannelInvite}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-primary underline underline-offset-4"
+                  >
+                    Lien d&apos;invitation ↗
+                  </a>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Aucune chaîne rattachée. Détectez la chaîne WhatsApp déjà créée sur ce numéro pour
+                la rattacher, ou créez-en une depuis /app/marketing/chaine.
+              </p>
+            )}
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleDetectChannels}
+              disabled={detecting}
+              className="self-start"
+            >
+              {detecting ? 'Détection…' : 'Détecter ma chaîne'}
+            </Button>
+
+            {detectError && (
+              <div
+                role="alert"
+                className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              >
+                {detectError}
+              </div>
+            )}
+            {attachError && (
+              <div
+                role="alert"
+                className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              >
+                {attachError}
+              </div>
+            )}
+
+            {detectedChannels &&
+              (detectedChannels.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  Aucune chaîne détectée sur ce numéro WhatsApp.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {detectedChannels.map((channel) => {
+                    const isAttached = attachedChannelId === channel.id
+                    const isAttaching = attachingId === channel.id
+                    return (
+                      <li
+                        key={channel.id}
+                        className="flex items-center gap-3 rounded-2xl border border-border p-3"
+                      >
+                        {channel.picture ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- photo de canal distante, next/image ne s'applique pas
+                          <img
+                            src={channel.picture}
+                            alt=""
+                            className="h-10 w-10 shrink-0 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="h-10 w-10 shrink-0 rounded-full bg-muted" />
+                        )}
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">{channel.name ?? channel.id}</p>
+                          {typeof channel.subscribers === 'number' && (
+                            <p className="text-xs text-muted-foreground">{channel.subscribers} abonnés</p>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={isAttached ? 'outline' : 'default'}
+                          disabled={isAttaching || isAttached}
+                          onClick={() => handleAttachChannel(channel)}
+                        >
+                          {isAttached ? 'Rattachée' : isAttaching ? 'Rattachement…' : 'Rattacher'}
+                        </Button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              ))}
           </CardContent>
         </Card>
       )}

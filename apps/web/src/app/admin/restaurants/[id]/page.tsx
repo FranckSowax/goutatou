@@ -24,7 +24,7 @@ export default async function AdminRestaurantDetailPage({ params }: { params: Pr
     .select(
       `id, name, slug, address, contact_phone, hours_text, delivery_info, bot_welcome, bot_info_extra,
        drive_enabled, wheel_enabled, wheel_trigger_orders, lp_config, location_lat, location_lng,
-       catalog_enabled, catalog_synced_at, catalog_sync_error,
+       catalog_enabled, catalog_synced_at, catalog_sync_error, wa_channel_id, wa_channel_invite,
        subscriptions(plan, status),
        whapi_channels(id, status, last_webhook_at, token_encrypted, phone)`
     )
@@ -119,6 +119,8 @@ export default async function AdminRestaurantDetailPage({ params }: { params: Pr
             channelPhone={channel?.phone ?? null}
             botWelcome={resto.bot_welcome}
             botInfoExtra={resto.bot_info_extra}
+            waChannelId={resto.wa_channel_id}
+            waChannelInvite={resto.wa_channel_invite}
             profile={{
               address: resto.address,
               contact_phone: resto.contact_phone,
