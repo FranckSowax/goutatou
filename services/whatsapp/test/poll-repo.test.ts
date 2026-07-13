@@ -8,7 +8,7 @@ const TOKEN_KEY = '0'.repeat(64)
 /** Chaînable minimal reproduisant le style thenable de PostgrestFilterBuilder (supabase-js). */
 function makeChain(finalData: unknown) {
   const chain: Record<string, unknown> = {}
-  for (const m of ['select', 'eq', 'not', 'in', 'update', 'order', 'single']) {
+  for (const m of ['select', 'eq', 'not', 'in', 'update', 'insert', 'order', 'single']) {
     chain[m] = vi.fn(() => chain)
   }
   chain.then = (resolve: (v: { data: unknown }) => unknown) => Promise.resolve({ data: finalData }).then(resolve)
@@ -18,10 +18,16 @@ function makeChain(finalData: unknown) {
 describe('createPollRepo — claimQueued', () => {
   it('lit les sondages queued dont le resto a un canal actif puis claim par update conditionnel', async () => {
     const selectChain = makeChain([
-      { id: 'p1', restaurant_id: 'r1', question: 'Aimez-vous le poulet ?', options: ['Oui', 'Non'], quiz_correct: null, target: 'channel' },
+      {
+        id: 'p1', restaurant_id: 'r1', question: 'Aimez-vous le poulet ?', options: ['Oui', 'Non'], quiz_correct: null,
+        target: 'channel', surfaces: ['channel', 'group'], teaser_image_url: null,
+      },
     ])
     const updateChain = makeChain([
-      { id: 'p1', restaurant_id: 'r1', question: 'Aimez-vous le poulet ?', options: ['Oui', 'Non'], quiz_correct: null, target: 'channel' },
+      {
+        id: 'p1', restaurant_id: 'r1', question: 'Aimez-vous le poulet ?', options: ['Oui', 'Non'], quiz_correct: null,
+        target: 'channel', surfaces: ['channel', 'group'], teaser_image_url: null,
+      },
     ])
     const from = vi.fn().mockReturnValueOnce(selectChain).mockReturnValueOnce(updateChain)
     const repo = createPollRepo({ from } as unknown as SupabaseClient, TOKEN_KEY)
@@ -29,7 +35,10 @@ describe('createPollRepo — claimQueued', () => {
     const due = await repo.claimQueued()
 
     expect(due).toEqual([
-      { id: 'p1', restaurantId: 'r1', question: 'Aimez-vous le poulet ?', options: ['Oui', 'Non'], quizCorrect: null, target: 'channel' },
+      {
+        id: 'p1', restaurantId: 'r1', question: 'Aimez-vous le poulet ?', options: ['Oui', 'Non'], quizCorrect: null,
+        target: 'channel', surfaces: ['channel', 'group'], teaserImageUrl: null,
+      },
     ])
     expect(selectChain.select).toHaveBeenCalledWith(
       expect.stringContaining('whapi_channels!inner(status)'),
@@ -54,15 +63,21 @@ describe('createPollRepo — claimQueued', () => {
 })
 
 describe('createPollRepo — getChannel', () => {
-  it('déchiffre le token, renvoie le statut et le wa_channel_id du resto', async () => {
+  it('déchiffre le token, renvoie le statut, wa_channel_id, wa_channel_invite et staff_group_id du resto', async () => {
     const encrypted = encryptToken('tok-secret', TOKEN_KEY)
-    const chain = makeChain({ wa_channel_id: 'chan-1', whapi_channels: { token_encrypted: encrypted, status: 'active' } })
+    const chain = makeChain({
+      wa_channel_id: 'chan-1', wa_channel_invite: 'https://wa.me/channel/abc', staff_group_id: 'group-1',
+      whapi_channels: { token_encrypted: encrypted, status: 'active' },
+    })
     const from = vi.fn().mockReturnValue(chain)
     const repo = createPollRepo({ from } as unknown as SupabaseClient, TOKEN_KEY)
 
     const channel = await repo.getChannel('r1')
 
-    expect(channel).toEqual({ token: 'tok-secret', status: 'active', waChannelId: 'chan-1' })
+    expect(channel).toEqual({
+      token: 'tok-secret', status: 'active', waChannelId: 'chan-1',
+      waChannelInvite: 'https://wa.me/channel/abc', staffGroupId: 'group-1',
+    })
   })
 
   it('aucun canal Whapi → null', async () => {
@@ -94,6 +109,87 @@ describe('createPollRepo — optInChatIds', () => {
     expect(chain.eq).toHaveBeenCalledWith('restaurant_id', 'r1')
     expect(chain.eq).toHaveBeenCalledWith('marketing_opt_in', true)
     expect(chain.eq).toHaveBeenCalledWith('opted_out', false)
+  })
+})
+
+describe('createPollRepo — recordSurface', () => {
+  it('merge le statut dans surface_status et écrit channel_message_id si messageId fourni (channel)', async () => {
+    const selectChain = makeChain({ surface_status: { group: 'sent' } })
+    const updateChain = makeChain(null)
+    updateChain.then = (resolve: (v: { error: null }) => unknown) => Promise.resolve({ error: null }).then(resolve)
+    const from = vi.fn().mockReturnValueOnce(selectChain).mockReturnValueOnce(updateChain)
+    const repo = createPollRepo({ from } as unknown as SupabaseClient, TOKEN_KEY)
+
+    await repo.recordSurface('p1', 'channel', { status: 'sent', messageId: 'wa-msg-1' })
+
+    expect(updateChain.update).toHaveBeenCalledWith({
+      surface_status: { group: 'sent', channel: 'sent' },
+      channel_message_id: 'wa-msg-1',
+    })
+    expect(updateChain.eq).toHaveBeenCalledWith('id', 'p1')
+  })
+
+  it('écrit group_message_id pour la surface group', async () => {
+    const selectChain = makeChain({ surface_status: {} })
+    const updateChain = makeChain(null)
+    updateChain.then = (resolve: (v: { error: null }) => unknown) => Promise.resolve({ error: null }).then(resolve)
+    const from = vi.fn().mockReturnValueOnce(selectChain).mockReturnValueOnce(updateChain)
+    const repo = createPollRepo({ from } as unknown as SupabaseClient, TOKEN_KEY)
+
+    await repo.recordSurface('p1', 'group', { status: 'sent', messageId: 'wa-msg-2' })
+
+    expect(updateChain.update).toHaveBeenCalledWith({
+      surface_status: { group: 'sent' },
+      group_message_id: 'wa-msg-2',
+    })
+  })
+
+  it('status_teaser sans messageId → ne pose ni channel_message_id ni group_message_id', async () => {
+    const selectChain = makeChain({ surface_status: {} })
+    const updateChain = makeChain(null)
+    updateChain.then = (resolve: (v: { error: null }) => unknown) => Promise.resolve({ error: null }).then(resolve)
+    const from = vi.fn().mockReturnValueOnce(selectChain).mockReturnValueOnce(updateChain)
+    const repo = createPollRepo({ from } as unknown as SupabaseClient, TOKEN_KEY)
+
+    await repo.recordSurface('p1', 'status_teaser', { status: 'sent' })
+
+    expect(updateChain.update).toHaveBeenCalledWith({ surface_status: { status_teaser: 'sent' } })
+  })
+})
+
+describe('createPollRepo — insertTeaserStatus', () => {
+  it('insère un statut scheduled kind=image (mediaUrl fourni) puis pose polls.status_id, renvoie l’id', async () => {
+    const insertChain = makeChain(null)
+    insertChain.then = (resolve: (v: { data: { id: string }; error: null }) => unknown) =>
+      Promise.resolve({ data: { id: 'status-1' }, error: null }).then(resolve)
+    const updateChain = makeChain(null)
+    updateChain.then = (resolve: (v: { error: null }) => unknown) => Promise.resolve({ error: null }).then(resolve)
+    const from = vi.fn().mockReturnValueOnce(insertChain).mockReturnValueOnce(updateChain)
+    const repo = createPollRepo({ from } as unknown as SupabaseClient, TOKEN_KEY)
+
+    const id = await repo.insertTeaserStatus('r1', '📊 texte', 'https://x/img.jpg', 'p1')
+
+    expect(id).toBe('status-1')
+    expect(insertChain.insert).toHaveBeenCalledWith(expect.objectContaining({
+      restaurant_id: 'r1', kind: 'image', content: '📊 texte', media_url: 'https://x/img.jpg',
+      state: 'scheduled', audience: 'all', auto_generated: false,
+    }))
+    expect(updateChain.update).toHaveBeenCalledWith({ status_id: 'status-1' })
+    expect(updateChain.eq).toHaveBeenCalledWith('id', 'p1')
+  })
+
+  it('mediaUrl null → kind=text', async () => {
+    const insertChain = makeChain(null)
+    insertChain.then = (resolve: (v: { data: { id: string }; error: null }) => unknown) =>
+      Promise.resolve({ data: { id: 'status-2' }, error: null }).then(resolve)
+    const updateChain = makeChain(null)
+    updateChain.then = (resolve: (v: { error: null }) => unknown) => Promise.resolve({ error: null }).then(resolve)
+    const from = vi.fn().mockReturnValueOnce(insertChain).mockReturnValueOnce(updateChain)
+    const repo = createPollRepo({ from } as unknown as SupabaseClient, TOKEN_KEY)
+
+    await repo.insertTeaserStatus('r1', '📊 texte', null, 'p1')
+
+    expect(insertChain.insert).toHaveBeenCalledWith(expect.objectContaining({ kind: 'text', media_url: null }))
   })
 })
 
