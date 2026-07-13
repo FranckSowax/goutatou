@@ -412,6 +412,54 @@ export class WhapiClient {
     return { id: res.message?.id }
   }
 
+  /**
+   * Lit les compteurs de votes d'un sondage Oui/Non — GET /messages/{MessageID}. Endpoint et
+   * méthode confirmés par le code généré du serveur MCP whapi-mcp (getMessage.js) et
+   * B_manifest.json (summary "Get message" : « returns a message from any chat by message id »).
+   * La forme du message poll (`poll.results[]` avec `{ name, count, voters, id }` par option) est
+   * documentée par .agents/skills/whapi/references/msg-interactive.md, section "Tracking Poll
+   * Responses" : le payload webhook `poll_update` ET l'appel GET décrit juste après ("Retrieve
+   * current vote counts via GET ... Returns the full poll message with latest results[].count and
+   * results[].voters") partagent la MÊME structure `poll.results[]` — c'est la source la plus
+   * directe disponible pour cet endpoint précis (les deux autres sources, whapi.readme.io et le
+   * manifeste MCP, ne montrent qu'une enveloppe générique {status, content} sans exemple JSON).
+   * Confiance : moyenne-haute sur `poll.results[].name`/`.count` (documentés explicitement pour ce
+   * GET) — à confirmer par un smoke test réel avant la mise en prod du mode 'group' (cf. VS3,
+   * flag laissé dans le design doc).
+   *
+   * Parsing défensif au cas où la réponse serait enveloppée différemment (`{ message: {...} }`,
+   * observé sur tous les autres endpoints POST /messages/* de ce client) : on cherche `poll` à la
+   * racine, sinon sous `message`. Chaque option est matchée par son `name` (repli `title`),
+   * insensible à la casse, sur une sous-chaîne 'oui' → yes / 'non' → no (couvre les variantes avec
+   * emoji, ex. "✅ Oui"). Compteur lu sur `count` (repli `votes`, repli `voters.length`), 0 par
+   * défaut si absent ou introuvable — jamais d'exception : un sondage vide ou une forme inattendue
+   * doit se traduire par 0 vote de chaque côté (comportement sûr : la decision worker traite un
+   * sondage sans vote comme "non validé", cf. design doc §3).
+   */
+  async readPollVotes(messageId: string): Promise<{ yes: number; no: number }> {
+    const res = (await this.request('GET', `/messages/${messageId}`)) as Record<string, unknown>
+    const message = (res.message as Record<string, unknown> | undefined) ?? res
+    const poll = message.poll as Record<string, unknown> | undefined
+    const results = Array.isArray(poll?.results) ? (poll.results as Array<Record<string, unknown>>) : []
+    let yes = 0
+    let no = 0
+    for (const option of results) {
+      const name = typeof option.name === 'string' ? option.name : typeof option.title === 'string' ? option.title : ''
+      const label = name.toLowerCase()
+      const count =
+        typeof option.count === 'number'
+          ? option.count
+          : typeof option.votes === 'number'
+            ? option.votes
+            : Array.isArray(option.voters)
+              ? option.voters.length
+              : 0
+      if (label.includes('oui')) yes = count
+      else if (label.includes('non')) no = count
+    }
+    return { yes, no }
+  }
+
   async setWebhook(url: string): Promise<void> {
     await this.request('PATCH', '/settings', {
       webhooks: [{ mode: 'body', events: [{ type: 'messages', method: 'post' }], url }],

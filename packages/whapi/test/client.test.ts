@@ -524,4 +524,66 @@ describe('WhapiClient', () => {
     expect(url).toBe('https://gate.whapi.cloud/business/orders/ORDER1?token=tok123&order_token=b64tok%3D%3D')
     expect(init.method).toBe('GET')
   })
+
+  it('readPollVotes : GET /messages/{id}, parse poll.results[] Oui/Non insensible à la casse', async () => {
+    const fetchFn = mockFetch([
+      {
+        status: 200,
+        body: {
+          id: 'p.w30M7fgwWD4XwHu.g4CA-gBgTwl0rVw',
+          type: 'poll',
+          poll: {
+            title: '📸 Publier les 3 statuts du jour ?',
+            results: [
+              { name: 'Oui', count: 3, voters: ['24177000001@s.whatsapp.net'], id: 'opt1' },
+              { name: 'Non', count: 1, voters: ['24177000002@s.whatsapp.net'], id: 'opt2' },
+            ],
+          },
+        },
+      },
+    ])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.readPollVotes('p.w30M7fgwWD4XwHu.g4CA-gBgTwl0rVw')
+    expect(res).toEqual({ yes: 3, no: 1 })
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/messages/p.w30M7fgwWD4XwHu.g4CA-gBgTwl0rVw')
+    expect(init.method).toBe('GET')
+  })
+
+  it('readPollVotes : matche les options avec emoji, insensible à la casse (✅ OUI / ❌ non)', async () => {
+    const fetchFn = mockFetch([
+      { status: 200, body: { poll: { results: [{ name: '✅ OUI', count: 5 }, { name: '❌ non', count: 2 }] } } },
+    ])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.readPollVotes('MSG1')
+    expect(res).toEqual({ yes: 5, no: 2 })
+  })
+
+  it('readPollVotes : réponse enveloppée sous `message` (comme les endpoints POST /messages/*)', async () => {
+    const fetchFn = mockFetch([
+      { status: 200, body: { message: { poll: { results: [{ name: 'Oui', count: 2 }, { name: 'Non', count: 0 }] } } } },
+    ])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.readPollVotes('MSG1')
+    expect(res).toEqual({ yes: 2, no: 0 })
+  })
+
+  it('readPollVotes : voters.length en repli si `count` absent', async () => {
+    const fetchFn = mockFetch([
+      {
+        status: 200,
+        body: { poll: { results: [{ name: 'Oui', voters: ['a', 'b'] }, { name: 'Non', voters: [] }] } },
+      },
+    ])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.readPollVotes('MSG1')
+    expect(res).toEqual({ yes: 2, no: 0 })
+  })
+
+  it('readPollVotes : { yes: 0, no: 0 } si le sondage est vide, absent ou de forme inattendue', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: {} }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.readPollVotes('MSG1')
+    expect(res).toEqual({ yes: 0, no: 0 })
+  })
 })
