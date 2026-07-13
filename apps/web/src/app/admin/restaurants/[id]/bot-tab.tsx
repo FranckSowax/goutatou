@@ -134,10 +134,10 @@ export function BotTab({
     setAttachingId(channel.id)
     setAttachError(null)
     try {
-      await attachChannel(restaurantId, channel.id)
+      await attachChannel(restaurantId, channel.id, channel.invite)
       setAttachedChannelId(channel.id)
       setAttachedChannelName(channel.name ?? null)
-      setAttachedChannelInvite(null)
+      setAttachedChannelInvite(channel.invite ?? null)
     } catch (e) {
       setAttachError(errorMessage(e, 'Impossible de rattacher cette chaîne.'))
     } finally {

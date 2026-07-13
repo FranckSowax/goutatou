@@ -227,26 +227,29 @@ export class WhapiClient {
    * le champ est absent ou porte un autre nom).
    */
   async getNewsletters(): Promise<
-    Array<{ id?: string; name?: string; picture?: string; role?: string; subscribers?: number }>
+    Array<{ id?: string; name?: string; picture?: string; role?: string; invite?: string; subscribers?: number }>
   > {
+    // Forme réelle vérifiée sur canal live (2026-07-13) : { newsletters: [{ id, name,
+    // chat_pic, invite_code, role: 'owner'|'admin'|'subscriber', ... }], count, total }.
+    // Pas de champ d'abonnés dans la liste (subscribers reste undefined). La photo est
+    // sous `chat_pic` (pas `picture`), l'invite sous `invite_code`.
     const res = (await this.request('GET', '/newsletters?count=100')) as
       | { newsletters?: Array<Record<string, unknown>> }
       | Array<Record<string, unknown>>
     const list = Array.isArray(res) ? res : (res.newsletters ?? [])
+    const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined)
     return list.map((item) => ({
-      id: typeof item.id === 'string' ? item.id : undefined,
-      name: typeof item.name === 'string' ? item.name : undefined,
-      picture: typeof item.picture === 'string' ? item.picture : undefined,
-      role:
-        typeof item.role === 'string' ? item.role : typeof item.user_role === 'string' ? item.user_role : undefined,
+      id: str(item.id),
+      name: str(item.name),
+      picture: str(item.chat_pic) ?? str(item.picture),
+      role: str(item.role) ?? str(item.user_role),
+      invite: str(item.invite_code) ?? str(item.invite),
       subscribers:
         typeof item.subscribers === 'number'
           ? item.subscribers
           : typeof item.subscribers_count === 'number'
             ? item.subscribers_count
-            : typeof item.followers === 'number'
-              ? item.followers
-              : undefined,
+            : undefined,
     }))
   }
 
