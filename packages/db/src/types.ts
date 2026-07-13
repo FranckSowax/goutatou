@@ -125,3 +125,11 @@ const STATUS_LABELS: Record<StatusState, string> = {
 export function statusStateLabel(s: StatusState): string {
   return STATUS_LABELS[s]
 }
+
+// Chaîne Auto — posts programmés/auto sur le canal WhatsApp (migration 0026, cf.
+// docs/superpowers/plans/2026-07-13-chaine-auto-premium.md). Pas de type Restaurant/Status
+// explicite dans ce package pour les colonnes auto_channel_*/echo_to_channel — les repos
+// lisent en colonnes brutes, cf. RestaurantProfile qui ne couvre que la fiche pratique (0018).
+export type ChannelPostKind = 'text' | 'image' | 'video' | 'menu_card' | 'poll'
+export type ChannelPostState =
+  | 'scheduled' | 'pending_approval' | 'posting' | 'posted' | 'failed' | 'canceled'
