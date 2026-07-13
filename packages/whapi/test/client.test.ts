@@ -586,4 +586,44 @@ describe('WhapiClient', () => {
     const res = await client.readPollVotes('MSG1')
     expect(res).toEqual({ yes: 0, no: 0 })
   })
+
+  it('readPollResults : GET /messages/{id}, parse poll.results[] à 3 options → counts + total', async () => {
+    const fetchFn = mockFetch([
+      {
+        status: 200,
+        body: {
+          id: 'p.abc123',
+          type: 'poll',
+          poll: {
+            title: 'Quel plat préférez-vous ?',
+            results: [
+              { name: 'Poulet Nyembwe', count: 5, voters: ['a', 'b', 'c', 'd', 'e'], id: 'opt1' },
+              { name: 'Poisson braisé', count: 2, voters: ['f', 'g'], id: 'opt2' },
+              { name: 'Alloco', count: 0, voters: [], id: 'opt3' },
+            ],
+          },
+        },
+      },
+    ])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.readPollResults('p.abc123')
+    expect(res).toEqual({
+      options: [
+        { label: 'Poulet Nyembwe', count: 5 },
+        { label: 'Poisson braisé', count: 2 },
+        { label: 'Alloco', count: 0 },
+      ],
+      total: 7,
+    })
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/messages/p.abc123')
+    expect(init.method).toBe('GET')
+  })
+
+  it('readPollResults : { options: [], total: 0 } si le sondage est vide, absent ou de forme inattendue', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: {} }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.readPollResults('MSG1')
+    expect(res).toEqual({ options: [], total: 0 })
+  })
 })

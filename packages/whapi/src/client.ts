@@ -460,6 +460,41 @@ export class WhapiClient {
     return { yes, no }
   }
 
+  /**
+   * Lit le décompte par option d'un sondage natif (toutes options, pas seulement Oui/Non) — même
+   * lecture que `readPollVotes` ci-dessus (GET /messages/{id}, `message.poll.results`, parsing
+   * défensif enveloppe `message`/racine), mais renvoie le détail par option au lieu d'agréger sur
+   * Oui/Non : utilisé par le dépouillement web (Task SV4, sondages multi-surfaces v2), qui doit
+   * afficher le score de chaque option quel que soit son libellé. `label` = `name` (repli
+   * `title`), `count` = `count` (repli `votes`, repli `voters.length`), 0 par défaut — mêmes
+   * règles de repli que `readPollVotes`. `total` = somme des counts. Sondage vide/absent/de forme
+   * inattendue → `{ options: [], total: 0 }` (jamais d'exception, cf. `readPollVotes`).
+   *
+   * N'existait pas avant Task SV1 (cf. plan sondages-v2) : ajoutée sans toucher à `readPollVotes`,
+   * qui reste utilisée telle quelle par les decision workers existants (non-régression requise).
+   */
+  async readPollResults(messageId: string): Promise<{ options: Array<{ label: string; count: number }>; total: number }> {
+    const res = (await this.request('GET', `/messages/${messageId}`)) as Record<string, unknown>
+    const message = (res.message as Record<string, unknown> | undefined) ?? res
+    const poll = message.poll as Record<string, unknown> | undefined
+    const results = Array.isArray(poll?.results) ? (poll.results as Array<Record<string, unknown>>) : []
+    const options = results.map((option) => {
+      const label =
+        typeof option.name === 'string' ? option.name : typeof option.title === 'string' ? option.title : ''
+      const count =
+        typeof option.count === 'number'
+          ? option.count
+          : typeof option.votes === 'number'
+            ? option.votes
+            : Array.isArray(option.voters)
+              ? option.voters.length
+              : 0
+      return { label, count }
+    })
+    const total = options.reduce((sum, o) => sum + o.count, 0)
+    return { options, total }
+  }
+
   async setWebhook(url: string): Promise<void> {
     await this.request('PATCH', '/settings', {
       webhooks: [{ mode: 'body', events: [{ type: 'messages', method: 'post' }], url }],

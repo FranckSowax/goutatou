@@ -133,3 +133,8 @@ export function statusStateLabel(s: StatusState): string {
 export type ChannelPostKind = 'text' | 'image' | 'video' | 'menu_card' | 'poll'
 export type ChannelPostState =
   | 'scheduled' | 'pending_approval' | 'posting' | 'posted' | 'failed' | 'canceled'
+
+// Sondages v2 (migration 0027, spec docs/superpowers/specs/2026-07-13-sondages-v2-design.md) :
+// surfaces de publication d'un même sondage natif. Pas de type Poll explicite dans ce package
+// (les repos lisent en colonnes brutes) — on n'ajoute donc que le type de surface.
+export type PollSurface = 'channel' | 'group' | 'status_teaser'
