@@ -5,13 +5,7 @@ import { createSupabaseServer } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertPlan } from '@/lib/premium'
 import { loadChannelToken } from './channel-token'
-import {
-  CATALOG_THROTTLE_MS,
-  MAX_CATALOG_ITEMS,
-  formatDishCaption,
-  validatePollOptions,
-  validateVideoPath,
-} from './shared'
+import { validateImagePath, validatePollOptions, validateVideoPath } from './shared'
 
 const CHAIN_ERROR = 'La chaîne n’est pas disponible sur ce canal.'
 const ATTACH_ERROR = 'Rattachez d’abord votre chaîne.'
@@ -40,10 +34,6 @@ async function myChannel() {
     .single()
   if (!resto?.wa_channel_id) throw new Error(ATTACH_ERROR)
   return { supabase, restaurantId, waChannelId: resto.wa_channel_id as string }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 export async function createChannelAction() {
@@ -188,27 +178,24 @@ export async function postChannelVideo(formData: FormData) {
   revalidatePath('/app/marketing/chaine')
 }
 
-/**
- * Publie la carte (plats disponibles avec photo, cap 10, throttle 2 s) en
- * autant de photos+légende que de plats éligibles. Best-effort : un échec
- * ponctuel n'interrompt pas les envois suivants, le compte final est
- * retourné pour affichage (« Carte publiée (N plats). »).
- */
-export async function postChannelCatalog(): Promise<{ sent: number; failed: number }> {
-  const { supabase, restaurantId, waChannelId } = await myChannel()
+const DEFAULT_MENU_CARD_CAPTION = '📋 Notre carte — commandez sur WhatsApp !'
 
-  const { data: dishes, error: dishesErr } = await supabase
-    .from('menu_items')
-    .select('id, name, price, photo_url')
-    .eq('restaurant_id', restaurantId)
-    .eq('available', true)
-    .not('photo_url', 'is', null)
-    .order('position')
-    .limit(MAX_CATALOG_ITEMS)
-  if (dishesErr) throw new Error('Impossible de charger le menu.')
-  if (!dishes || dishes.length === 0) {
-    throw new Error('Aucun plat disponible avec photo à publier.')
-  }
+/**
+ * Publie la carte menu (une image uploadée en DIRECT navigateur→bucket
+ * `status-media` par le composer — jamais de Server Action pour le fichier,
+ * pattern vidéo/statuts ci-dessus) : cette action ne reçoit que le chemin de
+ * stockage, revalidé (préfixe `${restaurantId}/`, extension image) avant
+ * résolution en URL publique. Pas de persistance en v1 : upload à chaque
+ * publication.
+ */
+export async function postChannelMenuCard(formData: FormData) {
+  const { supabase, restaurantId, waChannelId } = await myChannel()
+  const mediaPath = String(formData.get('media_path') ?? '').trim()
+  const caption = String(formData.get('caption') ?? '').trim()
+
+  const pathError = validateImagePath(mediaPath, restaurantId)
+  if (pathError) throw new Error(pathError)
+  const publicUrl = supabase.storage.from('status-media').getPublicUrl(mediaPath).data.publicUrl
 
   let token: string
   try {
@@ -216,23 +203,15 @@ export async function postChannelCatalog(): Promise<{ sent: number; failed: numb
   } catch {
     throw new Error(CHAIN_ERROR)
   }
-  const whapi = new WhapiClient(token)
 
-  let sent = 0
-  let failed = 0
-  for (let i = 0; i < dishes.length; i++) {
-    if (i > 0) await sleep(CATALOG_THROTTLE_MS)
-    const dish = dishes[i]
-    try {
-      await whapi.sendNewsletterImage(waChannelId, dish.photo_url as string, formatDishCaption(dish.name, dish.price))
-      sent++
-    } catch {
-      failed++
-    }
+  const whapi = new WhapiClient(token)
+  try {
+    await whapi.sendNewsletterImage(waChannelId, publicUrl, caption || DEFAULT_MENU_CARD_CAPTION)
+  } catch {
+    throw new Error(CHAIN_ERROR)
   }
 
   revalidatePath('/app/marketing/chaine')
-  return { sent, failed }
 }
 
 export async function postChannelPoll(formData: FormData) {

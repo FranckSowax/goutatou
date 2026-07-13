@@ -8,20 +8,20 @@ import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
-  postChannelCatalog,
   postChannelImage,
+  postChannelMenuCard,
   postChannelPoll,
   postChannelText,
   postChannelVideo,
   uploadChannelImage,
 } from './actions'
-import { MAX_VIDEO_MB, POLL_MAX_OPTIONS, POLL_MIN_OPTIONS, type ChannelPostType } from './shared'
+import { MAX_IMAGE_MB, MAX_VIDEO_MB, POLL_MAX_OPTIONS, POLL_MIN_OPTIONS, type ChannelPostType } from './shared'
 
 const TYPE_LABELS: Record<ChannelPostType, string> = {
   text: 'Texte',
   image: 'Photo',
   video: 'Vidéo',
-  album: 'Album',
+  menu_card: 'Carte menu',
   poll: 'Sondage',
 }
 
@@ -49,6 +49,11 @@ export function Composer({ restaurantId }: { restaurantId: string }) {
   const [videoCaption, setVideoCaption] = useState('')
   const [videoUploading, setVideoUploading] = useState(false)
 
+  // Carte menu
+  const [menuCardPath, setMenuCardPath] = useState('')
+  const [menuCardCaption, setMenuCardCaption] = useState('')
+  const [menuCardUploading, setMenuCardUploading] = useState(false)
+
   // Sondage
   const [question, setQuestion] = useState('')
   const [options, setOptions] = useState<string[]>(['', ''])
@@ -63,6 +68,8 @@ export function Composer({ restaurantId }: { restaurantId: string }) {
     setImageCaption('')
     setVideoPath('')
     setVideoCaption('')
+    setMenuCardPath('')
+    setMenuCardCaption('')
     setQuestion('')
     setOptions(['', ''])
   }
@@ -130,6 +137,41 @@ export function Composer({ restaurantId }: { restaurantId: string }) {
     }
   }
 
+  async function onMenuCardFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setError('La carte doit être une image.')
+      return
+    }
+    if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
+      setError(`Image trop lourde (max ${MAX_IMAGE_MB} Mo).`)
+      return
+    }
+    setMenuCardUploading(true)
+    setError(null)
+    try {
+      // Upload DIRECT navigateur → bucket status-media (jamais de Server
+      // Action pour le fichier — pattern vidéo/statuts). L'action ne reçoit
+      // que le chemin de stockage, revalidé côté serveur avant envoi.
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      )
+      const ext = (file.name.match(/\.([a-zA-Z0-9]+)$/)?.[1] ?? 'jpg').toLowerCase()
+      const path = `${restaurantId}/${crypto.randomUUID()}.${ext}`
+      const { error: uploadError } = await supabase.storage
+        .from('status-media')
+        .upload(path, file, { contentType: file.type })
+      if (uploadError) throw new Error(uploadError.message)
+      setMenuCardPath(path)
+    } catch (err) {
+      setError(errorMessage(err, "L'upload de la carte a échoué. Réessayez."))
+    } finally {
+      setMenuCardUploading(false)
+    }
+  }
+
   function validateClient(): string | null {
     if (type === 'text' && !body.trim()) return 'Écrivez un message.'
     if (type === 'image') {
@@ -139,6 +181,10 @@ export function Composer({ restaurantId }: { restaurantId: string }) {
     if (type === 'video') {
       if (videoUploading) return "Attendez la fin de l'upload."
       if (!videoPath) return 'Ajoutez une vidéo.'
+    }
+    if (type === 'menu_card') {
+      if (menuCardUploading) return "Attendez la fin de l'upload."
+      if (!menuCardPath) return 'Ajoutez une image de votre carte.'
     }
     if (type === 'poll') {
       if (!question.trim()) return 'Écrivez une question.'
@@ -175,9 +221,12 @@ export function Composer({ restaurantId }: { restaurantId: string }) {
         fd.set('caption', videoCaption)
         await postChannelVideo(fd)
         setSuccess('Publié sur la chaîne.')
-      } else if (type === 'album') {
-        const result = await postChannelCatalog()
-        setSuccess(`Carte publiée (${result.sent} plats).`)
+      } else if (type === 'menu_card') {
+        const fd = new FormData()
+        fd.set('media_path', menuCardPath)
+        fd.set('caption', menuCardCaption)
+        await postChannelMenuCard(fd)
+        setSuccess('Carte publiée sur la chaîne.')
       } else {
         const fd = new FormData()
         fd.set('question', question)
@@ -276,10 +325,27 @@ export function Composer({ restaurantId }: { restaurantId: string }) {
           </div>
         )}
 
-        {type === 'album' && (
-          <p className="text-sm text-muted-foreground">
-            Envoie chaque plat disponible avec photo (jusqu&apos;à 10) en photo légendée « Nom — Prix FCFA ».
-          </p>
+        {type === 'menu_card' && (
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="chaine-menu-card">Photo de votre carte (image, {MAX_IMAGE_MB} Mo max)</Label>
+              <Input id="chaine-menu-card" type="file" accept="image/*" onChange={onMenuCardFileChange} />
+              {menuCardUploading && <p className="text-sm text-muted-foreground">Upload…</p>}
+              {menuCardPath && !menuCardUploading && (
+                <p className="text-sm text-muted-foreground">Carte prête.</p>
+              )}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="chaine-menu-card-caption">Légende (optionnel)</Label>
+              <Textarea
+                id="chaine-menu-card-caption"
+                value={menuCardCaption}
+                onChange={(e) => setMenuCardCaption(e.target.value)}
+                rows={2}
+                placeholder="📋 Notre carte — commandez sur WhatsApp !"
+              />
+            </div>
+          </div>
         )}
 
         {type === 'poll' && (
@@ -333,7 +399,7 @@ export function Composer({ restaurantId }: { restaurantId: string }) {
 
         <div className="flex items-center gap-3">
           <Button type="button" disabled={sending} onClick={onSubmit}>
-            {sending ? 'Publication…' : type === 'album' ? 'Publier ma carte' : 'Publier'}
+            {sending ? 'Publication…' : type === 'menu_card' ? 'Publier ma carte' : 'Publier'}
           </Button>
           {success && !sending && <span className="text-sm text-muted-foreground">{success}</span>}
         </div>

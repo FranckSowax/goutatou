@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CATALOG_THROTTLE_MS,
-  MAX_CATALOG_ITEMS,
+  MAX_IMAGE_MB,
   MAX_VIDEO_MB,
   POLL_MAX_OPTIONS,
   POLL_MIN_OPTIONS,
-  formatDishCaption,
   formatHistoryDate,
   formatHistoryPreview,
+  validateImagePath,
   validatePollOptions,
   validateVideoPath,
 } from '../src/app/app/marketing/chaine/shared'
@@ -17,8 +16,7 @@ const RID = 'resto-1'
 describe('constants', () => {
   it('expose les bornes attendues', () => {
     expect(MAX_VIDEO_MB).toBe(16)
-    expect(MAX_CATALOG_ITEMS).toBe(10)
-    expect(CATALOG_THROTTLE_MS).toBe(2000)
+    expect(MAX_IMAGE_MB).toBe(8)
     expect(POLL_MIN_OPTIONS).toBe(2)
     expect(POLL_MAX_OPTIONS).toBe(12)
   })
@@ -36,6 +34,26 @@ describe('validateVideoPath', () => {
   })
   it('rejette une extension non mp4', () => {
     expect(validateVideoPath(`${RID}/abc.mov`, RID)).toBe('La vidéo doit être au format mp4.')
+  })
+})
+
+describe('validateImagePath', () => {
+  it('accepte un chemin restaurantId/uuid.jpg', () => {
+    expect(validateImagePath(`${RID}/abc-123.jpg`, RID)).toBeNull()
+  })
+  it('accepte les extensions jpeg, png et webp', () => {
+    expect(validateImagePath(`${RID}/a.jpeg`, RID)).toBeNull()
+    expect(validateImagePath(`${RID}/a.png`, RID)).toBeNull()
+    expect(validateImagePath(`${RID}/a.webp`, RID)).toBeNull()
+  })
+  it('rejette un chemin vide', () => {
+    expect(validateImagePath('', RID)).toBe('Ajoutez une image.')
+  })
+  it("rejette un chemin d'un autre restaurant", () => {
+    expect(validateImagePath('resto-2/abc.jpg', RID)).toBe('Chemin image invalide.')
+  })
+  it('rejette une extension non image', () => {
+    expect(validateImagePath(`${RID}/abc.mp4`, RID)).toBe("L'image doit être au format jpg, png ou webp.")
   })
 })
 
@@ -63,12 +81,6 @@ describe('validatePollOptions', () => {
   it('ignore les options vides en trop avant de compter', () => {
     const res = validatePollOptions('Q ?', ['A', '', 'B', '  '])
     expect(res).toEqual({ ok: true, question: 'Q ?', options: ['A', 'B'] })
-  })
-})
-
-describe('formatDishCaption', () => {
-  it('formate "{nom} — {prix} FCFA"', () => {
-    expect(formatDishCaption('Poulet braisé', 3500)).toBe('Poulet braisé — 3500 FCFA')
   })
 })
 

@@ -2,11 +2,10 @@
 // pure (aucune dépendance Supabase/whapi ici) afin de rester testable sans
 // mock, sur le même modèle que /app/marketing/statuts/shared.ts.
 
-export type ChannelPostType = 'text' | 'image' | 'video' | 'album' | 'poll'
+export type ChannelPostType = 'text' | 'image' | 'video' | 'menu_card' | 'poll'
 
 export const MAX_VIDEO_MB = 16
-export const MAX_CATALOG_ITEMS = 10
-export const CATALOG_THROTTLE_MS = 2000
+export const MAX_IMAGE_MB = 8
 export const POLL_MIN_OPTIONS = 2
 export const POLL_MAX_OPTIONS = 12
 export const HISTORY_COUNT = 20
@@ -26,6 +25,20 @@ export function validateVideoPath(mediaPath: string, restaurantId: string): stri
   return null
 }
 
+/**
+ * Valide le chemin de stockage d'une image (carte menu) uploadée en DIRECT
+ * navigateur→bucket `status-media` (jamais de Server Action pour le fichier —
+ * même garde-fou que `validateVideoPath` ci-dessus). Retourne un message
+ * d'erreur FR, ou `null` si le chemin est valide.
+ */
+export function validateImagePath(mediaPath: string, restaurantId: string): string | null {
+  const path = mediaPath.trim()
+  if (!path) return 'Ajoutez une image.'
+  if (!path.startsWith(`${restaurantId}/`)) return 'Chemin image invalide.'
+  if (!/\.(jpg|jpeg|png|webp)$/i.test(path)) return "L'image doit être au format jpg, png ou webp."
+  return null
+}
+
 export type ValidatePollResult =
   | { ok: true; question: string; options: string[] }
   | { ok: false; error: string }
@@ -42,11 +55,6 @@ export function validatePollOptions(question: string, rawOptions: string[]): Val
     return { ok: false, error: 'Les options doivent être différentes les unes des autres.' }
   }
   return { ok: true, question: q, options }
-}
-
-/** Légende standard d'un plat publié en album catalogue. */
-export function formatDishCaption(name: string, price: number): string {
-  return `${name} — ${price} FCFA`
 }
 
 /** Aperçu FR d'un message d'historique de chaîne (texte tronqué ou pastille média). */
