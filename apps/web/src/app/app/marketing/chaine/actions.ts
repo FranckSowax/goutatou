@@ -254,7 +254,7 @@ export async function postChannelPoll(formData: FormData) {
  * ci-dessus).
  */
 export async function scheduleChannelPost(formData: FormData) {
-  const { supabase, restaurantId } = await myRestaurant()
+  const { supabase, restaurantId } = await myChannel()
   const kind = String(formData.get('kind') ?? 'text') as ChannelPostType
   if (kind !== 'text' && kind !== 'image' && kind !== 'menu_card') {
     throw new Error('Type de post invalide pour la programmation.')
@@ -291,7 +291,7 @@ export async function scheduleChannelPost(formData: FormData) {
 
 /** Annule un post chaîne programmé (garde tenant + état — n'annule qu'un post encore 'scheduled'). */
 export async function cancelScheduledPost(formData: FormData) {
-  const { supabase, restaurantId } = await myRestaurant()
+  const { supabase, restaurantId } = await myChannel()
   const postId = String(formData.get('post_id') ?? '').trim()
   if (!postId) throw new Error('Post introuvable.')
   const { error } = await supabase
@@ -311,7 +311,7 @@ export async function cancelScheduledPost(formData: FormData) {
  * table, pattern repris de `updateAutoStatus`).
  */
 export async function saveAutoChannelSettings(formData: FormData) {
-  const { supabase, restaurantId } = await myRestaurant()
+  const { supabase, restaurantId } = await myChannel()
   await assertPlan(supabase, restaurantId, ['premium'])
 
   const enabled = formData.get('enabled') === 'on'
