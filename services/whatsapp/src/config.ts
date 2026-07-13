@@ -24,6 +24,10 @@ export function loadConfig() {
     catalogSyncPollMs: Number(process.env.CATALOG_SYNC_POLL_MS ?? 60000),
     pollWorkerPollMs: Number(process.env.POLL_WORKER_POLL_MS ?? 30000),
     autoStatusPollMs: Number(process.env.AUTO_STATUS_POLL_MS ?? 300000),
+    // Défauts alignés sur leurs pendants statuts (CA5 : Chaîne Auto est le pendant chaîne des
+    // Statuts Auto, cf. plan § Tâche CA5) — réglables indépendamment via env si besoin.
+    autoChannelPollMs: Number(process.env.AUTO_CHANNEL_POLL_MS ?? process.env.AUTO_STATUS_POLL_MS ?? 300000),
+    channelPostsPollMs: Number(process.env.CHANNEL_POSTS_POLL_MS ?? process.env.STATUS_POLL_MS ?? 30000),
   }
 }
 export type Config = ReturnType<typeof loadConfig>
