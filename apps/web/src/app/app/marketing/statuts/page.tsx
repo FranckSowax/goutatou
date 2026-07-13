@@ -3,6 +3,7 @@ import { isPro, isPremium } from '@/lib/premium'
 import { Card } from '@/components/ui/card'
 import { Board } from './board'
 import { AutoStatusCard, type AutoStatusDish } from './auto-status-card'
+import { isAutoStatusValidationMode } from './shared'
 
 export const dynamic = 'force-dynamic'
 
@@ -75,7 +76,7 @@ export default async function StatutsPage() {
     .order('created_at', { ascending: false })
 
   const { data: restaurant } = await supabase.from('restaurants')
-    .select('auto_status_enabled, auto_status_times, auto_status_count, auto_status_cursor, auto_status_last_slot')
+    .select('auto_status_enabled, auto_status_times, auto_status_count, auto_status_cursor, auto_status_last_slot, auto_status_validation, auto_status_manager_phone, contact_phone, staff_group_id')
     .eq('id', restaurantId)
     .single()
 
@@ -95,6 +96,14 @@ export default async function StatutsPage() {
           count={autoStatusCount}
           lastSlot={restaurant?.auto_status_last_slot ?? null}
           nextDishes={nextDishes}
+          validation={
+            isAutoStatusValidationMode(String(restaurant?.auto_status_validation ?? 'none'))
+              ? (restaurant?.auto_status_validation as 'none' | 'manager' | 'group')
+              : 'none'
+          }
+          managerPhone={restaurant?.auto_status_manager_phone ?? null}
+          contactPhone={restaurant?.contact_phone ?? null}
+          staffGroupId={restaurant?.staff_group_id ?? null}
         />
       </div>
     </>

@@ -226,6 +226,38 @@ export function validateAutoStatusCount(count: number): boolean {
   return Number.isInteger(count) && count >= AUTO_STATUS_COUNT_MIN && count <= AUTO_STATUS_COUNT_MAX
 }
 
+// --- Statuts Auto (premium) : validation avant publication ---------------
+
+/** Mode de validation avant publication d'un statut auto (cf. restaurants.auto_status_validation). */
+export type AutoStatusValidationMode = 'none' | 'manager' | 'group'
+
+export const AUTO_STATUS_VALIDATION_MODES: AutoStatusValidationMode[] = ['none', 'manager', 'group']
+
+export function isAutoStatusValidationMode(value: string): value is AutoStatusValidationMode {
+  return (AUTO_STATUS_VALIDATION_MODES as string[]).includes(value)
+}
+
+/** Numéro E.164 permissif : « + » optionnel en tête, 8 à 15 chiffres. */
+export const MANAGER_PHONE_REGEX = /^\+?\d{8,15}$/
+
+export type ValidateManagerPhoneResult = { ok: true; phone: string } | { ok: false; error: string }
+
+/**
+ * Valide le numéro du gérant validateur (requis quand `validation ===
+ * 'manager'`) : trim, puis format permissif (chiffres + « + » optionnel,
+ * 8 à 15 chiffres — pas de validation stricte du plan de numérotation, cf.
+ * design §Web). Vide → erreur dédiée (distincte du format invalide) pour un
+ * message plus actionnable côté formulaire.
+ */
+export function validateManagerPhone(raw: string): ValidateManagerPhoneResult {
+  const trimmed = raw.trim()
+  if (!trimmed) return { ok: false, error: 'Renseignez le numéro du gérant.' }
+  if (!MANAGER_PHONE_REGEX.test(trimmed)) {
+    return { ok: false, error: 'Numéro du gérant invalide.' }
+  }
+  return { ok: true, phone: trimmed }
+}
+
 // --- Historique (board.tsx) : filtre par état + pagination pure ----------
 
 /** Filtre d'état proposé dans l'historique. 'all' n'exclut aucun état (y compris posting/canceled). */

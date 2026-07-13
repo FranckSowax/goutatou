@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { updateAutoStatus } from './actions'
 import { StatusPreview } from './status-preview'
 import { buildStatusCaptionPreview } from './auto-caption-preview'
-import { AUTO_STATUS_COUNT_MAX, AUTO_STATUS_COUNT_MIN } from './shared'
+import { AUTO_STATUS_COUNT_MAX, AUTO_STATUS_COUNT_MIN, type AutoStatusValidationMode } from './shared'
 
 export interface AutoStatusDish {
   id: string
@@ -24,6 +24,10 @@ export interface AutoStatusCardProps {
   count: number
   lastSlot: string | null
   nextDishes: AutoStatusDish[]
+  validation: AutoStatusValidationMode
+  managerPhone: string | null
+  contactPhone: string | null
+  staffGroupId: string | null
 }
 
 function formatLastSlot(lastSlot: string | null): string {
@@ -46,12 +50,24 @@ const COUNT_OPTIONS = Array.from(
  * practical-info-form.tsx) — pas de handler client qui appelle la Server
  * Action hors formulaire.
  */
-export function AutoStatusCard({ isPremium, enabled, times, count, lastSlot, nextDishes }: AutoStatusCardProps) {
+export function AutoStatusCard({
+  isPremium,
+  enabled,
+  times,
+  count,
+  lastSlot,
+  nextDishes,
+  validation,
+  managerPhone,
+  contactPhone,
+  staffGroupId,
+}: AutoStatusCardProps) {
   const [isEnabled, setIsEnabled] = useState(enabled)
   const [time1, setTime1] = useState(times[0] ?? '')
   const [time2, setTime2] = useState(times[1] ?? '')
   const [hasSecondSlot, setHasSecondSlot] = useState(times.length > 1)
   const [countValue, setCountValue] = useState(count)
+  const [validationMode, setValidationMode] = useState<AutoStatusValidationMode>(validation)
   const [pending, startTransition] = useTransition()
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
 
@@ -165,6 +181,44 @@ export function AutoStatusCard({ isPremium, enabled, times, count, lastSlot, nex
               ))}
             </select>
           </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="auto-validation">Validation avant publication</Label>
+            <select
+              id="auto-validation"
+              name="validation"
+              value={validationMode}
+              onChange={(e) => setValidationMode(e.target.value as AutoStatusValidationMode)}
+              className="h-9 w-48 rounded-lg border border-input bg-transparent px-2 text-sm"
+            >
+              <option value="none">Aucune</option>
+              <option value="manager">Gérant</option>
+              <option value="group">Groupe staff</option>
+            </select>
+          </div>
+
+          {validationMode === 'manager' && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="auto-manager-phone">Numéro du gérant validateur</Label>
+              <Input
+                id="auto-manager-phone"
+                name="manager_phone"
+                type="tel"
+                defaultValue={managerPhone ?? ''}
+                placeholder={contactPhone ?? '241…'}
+                className="w-48"
+              />
+            </div>
+          )}
+
+          {validationMode === 'group' && (
+            <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+              <p>Le groupe Cuisine votera à chaque publication.</p>
+              {!staffGroupId && (
+                <p className="text-destructive">Créez d’abord le groupe Cuisine (fiche réglages).</p>
+              )}
+            </div>
+          )}
 
           <p className="text-sm text-muted-foreground">Dernier créneau exécuté : {formatLastSlot(lastSlot)}</p>
 

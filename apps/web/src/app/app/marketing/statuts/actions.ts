@@ -7,9 +7,12 @@ import {
   MAX_CARDS,
   computeScheduledAt,
   computeState,
+  isAutoStatusValidationMode,
   validateAutoStatusCount,
   validateAutoStatusTimes,
   validateCard,
+  validateManagerPhone,
+  type AutoStatusValidationMode,
   type RawStatusCard,
   type StatusPublishMode,
 } from './shared'
@@ -170,6 +173,18 @@ export async function updateAutoStatus(formData: FormData) {
     throw new Error('Nombre de statuts par créneau invalide (1 à 3).')
   }
 
+  const rawValidation = String(formData.get('validation') ?? 'none')
+  const validation: AutoStatusValidationMode = isAutoStatusValidationMode(rawValidation) ? rawValidation : 'none'
+
+  // Le numéro du gérant n'est exigé (et stocké) qu'en mode 'manager' — dans
+  // les autres modes il n'est ni affiché ni transmis par le formulaire.
+  let managerPhone: string | null = null
+  if (validation === 'manager') {
+    const phoneResult = validateManagerPhone(String(formData.get('manager_phone') ?? ''))
+    if (!phoneResult.ok) throw new Error(phoneResult.error)
+    managerPhone = phoneResult.phone
+  }
+
   // Ancrage anti-rattrapage (revue finale) : à l'enregistrement, on pose
   // auto_status_last_slot sur le dernier créneau déjà passé AUJOURD'HUI
   // (heure de Libreville, UTC+1 fixe). Le worker ne publie qu'après le
@@ -187,6 +202,8 @@ export async function updateAutoStatus(formData: FormData) {
       auto_status_times: timesResult.times,
       auto_status_count: count,
       auto_status_last_slot: anchor,
+      auto_status_validation: validation,
+      auto_status_manager_phone: managerPhone,
     })
     .eq('id', restaurantId)
     .select('id')

@@ -12,9 +12,11 @@ import {
   isHexColor,
   isValidFontType,
   paginate,
+  isAutoStatusValidationMode,
   validateAutoStatusCount,
   validateAutoStatusTimes,
   validateCard,
+  validateManagerPhone,
   type RawStatusCard,
 } from '../src/app/app/marketing/statuts/shared'
 import {
@@ -230,6 +232,56 @@ describe('validateAutoStatusCount', () => {
     expect(validateAutoStatusCount(4)).toBe(false)
     expect(validateAutoStatusCount(1.5)).toBe(false)
     expect(validateAutoStatusCount(Number.NaN)).toBe(false)
+  })
+})
+
+describe('isAutoStatusValidationMode', () => {
+  it('accepte none/manager/group', () => {
+    expect(isAutoStatusValidationMode('none')).toBe(true)
+    expect(isAutoStatusValidationMode('manager')).toBe(true)
+    expect(isAutoStatusValidationMode('group')).toBe(true)
+  })
+  it('rejette toute autre valeur', () => {
+    expect(isAutoStatusValidationMode('')).toBe(false)
+    expect(isAutoStatusValidationMode('admin')).toBe(false)
+    expect(isAutoStatusValidationMode('Manager')).toBe(false)
+  })
+})
+
+describe('validateManagerPhone', () => {
+  it('accepte un numéro E.164 avec +', () => {
+    const res = validateManagerPhone('+24107123456')
+    expect(res.ok).toBe(true)
+    if (res.ok) expect(res.phone).toBe('+24107123456')
+  })
+  it('accepte un numéro sans + (chiffres seuls)', () => {
+    expect(validateManagerPhone('24107123456').ok).toBe(true)
+  })
+  it('trim les espaces avant validation', () => {
+    const res = validateManagerPhone('  +24107123456  ')
+    expect(res.ok).toBe(true)
+    if (res.ok) expect(res.phone).toBe('+24107123456')
+  })
+  it('rejette une chaîne vide avec un message dédié', () => {
+    const res = validateManagerPhone('   ')
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.error).toBe('Renseignez le numéro du gérant.')
+  })
+  it('rejette un numéro trop court (< 8 chiffres)', () => {
+    const res = validateManagerPhone('1234567')
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.error).toBe('Numéro du gérant invalide.')
+  })
+  it('rejette un numéro trop long (> 15 chiffres)', () => {
+    expect(validateManagerPhone('1234567890123456').ok).toBe(false)
+  })
+  it('rejette les caractères non numériques', () => {
+    expect(validateManagerPhone('+241 07 12 34 56').ok).toBe(false)
+    expect(validateManagerPhone('abc12345678').ok).toBe(false)
+  })
+  it('accepte les bornes 8 et 15 chiffres', () => {
+    expect(validateManagerPhone('12345678').ok).toBe(true)
+    expect(validateManagerPhone('123456789012345').ok).toBe(true)
   })
 })
 
