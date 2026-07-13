@@ -1,13 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AUTO_CHANNEL_COUNT_MAX,
+  AUTO_CHANNEL_COUNT_MIN,
+  AUTO_CHANNEL_MAX_TIMES,
   MAX_IMAGE_MB,
   MAX_VIDEO_MB,
   POLL_MAX_OPTIONS,
   POLL_MIN_OPTIONS,
+  appendOrderLink,
   formatHistoryDate,
   formatHistoryPreview,
+  validateAutoChannelCount,
+  validateAutoChannelTimes,
   validateImagePath,
   validatePollOptions,
+  validateScheduledAt,
   validateVideoPath,
 } from '../src/app/app/marketing/chaine/shared'
 
@@ -119,5 +126,82 @@ describe('formatHistoryDate', () => {
   it('formate un timestamp en secondes', () => {
     const res = formatHistoryDate(1_735_689_600) // 2025-01-01T00:00:00Z
     expect(res).toMatch(/2025/)
+  })
+})
+
+describe('validateScheduledAt', () => {
+  const NOW = '2026-07-13T12:00:00.000Z'
+  it('accepte une date future', () => {
+    expect(validateScheduledAt('2026-07-13T13:00:00.000Z', NOW)).toBeNull()
+  })
+  it('rejette une date vide', () => {
+    expect(validateScheduledAt('', NOW)).toBe('Choisissez une date future.')
+  })
+  it('rejette une date invalide', () => {
+    expect(validateScheduledAt('pas-une-date', NOW)).toBe('Choisissez une date future.')
+  })
+  it('rejette une date passée', () => {
+    expect(validateScheduledAt('2026-07-13T11:00:00.000Z', NOW)).toBe('Choisissez une date future.')
+  })
+  it('rejette une date égale à maintenant', () => {
+    expect(validateScheduledAt(NOW, NOW)).toBe('Choisissez une date future.')
+  })
+})
+
+describe('appendOrderLink', () => {
+  it('appende le lien wa.me si contactPhone est renseigné', () => {
+    const res = appendOrderLink('Notre plat du jour', '074123456')
+    expect(res).toBe('Notre plat du jour\n👉 Commander : https://wa.me/074123456')
+  })
+  it('ne modifie pas le contenu si contactPhone est vide', () => {
+    expect(appendOrderLink('Notre plat du jour', '')).toBe('Notre plat du jour')
+  })
+  it('ne modifie pas le contenu si contactPhone est null', () => {
+    expect(appendOrderLink('Notre plat du jour', null)).toBe('Notre plat du jour')
+  })
+  it('ne garde que les chiffres du numéro', () => {
+    const res = appendOrderLink('Corps', '+241 74 12 34 56')
+    expect(res).toBe('Corps\n👉 Commander : https://wa.me/24174123456')
+  })
+})
+
+describe('validateAutoChannelTimes', () => {
+  it('expose la borne attendue', () => {
+    expect(AUTO_CHANNEL_MAX_TIMES).toBe(2)
+  })
+  it('accepte 1 à 2 créneaux HH:MM valides', () => {
+    expect(validateAutoChannelTimes(['11:30', ''])).toEqual({ ok: true, times: ['11:30'] })
+    expect(validateAutoChannelTimes(['11:30', '18:30'])).toEqual({ ok: true, times: ['11:30', '18:30'] })
+  })
+  it('rejette une liste vide', () => {
+    expect(validateAutoChannelTimes(['', '']).ok).toBe(false)
+  })
+  it('rejette plus de 2 créneaux', () => {
+    expect(validateAutoChannelTimes(['08:00', '12:00', '18:00']).ok).toBe(false)
+  })
+  it('rejette un format invalide', () => {
+    expect(validateAutoChannelTimes(['midi']).ok).toBe(false)
+    expect(validateAutoChannelTimes(['8:00']).ok).toBe(false)
+  })
+  it('rejette des créneaux dupliqués', () => {
+    expect(validateAutoChannelTimes(['11:30', '11:30']).ok).toBe(false)
+  })
+})
+
+describe('validateAutoChannelCount', () => {
+  it('expose les bornes attendues', () => {
+    expect(AUTO_CHANNEL_COUNT_MIN).toBe(1)
+    expect(AUTO_CHANNEL_COUNT_MAX).toBe(3)
+  })
+  it('accepte 1 à 3', () => {
+    expect(validateAutoChannelCount(1)).toBe(true)
+    expect(validateAutoChannelCount(2)).toBe(true)
+    expect(validateAutoChannelCount(3)).toBe(true)
+  })
+  it('rejette hors bornes ou non entier', () => {
+    expect(validateAutoChannelCount(0)).toBe(false)
+    expect(validateAutoChannelCount(4)).toBe(false)
+    expect(validateAutoChannelCount(1.5)).toBe(false)
+    expect(validateAutoChannelCount(Number.NaN)).toBe(false)
   })
 })

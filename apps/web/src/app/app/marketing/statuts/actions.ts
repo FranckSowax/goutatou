@@ -76,6 +76,7 @@ export async function createStatus(formData: FormData) {
   const mediaUrl = resolveMediaUrl(supabase, card)
   const scheduledAt = computeScheduledAt(mode, 0, card.scheduledAt, Date.now())
   const state = computeState(mode, 0)
+  const echoToChannel = formData.get('echo_to_channel') === 'true'
 
   const { error } = await supabase.from('statuses').insert({
     restaurant_id: restaurantId,
@@ -88,6 +89,7 @@ export async function createStatus(formData: FormData) {
     audience: card.audience,
     state,
     scheduled_at: scheduledAt,
+    echo_to_channel: echoToChannel,
   })
   if (error) throw new Error(error.message)
   revalidatePath('/app/marketing/statuts')
@@ -117,6 +119,10 @@ export async function createStatusBatch(formData: FormData) {
     throw new Error(`Limitez-vous à ${MAX_CARDS} cartes par envoi.`)
   }
 
+  // Écho statut → chaîne : un seul état global pour tout le lot (pas par
+  // carte, cf. plan Chaîne Auto — choix « globale pour simplicité »).
+  const echoToChannel = formData.get('echo_to_channel') === 'true'
+
   const now = Date.now()
   const rows = rawCards.map((raw, index) => {
     const result = validateCard(raw, { restaurantId, isPremium: premium })
@@ -136,6 +142,7 @@ export async function createStatusBatch(formData: FormData) {
       audience: card.audience,
       state: computeState(mode, index),
       scheduled_at: computeScheduledAt(mode, index, card.scheduledAt, now),
+      echo_to_channel: echoToChannel,
     }
   })
 
@@ -185,6 +192,11 @@ export async function updateAutoStatus(formData: FormData) {
     managerPhone = phoneResult.phone
   }
 
+  // Écho chaîne par défaut (Chaîne Auto) : appliqué aux statuts générés par
+  // le worker Statuts Auto (cf. plan Chaîne Auto — colonne indépendante,
+  // n'affecte pas la case « Publier aussi sur la chaîne » du composer manuel).
+  const echoChannel = formData.get('echo_channel') === 'on'
+
   // Ancrage anti-rattrapage (revue finale) : à l'enregistrement, on pose
   // auto_status_last_slot sur le dernier créneau déjà passé AUJOURD'HUI
   // (heure de Libreville, UTC+1 fixe). Le worker ne publie qu'après le
@@ -204,6 +216,7 @@ export async function updateAutoStatus(formData: FormData) {
       auto_status_last_slot: anchor,
       auto_status_validation: validation,
       auto_status_manager_phone: managerPhone,
+      auto_status_echo_channel: echoChannel,
     })
     .eq('id', restaurantId)
     .select('id')

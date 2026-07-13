@@ -2,6 +2,11 @@
 // pure (aucune dépendance Supabase/whapi ici) afin de rester testable sans
 // mock, sur le même modèle que /app/marketing/statuts/shared.ts.
 
+// Import relatif (et non `@/lib/...`) : ce fichier est chargé tel quel par
+// vitest (pas d'alias de résolution configuré côté vitest.config.ts, cf.
+// pattern des autres modules `shared.ts` testés sans mock).
+import { buildWaLink } from '../../../../lib/lp/wa'
+
 export type ChannelPostType = 'text' | 'image' | 'video' | 'menu_card' | 'poll'
 
 export const MAX_VIDEO_MB = 16
@@ -89,4 +94,71 @@ export function formatHistoryDate(timestamp?: number): string {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+// --- Programmation de posts (channel_posts) -------------------------------
+
+/**
+ * Valide la date de programmation d'un post chaîne : doit être une date ISO
+ * strictement future par rapport à `nowIso` (horloge injectée, jamais
+ * `Date.now()` en dur côté action — cf. contrat repris des workers bot).
+ * Retourne un message d'erreur FR, ou `null` si la date est valide.
+ */
+export function validateScheduledAt(iso: string, nowIso: string): string | null {
+  const trimmed = iso.trim()
+  if (!trimmed) return 'Choisissez une date future.'
+  const d = new Date(trimmed)
+  if (Number.isNaN(d.getTime())) return 'Choisissez une date future.'
+  const now = new Date(nowIso)
+  if (d.getTime() <= now.getTime()) return 'Choisissez une date future.'
+  return null
+}
+
+/**
+ * Appende le CTA « Commander » (lien wa.me) à un corps/légende de post
+ * chaîne, côté client, AVANT envoi (cf. Global Constraints — pas de vrais
+ * boutons interactifs sur les chaînes WhatsApp). Aucun lien ajouté si
+ * `contactPhone` est absent/vide (choix délibéré, pas d'erreur).
+ */
+export function appendOrderLink(content: string, contactPhone: string | null): string {
+  const digits = (contactPhone ?? '').replace(/\D/g, '')
+  if (!digits) return content
+  return `${content}\n👉 Commander : ${buildWaLink(digits)}`
+}
+
+// --- Chaîne Auto (premium) : validation pure des créneaux/quota ----------
+
+export const AUTO_CHANNEL_MAX_TIMES = 2
+export const AUTO_CHANNEL_COUNT_MIN = 1
+export const AUTO_CHANNEL_COUNT_MAX = 3
+/** Format HH:MM (cf. spec CA2 — validation permissive, pas de bornes horaires strictes). */
+export const AUTO_CHANNEL_TIME_REGEX = /^\d{2}:\d{2}$/
+
+export type ValidateAutoChannelTimesResult = { ok: true; times: string[] } | { ok: false; error: string }
+
+/**
+ * Valide la liste de créneaux HH:MM de la Chaîne Auto : 1 à 2 entrées,
+ * format `^\d{2}:\d{2}$`, sans doublon. Les entrées vides (second créneau
+ * non renseigné) sont ignorées avant validation.
+ */
+export function validateAutoChannelTimes(times: string[]): ValidateAutoChannelTimesResult {
+  const cleaned = times.map((t) => t.trim()).filter((t) => t !== '')
+  if (cleaned.length === 0) return { ok: false, error: 'Choisissez au moins un créneau.' }
+  if (cleaned.length > AUTO_CHANNEL_MAX_TIMES) {
+    return { ok: false, error: `Limitez-vous à ${AUTO_CHANNEL_MAX_TIMES} créneaux.` }
+  }
+  for (const t of cleaned) {
+    if (!AUTO_CHANNEL_TIME_REGEX.test(t)) {
+      return { ok: false, error: `Créneau invalide : « ${t} » (format HH:MM).` }
+    }
+  }
+  if (new Set(cleaned).size !== cleaned.length) {
+    return { ok: false, error: 'Les créneaux doivent être différents.' }
+  }
+  return { ok: true, times: cleaned }
+}
+
+/** Nombre de posts générés par créneau : entier entre 1 et 3. */
+export function validateAutoChannelCount(count: number): boolean {
+  return Number.isInteger(count) && count >= AUTO_CHANNEL_COUNT_MIN && count <= AUTO_CHANNEL_COUNT_MAX
 }

@@ -28,6 +28,7 @@ export interface AutoStatusCardProps {
   managerPhone: string | null
   contactPhone: string | null
   staffGroupId: string | null
+  echoChannel: boolean
 }
 
 function formatLastSlot(lastSlot: string | null): string {
@@ -61,6 +62,7 @@ export function AutoStatusCard({
   managerPhone,
   contactPhone,
   staffGroupId,
+  echoChannel,
 }: AutoStatusCardProps) {
   const [isEnabled, setIsEnabled] = useState(enabled)
   const [time1, setTime1] = useState(times[0] ?? '')
@@ -68,6 +70,7 @@ export function AutoStatusCard({
   const [hasSecondSlot, setHasSecondSlot] = useState(times.length > 1)
   const [countValue, setCountValue] = useState(count)
   const [validationMode, setValidationMode] = useState<AutoStatusValidationMode>(validation)
+  const [echoChannelEnabled, setEchoChannelEnabled] = useState(echoChannel)
   const [pending, startTransition] = useTransition()
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
 
@@ -219,6 +222,17 @@ export function AutoStatusCard({
               )}
             </div>
           )}
+
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="echo_channel"
+              checked={echoChannelEnabled}
+              onChange={(e) => setEchoChannelEnabled(e.target.checked)}
+              className="accent-primary"
+            />
+            Écho chaîne par défaut
+          </label>
 
           <p className="text-sm text-muted-foreground">Dernier créneau exécuté : {formatLastSlot(lastSlot)}</p>
 

@@ -73,6 +73,9 @@ export function Composer({ restaurantId, isPremium }: { restaurantId: string; is
   const [cards, setCards] = useState<ComposerCard[]>([newCard()])
   const [activeId, setActiveId] = useState<string>(cards[0].localId)
   const [mode, setMode] = useState<StatusPublishMode>('chain')
+  // Écho statut → chaîne : un seul état global (pas par carte, cf. plan
+  // Chaîne Auto — choix « globale pour simplicité »).
+  const [echoToChannel, setEchoToChannel] = useState(false)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
@@ -214,6 +217,7 @@ export function Composer({ restaurantId, isPremium }: { restaurantId: string; is
       const fd = new FormData()
       fd.set('mode', mode)
       fd.set('cards_json', JSON.stringify(payload))
+      fd.set('echo_to_channel', String(echoToChannel))
       await createStatusBatch(fd)
       setSent(true)
       const fresh = newCard()
@@ -488,6 +492,16 @@ export function Composer({ restaurantId, isPremium }: { restaurantId: string; is
               </label>
             </div>
           </div>
+
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={echoToChannel}
+              onChange={(e) => setEchoToChannel(e.target.checked)}
+              className="accent-primary"
+            />
+            Publier aussi sur la chaîne
+          </label>
 
           <div className="flex items-center gap-3">
             <Button type="button" disabled={sending} onClick={onSubmit}>

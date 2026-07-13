@@ -13,9 +13,16 @@ import {
   postChannelPoll,
   postChannelText,
   postChannelVideo,
-  uploadChannelImage,
+  scheduleChannelPost,
 } from './actions'
-import { MAX_IMAGE_MB, MAX_VIDEO_MB, POLL_MAX_OPTIONS, POLL_MIN_OPTIONS, type ChannelPostType } from './shared'
+import {
+  MAX_IMAGE_MB,
+  MAX_VIDEO_MB,
+  POLL_MAX_OPTIONS,
+  POLL_MIN_OPTIONS,
+  appendOrderLink,
+  type ChannelPostType,
+} from './shared'
 
 const TYPE_LABELS: Record<ChannelPostType, string> = {
   text: 'Texte',
@@ -25,6 +32,9 @@ const TYPE_LABELS: Record<ChannelPostType, string> = {
   poll: 'Sondage',
 }
 
+/** Types acceptant la programmation (v1) — vidéo et sondage restent immédiats seulement. */
+const SCHEDULABLE_TYPES: ChannelPostType[] = ['text', 'image', 'menu_card']
+
 function errorMessage(_e: unknown, fallback: string): string {
   // Next redige les messages d'erreur des Server Actions en prod (texte
   // anglais générique) : on affiche TOUJOURS le message FR fixe le plus
@@ -33,13 +43,22 @@ function errorMessage(_e: unknown, fallback: string): string {
   return fallback
 }
 
-export function Composer({ restaurantId }: { restaurantId: string }) {
+export function Composer({
+  restaurantId,
+  contactPhone,
+}: {
+  restaurantId: string
+  contactPhone: string | null
+}) {
   const [type, setType] = useState<ChannelPostType>('text')
 
   // Texte
   const [body, setBody] = useState('')
 
-  // Photo
+  // Photo — upload DIRECT navigateur→bucket (jamais de Server Action pour le
+  // fichier lui-même) : on garde le chemin de stockage (media_path, transmis
+  // aux Server Actions) ET l'URL publique (aperçu uniquement).
+  const [imagePath, setImagePath] = useState('')
   const [imageUrl, setImageUrl] = useState('')
   const [imageCaption, setImageCaption] = useState('')
   const [imageUploading, setImageUploading] = useState(false)
@@ -58,12 +77,20 @@ export function Composer({ restaurantId }: { restaurantId: string }) {
   const [question, setQuestion] = useState('')
   const [options, setOptions] = useState<string[]>(['', ''])
 
-  const [sending, setSending] = useState(false)
+  // Programmation (text/image/menu_card) + bouton Commander
+  const [scheduledAt, setScheduledAt] = useState('')
+  const [addOrderButton, setAddOrderButton] = useState(true)
+
+  const [pendingAction, setPendingAction] = useState<'publish' | 'schedule' | null>(null)
+  const sending = pendingAction !== null
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
+  const contactDigits = (contactPhone ?? '').replace(/\D/g, '')
+
   function resetForm() {
     setBody('')
+    setImagePath('')
     setImageUrl('')
     setImageCaption('')
     setVideoPath('')
@@ -72,6 +99,7 @@ export function Composer({ restaurantId }: { restaurantId: string }) {
     setMenuCardCaption('')
     setQuestion('')
     setOptions(['', ''])
+    setScheduledAt('')
   }
 
   function updateOption(idx: number, value: string) {
@@ -89,13 +117,34 @@ export function Composer({ restaurantId }: { restaurantId: string }) {
   async function onImageFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setError('Le fichier doit être une image.')
+      return
+    }
+    if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
+      setError(`Image trop lourde (max ${MAX_IMAGE_MB} Mo).`)
+      return
+    }
     setImageUploading(true)
     setError(null)
     try {
-      const fd = new FormData()
-      fd.set('media', file)
-      const url = await uploadChannelImage(fd)
-      setImageUrl(url)
+      // Upload DIRECT navigateur → bucket status-media (jamais de Server
+      // Action pour l'image — même pattern que la vidéo/la carte menu :
+      // l'id d'une Server Action change à chaque build, un onglet resté
+      // ouvert produirait un 404 sur l'upload).
+      const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      )
+      const ext = (file.name.match(/\.([a-zA-Z0-9]+)$/)?.[1] ?? 'jpg').toLowerCase()
+      const path = `${restaurantId}/${crypto.randomUUID()}.${ext}`
+      const { error: uploadError } = await supabase.storage
+        .from('status-media')
+        .upload(path, file, { contentType: file.type || undefined })
+      if (uploadError) throw new Error(uploadError.message)
+      const publicUrl = supabase.storage.from('status-media').getPublicUrl(path).data.publicUrl
+      setImagePath(path)
+      setImageUrl(publicUrl)
     } catch (err) {
       setError(errorMessage(err, "L'upload de l'image a échoué. Réessayez."))
     } finally {
@@ -172,11 +221,11 @@ export function Composer({ restaurantId }: { restaurantId: string }) {
     }
   }
 
-  function validateClient(): string | null {
+  function validateClient(action: 'publish' | 'schedule'): string | null {
     if (type === 'text' && !body.trim()) return 'Écrivez un message.'
     if (type === 'image') {
       if (imageUploading) return "Attendez la fin de l'upload."
-      if (!imageUrl) return 'Ajoutez une image.'
+      if (!imagePath) return 'Ajoutez une image.'
     }
     if (type === 'video') {
       if (videoUploading) return "Attendez la fin de l'upload."
@@ -191,28 +240,44 @@ export function Composer({ restaurantId }: { restaurantId: string }) {
       const nonEmpty = options.map((o) => o.trim()).filter(Boolean)
       if (nonEmpty.length < POLL_MIN_OPTIONS) return `Ajoutez au moins ${POLL_MIN_OPTIONS} options.`
     }
+    if (action === 'schedule') {
+      if (!SCHEDULABLE_TYPES.includes(type)) {
+        return 'La programmation n’est pas disponible pour ce type de post.'
+      }
+      if (!scheduledAt.trim()) return 'Choisissez une date et une heure.'
+    }
     return null
   }
 
-  async function onSubmit() {
+  async function onSubmit(action: 'publish' | 'schedule') {
     setError(null)
     setSuccess(null)
-    const clientError = validateClient()
+    const clientError = validateClient(action)
     if (clientError) {
       setError(clientError)
       return
     }
-    setSending(true)
+    setPendingAction(action)
     try {
-      if (type === 'text') {
+      if (action === 'schedule') {
         const fd = new FormData()
-        fd.set('body', body)
+        fd.set('kind', type)
+        const rawContent = type === 'text' ? body : type === 'image' ? imageCaption : menuCardCaption
+        fd.set('content', addOrderButton ? appendOrderLink(rawContent, contactPhone) : rawContent)
+        if (type === 'image') fd.set('media_path', imagePath)
+        if (type === 'menu_card') fd.set('media_path', menuCardPath)
+        fd.set('scheduled_at', new Date(scheduledAt).toISOString())
+        await scheduleChannelPost(fd)
+        setSuccess('Post programmé.')
+      } else if (type === 'text') {
+        const fd = new FormData()
+        fd.set('body', addOrderButton ? appendOrderLink(body, contactPhone) : body)
         await postChannelText(fd)
         setSuccess('Publié sur la chaîne.')
       } else if (type === 'image') {
         const fd = new FormData()
-        fd.set('image_url', imageUrl)
-        fd.set('caption', imageCaption)
+        fd.set('media_path', imagePath)
+        fd.set('caption', addOrderButton ? appendOrderLink(imageCaption, contactPhone) : imageCaption)
         await postChannelImage(fd)
         setSuccess('Publié sur la chaîne.')
       } else if (type === 'video') {
@@ -224,7 +289,7 @@ export function Composer({ restaurantId }: { restaurantId: string }) {
       } else if (type === 'menu_card') {
         const fd = new FormData()
         fd.set('media_path', menuCardPath)
-        fd.set('caption', menuCardCaption)
+        fd.set('caption', addOrderButton ? appendOrderLink(menuCardCaption, contactPhone) : menuCardCaption)
         await postChannelMenuCard(fd)
         setSuccess('Carte publiée sur la chaîne.')
       } else {
@@ -236,9 +301,14 @@ export function Composer({ restaurantId }: { restaurantId: string }) {
       }
       resetForm()
     } catch (err) {
-      setError(errorMessage(err, 'Impossible de publier sur la chaîne. Réessayez.'))
+      setError(
+        errorMessage(
+          err,
+          action === 'schedule' ? 'Impossible de programmer ce post. Réessayez.' : 'Impossible de publier sur la chaîne. Réessayez.',
+        ),
+      )
     } finally {
-      setSending(false)
+      setPendingAction(null)
     }
   }
 
@@ -397,10 +467,41 @@ export function Composer({ restaurantId }: { restaurantId: string }) {
           </div>
         )}
 
+        {SCHEDULABLE_TYPES.includes(type) && (
+          <div className="flex flex-col gap-3 border-t border-border pt-3">
+            {contactDigits && (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={addOrderButton}
+                  onChange={(e) => setAddOrderButton(e.target.checked)}
+                  className="accent-primary"
+                />
+                Ajouter le bouton Commander
+              </label>
+            )}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="chaine-scheduled-at">Programmer pour plus tard (optionnel)</Label>
+              <Input
+                id="chaine-scheduled-at"
+                type="datetime-local"
+                value={scheduledAt}
+                onChange={(e) => setScheduledAt(e.target.value)}
+                className="w-56"
+              />
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-3">
-          <Button type="button" disabled={sending} onClick={onSubmit}>
-            {sending ? 'Publication…' : type === 'menu_card' ? 'Publier ma carte' : 'Publier'}
+          <Button type="button" disabled={sending} onClick={() => onSubmit('publish')}>
+            {pendingAction === 'publish' ? 'Publication…' : type === 'menu_card' ? 'Publier ma carte' : 'Publier'}
           </Button>
+          {SCHEDULABLE_TYPES.includes(type) && (
+            <Button type="button" variant="outline" disabled={sending} onClick={() => onSubmit('schedule')}>
+              {pendingAction === 'schedule' ? 'Programmation…' : 'Programmer'}
+            </Button>
+          )}
           {success && !sending && <span className="text-sm text-muted-foreground">{success}</span>}
         </div>
       </CardContent>

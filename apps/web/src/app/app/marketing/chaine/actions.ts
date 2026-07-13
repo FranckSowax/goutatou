@@ -5,7 +5,15 @@ import { createSupabaseServer } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertPlan } from '@/lib/premium'
 import { loadChannelToken } from './channel-token'
-import { validateImagePath, validatePollOptions, validateVideoPath } from './shared'
+import {
+  validateAutoChannelCount,
+  validateAutoChannelTimes,
+  validateImagePath,
+  validatePollOptions,
+  validateScheduledAt,
+  validateVideoPath,
+  type ChannelPostType,
+} from './shared'
 
 const CHAIN_ERROR = 'La chaîne n’est pas disponible sur ce canal.'
 const ATTACH_ERROR = 'Rattachez d’abord votre chaîne.'
@@ -89,18 +97,6 @@ export async function createChannelAction() {
   revalidatePath('/app/marketing/chaine')
 }
 
-/** Upload d'image via Server Action, bucket `status-media` réutilisé (pattern statuts). */
-export async function uploadChannelImage(formData: FormData): Promise<string> {
-  const { supabase, restaurantId } = await myRestaurant()
-  const file = formData.get('media') as File | null
-  if (!file || file.size === 0) throw new Error('Aucun fichier')
-  const safeName = file.name.replace(/^.*[\\/]/, '').replace(/[^a-zA-Z0-9._-]/g, '_')
-  const path = `${restaurantId}/${Date.now()}-${safeName}`
-  const { error } = await supabase.storage.from('status-media').upload(path, file)
-  if (error) throw new Error(error.message)
-  return supabase.storage.from('status-media').getPublicUrl(path).data.publicUrl
-}
-
 export async function postChannelText(formData: FormData) {
   const { supabase, restaurantId, waChannelId } = await myChannel()
   const body = String(formData.get('body') ?? '').trim()
@@ -123,11 +119,21 @@ export async function postChannelText(formData: FormData) {
   revalidatePath('/app/marketing/chaine')
 }
 
+/**
+ * Image uploadée en DIRECT navigateur→bucket `status-media` par le composer
+ * (jamais de Server Action pour le fichier lui-même — pattern vidéo/carte
+ * menu ci-dessous) : cette action ne reçoit que le chemin de stockage,
+ * revalidé (préfixe `${restaurantId}/`, extension image) avant résolution en
+ * URL publique.
+ */
 export async function postChannelImage(formData: FormData) {
   const { supabase, restaurantId, waChannelId } = await myChannel()
-  const imageUrl = String(formData.get('image_url') ?? '').trim()
+  const mediaPath = String(formData.get('media_path') ?? '').trim()
   const caption = String(formData.get('caption') ?? '').trim()
-  if (!imageUrl) throw new Error('Ajoutez une image.')
+
+  const pathError = validateImagePath(mediaPath, restaurantId)
+  if (pathError) throw new Error(pathError)
+  const publicUrl = supabase.storage.from('status-media').getPublicUrl(mediaPath).data.publicUrl
 
   let token: string
   try {
@@ -138,7 +144,7 @@ export async function postChannelImage(formData: FormData) {
 
   const whapi = new WhapiClient(token)
   try {
-    await whapi.sendNewsletterImage(waChannelId, imageUrl, caption || undefined)
+    await whapi.sendNewsletterImage(waChannelId, publicUrl, caption || undefined)
   } catch {
     throw new Error(CHAIN_ERROR)
   }
@@ -235,5 +241,99 @@ export async function postChannelPoll(formData: FormData) {
     throw new Error(CHAIN_ERROR)
   }
 
+  revalidatePath('/app/marketing/chaine')
+}
+
+/**
+ * Programme un post chaîne (table `channel_posts`, source unique des posts
+ * programmés ET auto — cf. plan Chaîne Auto). v1 : text/image/menu_card
+ * seulement (vidéo/sondage hors scope programmation). Image/carte menu
+ * uploadées en DIRECT navigateur→bucket `status-media` par le composer :
+ * cette action ne reçoit que le chemin de stockage, revalidé avant
+ * résolution en URL publique (même pattern que les publications immédiates
+ * ci-dessus).
+ */
+export async function scheduleChannelPost(formData: FormData) {
+  const { supabase, restaurantId } = await myRestaurant()
+  const kind = String(formData.get('kind') ?? 'text') as ChannelPostType
+  if (kind !== 'text' && kind !== 'image' && kind !== 'menu_card') {
+    throw new Error('Type de post invalide pour la programmation.')
+  }
+
+  const scheduledAtRaw = String(formData.get('scheduled_at') ?? '').trim()
+  const scheduledError = validateScheduledAt(scheduledAtRaw, new Date().toISOString())
+  if (scheduledError) throw new Error(scheduledError)
+
+  const content = String(formData.get('content') ?? '').trim()
+  let mediaUrl: string | null = null
+
+  if (kind === 'image' || kind === 'menu_card') {
+    const mediaPath = String(formData.get('media_path') ?? '').trim()
+    const pathError = validateImagePath(mediaPath, restaurantId)
+    if (pathError) throw new Error(pathError)
+    mediaUrl = supabase.storage.from('status-media').getPublicUrl(mediaPath).data.publicUrl
+  } else if (!content) {
+    throw new Error('Écrivez un message.')
+  }
+
+  const { error } = await supabase.from('channel_posts').insert({
+    restaurant_id: restaurantId,
+    kind,
+    content,
+    media_url: mediaUrl,
+    scheduled_at: new Date(scheduledAtRaw).toISOString(),
+    state: 'scheduled',
+    auto_generated: false,
+  })
+  if (error) throw new Error(error.message)
+  revalidatePath('/app/marketing/chaine')
+}
+
+/** Annule un post chaîne programmé (garde tenant + état — n'annule qu'un post encore 'scheduled'). */
+export async function cancelScheduledPost(formData: FormData) {
+  const { supabase, restaurantId } = await myRestaurant()
+  const postId = String(formData.get('post_id') ?? '').trim()
+  if (!postId) throw new Error('Post introuvable.')
+  const { error } = await supabase
+    .from('channel_posts')
+    .update({ state: 'canceled' })
+    .eq('id', postId)
+    .eq('restaurant_id', restaurantId)
+    .eq('state', 'scheduled')
+  if (error) throw new Error(error.message)
+  revalidatePath('/app/marketing/chaine')
+}
+
+/**
+ * Enregistre les réglages « Chaîne Auto » (premium — réservé au plan
+ * premium, contrairement au reste de la chaîne qui reste Pro). Écriture
+ * `restaurants` via client admin (pas de policy RLS UPDATE membre sur cette
+ * table, pattern repris de `updateAutoStatus`).
+ */
+export async function saveAutoChannelSettings(formData: FormData) {
+  const { supabase, restaurantId } = await myRestaurant()
+  await assertPlan(supabase, restaurantId, ['premium'])
+
+  const enabled = formData.get('enabled') === 'on'
+  const rawTimes = [String(formData.get('time_1') ?? ''), String(formData.get('time_2') ?? '')]
+  const timesResult = validateAutoChannelTimes(rawTimes)
+  if (!timesResult.ok) throw new Error(timesResult.error)
+
+  const count = Number.parseInt(String(formData.get('count') ?? ''), 10)
+  if (!validateAutoChannelCount(count)) {
+    throw new Error('Nombre de posts par créneau invalide (1 à 3).')
+  }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('restaurants')
+    .update({
+      auto_channel_enabled: enabled,
+      auto_channel_times: timesResult.times,
+      auto_channel_count: count,
+    })
+    .eq('id', restaurantId)
+    .select('id')
+  if (error || !data || data.length === 0) throw new Error('Enregistrement impossible.')
   revalidatePath('/app/marketing/chaine')
 }

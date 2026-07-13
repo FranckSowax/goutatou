@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { WhapiClient } from '@goutatou/whapi'
 import { loadChannelToken } from './channel-token'
 import { HISTORY_COUNT, formatHistoryDate, formatHistoryPreview } from './shared'
+import type { ChannelPostType } from './shared'
 
 export interface ChannelHistoryEntry {
   id: string
@@ -52,5 +53,57 @@ export async function loadChannelHistory(
     }))
   } catch {
     return []
+  }
+}
+
+export interface ScheduledChannelPost {
+  id: string
+  kind: ChannelPostType
+  content: string
+  scheduled_at: string
+}
+
+/** Posts chaîne programmés (state 'scheduled'), triés par date de publication croissante. */
+export async function loadScheduledPosts(
+  supabase: SupabaseClient,
+  restaurantId: string,
+): Promise<ScheduledChannelPost[]> {
+  const { data } = await supabase
+    .from('channel_posts')
+    .select('id, kind, content, scheduled_at')
+    .eq('restaurant_id', restaurantId)
+    .eq('state', 'scheduled')
+    .order('scheduled_at', { ascending: true })
+  return (data ?? []) as ScheduledChannelPost[]
+}
+
+export interface AutoChannelSettings {
+  enabled: boolean
+  times: string[]
+  count: number
+  /** Mode de validation hérité des Statuts Auto (colonne partagée `auto_status_validation`). */
+  validationMode: 'none' | 'manager' | 'group'
+}
+
+/**
+ * Réglages « Chaîne Auto » (premium). La validation avant publication est
+ * réutilisée à l'identique des Statuts Auto (aucune nouvelle colonne de
+ * validation, cf. plan Chaîne Auto) — lue ici en lecture seule pour rappel.
+ */
+export async function loadAutoChannelSettings(
+  supabase: SupabaseClient,
+  restaurantId: string,
+): Promise<AutoChannelSettings> {
+  const { data } = await supabase
+    .from('restaurants')
+    .select('auto_channel_enabled, auto_channel_times, auto_channel_count, auto_status_validation')
+    .eq('id', restaurantId)
+    .maybeSingle()
+  const validation = data?.auto_status_validation
+  return {
+    enabled: data?.auto_channel_enabled ?? false,
+    times: (data?.auto_channel_times as string[] | null) ?? [],
+    count: data?.auto_channel_count ?? 1,
+    validationMode: validation === 'manager' || validation === 'group' ? validation : 'none',
   }
 }

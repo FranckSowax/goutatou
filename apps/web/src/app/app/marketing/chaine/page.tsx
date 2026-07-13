@@ -1,12 +1,19 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
-import { isPro } from '@/lib/premium'
+import { isPremium, isPro } from '@/lib/premium'
 import { qrSvg } from '@/lib/qr'
 import { Card } from '@/components/ui/card'
 import { CreateChannelCard } from './create-channel-card'
 import { InviteCard } from './invite-card'
 import { Composer } from './composer'
 import { History } from './history'
-import { loadChannelHistory, loadChannelSubscribers } from './channel-data'
+import { ScheduledList } from './scheduled-list'
+import { AutoChannelCard } from './auto-channel-card'
+import {
+  loadAutoChannelSettings,
+  loadChannelHistory,
+  loadChannelSubscribers,
+  loadScheduledPosts,
+} from './channel-data'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,7 +46,7 @@ export default async function ChaineWhatsAppPage() {
 
   const { data: resto } = await supabase
     .from('restaurants')
-    .select('name, wa_channel_id, wa_channel_invite')
+    .select('name, wa_channel_id, wa_channel_invite, contact_phone')
     .eq('id', restaurantId)
     .single()
   const { data: channel } = await supabase
@@ -77,9 +84,12 @@ export default async function ChaineWhatsAppPage() {
   }
 
   const svg = resto.wa_channel_invite ? await qrSvg(resto.wa_channel_invite) : null
-  const [subscribers, history] = await Promise.all([
+  const premium = await isPremium(supabase, restaurantId)
+  const [subscribers, history, scheduledPosts, autoChannelSettings] = await Promise.all([
     loadChannelSubscribers(supabase, restaurantId, resto.wa_channel_id),
     loadChannelHistory(supabase, restaurantId, resto.wa_channel_id),
+    loadScheduledPosts(supabase, restaurantId),
+    premium ? loadAutoChannelSettings(supabase, restaurantId) : Promise.resolve(null),
   ])
 
   return (
@@ -91,7 +101,16 @@ export default async function ChaineWhatsAppPage() {
       </p>
       <div className="flex flex-col gap-6">
         <InviteCard invite={resto.wa_channel_invite} svg={svg} />
-        <Composer restaurantId={restaurantId} />
+        <Composer restaurantId={restaurantId} contactPhone={resto.contact_phone ?? null} />
+        <ScheduledList posts={scheduledPosts} />
+        {premium && autoChannelSettings && (
+          <AutoChannelCard
+            enabled={autoChannelSettings.enabled}
+            times={autoChannelSettings.times}
+            count={autoChannelSettings.count}
+            validationMode={autoChannelSettings.validationMode}
+          />
+        )}
         <History entries={history} />
       </div>
     </div>
