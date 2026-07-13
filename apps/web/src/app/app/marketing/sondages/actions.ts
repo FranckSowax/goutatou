@@ -1,10 +1,14 @@
 'use server'
 import { revalidatePath } from 'next/cache'
+import { WhapiClient } from '@goutatou/whapi'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { assertPlan } from '@/lib/premium'
 // Import relatif (et non `@/lib/...`) : `validateImagePath` est réutilisé tel quel depuis le
 // composer Chaîne — même garde-fou que l'upload direct chaine/composer.tsx.
 import { validateImagePath } from '../chaine/shared'
+// loadChannelToken : même helper que chaine/actions.ts (décrypte le token du canal — jamais
+// transmis au client), réutilisé tel quel pour le dépouillement (Task SV4).
+import { loadChannelToken } from '../chaine/channel-token'
 import { normalizeSurfaces, validatePollOptions, validateSurfaces, type PollSurface } from './shared'
 
 const VALID_SURFACES: PollSurface[] = ['channel', 'group', 'status_teaser']
@@ -84,4 +88,70 @@ export async function createPoll(formData: FormData) {
   if (error) throw new Error('Impossible d’envoyer le sondage. Réessayez.')
 
   revalidatePath('/app/marketing/sondages')
+}
+
+export type PollSurfaceResult =
+  | { options: Array<{ label: string; count: number }>; total: number }
+  | { error: string }
+
+export interface PollResultsPayload {
+  channel?: PollSurfaceResult
+  group?: PollSurfaceResult
+}
+
+const CHANNEL_TOKEN_ERROR = 'La chaîne n’est pas disponible sur ce canal.'
+
+/**
+ * Dépouillement à la demande d'un sondage natif (Task SV4). Multi-tenant strict : le poll est
+ * chargé filtré par `restaurant_id = <restaurant du membre courant>`, un membre ne peut donc
+ * jamais lire les résultats d'un sondage d'un autre restaurant même en connaissant son id. Ne lit
+ * QUE `channel_message_id`/`group_message_id` — le `status_teaser` n'a pas de vote natif propre
+ * (c'est une annonce, cf. Global Constraints du plan), il n'apparaît donc jamais dans le payload.
+ * Aucune exception non gérée ne doit remonter au client : chaque appel whapi est capturé
+ * individuellement par surface et transformé en état d'erreur FR affichable.
+ */
+export async function getPollResults(pollId: string): Promise<PollResultsPayload> {
+  const { supabase, restaurantId } = await myRestaurant()
+
+  const { data: poll, error } = await supabase
+    .from('polls')
+    .select('id, channel_message_id, group_message_id')
+    .eq('id', pollId)
+    .eq('restaurant_id', restaurantId)
+    .maybeSingle()
+  if (error || !poll) throw new Error('Sondage introuvable.')
+
+  const channelMessageId = poll.channel_message_id as string | null
+  const groupMessageId = poll.group_message_id as string | null
+  if (!channelMessageId && !groupMessageId) return {}
+
+  let token: string
+  try {
+    token = await loadChannelToken(supabase, restaurantId)
+  } catch {
+    const payload: PollResultsPayload = {}
+    if (channelMessageId) payload.channel = { error: CHANNEL_TOKEN_ERROR }
+    if (groupMessageId) payload.group = { error: CHANNEL_TOKEN_ERROR }
+    return payload
+  }
+
+  const whapi = new WhapiClient(token)
+  const payload: PollResultsPayload = {}
+
+  if (channelMessageId) {
+    try {
+      payload.channel = await whapi.readPollResults(channelMessageId)
+    } catch {
+      payload.channel = { error: 'Impossible de lire les résultats de la chaîne.' }
+    }
+  }
+  if (groupMessageId) {
+    try {
+      payload.group = await whapi.readPollResults(groupMessageId)
+    } catch {
+      payload.group = { error: 'Impossible de lire les résultats du groupe.' }
+    }
+  }
+
+  return payload
 }

@@ -4,7 +4,8 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import type { BadgeTone } from '@/lib/status-badge'
 import { Composer } from './composer'
-import { SURFACE_LABELS, type PollSurface } from './shared'
+import { PollResults } from './results'
+import { POLL_SURFACES, SURFACE_LABELS, type PollSurface } from './shared'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,6 +24,9 @@ interface PollRow {
   error: string | null
   created_at: string
   sent_at: string | null
+  channel_message_id: string | null
+  group_message_id: string | null
+  surface_status: Record<string, string> | null
 }
 
 function statusBadge(status: PollStatus, sentCount: number): { variant: BadgeTone; label: string } {
@@ -42,12 +46,30 @@ function targetLabel(target: PollTarget): string {
   return target === 'channel' ? 'Chaîne WhatsApp' : 'Clients opt-in'
 }
 
-/** Libellé des surfaces d'un sondage ; repli sur `target` pour les lignes historiques (avant la
- * migration 0027 multi-surfaces) qui n'ont pas de `surfaces` renseignées. */
-function surfacesLabel(p: Pick<PollRow, 'surfaces' | 'target'>): string {
+/** Surfaces effectives d'un sondage ; repli sur `target` pour les lignes historiques (avant la
+ * migration 0027 multi-surfaces) qui n'ont pas de `surfaces` renseignées. Réutilisé pour le
+ * libellé, le détail d'envoi par surface et pour monter `<PollResults>`. */
+function resolveSurfaces(p: Pick<PollRow, 'surfaces' | 'target'>): PollSurface[] {
   const surfaces = (p.surfaces ?? []).filter((s): s is PollSurface => s in SURFACE_LABELS)
+  if (surfaces.length > 0) return POLL_SURFACES.filter((s) => surfaces.includes(s))
+  return p.target === 'channel' ? ['channel'] : []
+}
+
+function surfacesLabel(p: Pick<PollRow, 'surfaces' | 'target'>): string {
+  const surfaces = resolveSurfaces(p)
   if (surfaces.length > 0) return surfaces.map((s) => SURFACE_LABELS[s]).join(' + ')
   return targetLabel(p.target)
+}
+
+const SURFACE_SEND_LABELS: Record<string, string> = {
+  sent: 'Envoyé',
+  failed: 'Échec',
+}
+
+/** État d'envoi d'une surface — `surface_status` (jsonb `{ "<surface>": "sent"|"failed" }`,
+ * peuplé par le poll-worker, Task SV2). Pas d'entrée pour une surface = pas encore traitée. */
+function surfaceSendLabel(status: string | undefined): string {
+  return status ? (SURFACE_SEND_LABELS[status] ?? status) : 'En attente'
 }
 
 export default async function SondagesPage() {
@@ -85,7 +107,9 @@ export default async function SondagesPage() {
 
   const { data: polls } = await supabase
     .from('polls')
-    .select('id, question, options, quiz_correct, target, surfaces, status, sent_count, error, created_at, sent_at')
+    .select(
+      'id, question, options, quiz_correct, target, surfaces, status, sent_count, error, created_at, sent_at, channel_message_id, group_message_id, surface_status',
+    )
     .eq('restaurant_id', restaurantId)
     .order('created_at', { ascending: false })
     .limit(20)
@@ -102,6 +126,8 @@ export default async function SondagesPage() {
           <ul className="flex flex-col gap-3">
             {rows.map((p) => {
               const badge = statusBadge(p.status, p.sent_count)
+              const surfaces = resolveSurfaces(p)
+              const surfaceStatus = p.surface_status ?? {}
               return (
                 <li key={p.id}>
                   <Card className="rounded-2xl p-4">
@@ -112,9 +138,19 @@ export default async function SondagesPage() {
                     <p className="mt-1 text-sm text-muted-foreground">
                       {surfacesLabel(p)} · {new Date(p.created_at).toLocaleString('fr-FR')}
                     </p>
+                    {surfaces.length > 0 && (
+                      <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                        {surfaces.map((s) => (
+                          <li key={s}>
+                            {SURFACE_LABELS[s]} : {surfaceSendLabel(surfaceStatus[s])}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                     {p.status === 'failed' && p.error && (
                       <p className="mt-2 text-sm text-destructive">{p.error}</p>
                     )}
+                    <PollResults pollId={p.id} surfaces={surfaces} />
                   </Card>
                 </li>
               )
