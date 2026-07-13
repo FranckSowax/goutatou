@@ -202,6 +202,136 @@ export class WhapiClient {
   }
 
   /**
+   * Liste les canaux (newsletters) possédés ou suivis — GET /newsletters (query `count`, fixé à
+   * 100 ici ; `offset` non géré, pagination à ajouter si plus de 100 canaux). Endpoint, méthode et
+   * query params confirmés par le code généré du serveur MCP whapi-mcp (généré depuis le schéma
+   * officiel Whapi, ~/.npm/_npx/.../whapi-mcp/generated-mcp/getNewsletters.js) et B_manifest.json
+   * (summary "Get newsletters" : « returns a list with metadata of your own WhatsApp Channel and
+   * followed Channels »). Confiance : haute sur la requête.
+   *
+   * Forme de la réponse NON documentée (outputSchema du manifeste MCP = enveloppe générique
+   * {status, content}, pas le corps réel ; whapi.readme.io/reference/getnewsletters et
+   * .agents/skills/whapi/references/channels-management.md ne montrent aucun exemple JSON de
+   * réponse). Parsing défensif : liste sous `newsletters`, sinon réponse déjà un tableau, sinon
+   * vide. Champs lus par item, tous optionnels — AUCUN nom de champ n'est confirmé par une source
+   * documentée, ce sont les noms les plus plausibles par analogie :
+   *   - id/name : mêmes noms que getNewsletter/createNewsletter ci-dessus (confirmés pour ces
+   *     deux endpoints, supposés identiques ici puisque même ressource "newsletter").
+   *   - picture : nom plausible pour une image de profil de canal (absent de toute doc Whapi
+   *     consultée pour cet endpoint précis).
+   *   - role : `role` en priorité, repli sur `user_role` (distinction owner/admin/abonné évoquée
+   *     par la doc sans préciser le nom du champ).
+   *   - subscribers : `subscribers` en priorité, repli sur `subscribers_count` puis `followers`.
+   * Confiance : BASSE sur la forme exacte de chaque champ — à vérifier contre un vrai appel avant
+   * usage en prod (la tâche de rattachement de canal qui consomme `role` doit prévoir un repli si
+   * le champ est absent ou porte un autre nom).
+   */
+  async getNewsletters(): Promise<
+    Array<{ id?: string; name?: string; picture?: string; role?: string; subscribers?: number }>
+  > {
+    const res = (await this.request('GET', '/newsletters?count=100')) as
+      | { newsletters?: Array<Record<string, unknown>> }
+      | Array<Record<string, unknown>>
+    const list = Array.isArray(res) ? res : (res.newsletters ?? [])
+    return list.map((item) => ({
+      id: typeof item.id === 'string' ? item.id : undefined,
+      name: typeof item.name === 'string' ? item.name : undefined,
+      picture: typeof item.picture === 'string' ? item.picture : undefined,
+      role:
+        typeof item.role === 'string' ? item.role : typeof item.user_role === 'string' ? item.user_role : undefined,
+      subscribers:
+        typeof item.subscribers === 'number'
+          ? item.subscribers
+          : typeof item.subscribers_count === 'number'
+            ? item.subscribers_count
+            : typeof item.followers === 'number'
+              ? item.followers
+              : undefined,
+    }))
+  }
+
+  /**
+   * Envoie une vidéo à un canal — POST /messages/video, avec `to` = ID du canal au format
+   * `...@newsletter` (même convention que sendNewsletterText/sendNewsletterImage ci-dessus,
+   * confirmée par channels-management.md, section "Post to a Channel" : "Use the channel's
+   * @newsletter ID as the to field"). Endpoint, méthode et champs du body (to/media requis,
+   * caption optionnel) confirmés à l'identique par le code généré whapi-mcp
+   * (sendMessageVideo.js) et B_manifest.json (requestBody.schema.required = ["media", "to"]) —
+   * même schéma que sendImage, avec un champ `media` de type vidéo. Confiance : haute sur la
+   * requête.
+   *
+   * Contrairement à sendNewsletterText/sendNewsletterImage ci-dessus (qui délèguent tel quel à
+   * sendText/sendImage sans jamais toucher à `newsletterId`, l'appelant devant déjà fournir le
+   * suffixe `@newsletter`), cette méthode ajoute le suffixe si absent : c'est un endpoint neuf
+   * (pas un simple alias d'une méthode générique existante déjà couverte par des tests figés sur
+   * le comportement pass-through), donc ce filet de sécurité ne casse rien côté appelants
+   * existants.
+   *
+   * Forme de la réponse INFÉRÉE par analogie avec sendImage/sendText (`{ message: { id } }`) — non
+   * documentée pour cet endpoint spécifique (outputSchema générique {status, content}). Confiance :
+   * haute sur la requête, moyenne sur la forme de la réponse.
+   */
+  async sendChannelVideo(newsletterId: string, mediaUrl: string, caption?: string): Promise<{ id?: string }> {
+    const to = newsletterId.endsWith('@newsletter') ? newsletterId : `${newsletterId}@newsletter`
+    const res = (await this.request('POST', '/messages/video', { to, media: mediaUrl, caption })) as {
+      message?: { id?: string }
+    }
+    return { id: res.message?.id }
+  }
+
+  /**
+   * Historique des messages d'un canal — GET /newsletters/{NewsletterID}/messages (query `count`,
+   * défaut 20 ici côté appel — le défaut Whapi lui-même est 100 ; `before`/`after` non gérés,
+   * pagination à ajouter si besoin). Endpoint, méthode, paramètre de chemin et query params
+   * confirmés par le code généré whapi-mcp (getMessagesNewsletter.js) et B_manifest.json (summary
+   * "Get newsletter messages" : « returns the history of WhatsApp Channel messages »). Confiance :
+   * haute sur la requête.
+   *
+   * Forme de la réponse NON documentée par un exemple JSON (même limite que getNewsletters
+   * ci-dessus : outputSchema générique {status, content}). Parsing défensif : liste sous
+   * `messages`, sinon réponse déjà un tableau, sinon vide. Champs lus PAR ANALOGIE avec la forme
+   * des messages webhook entrants déjà consommée ailleurs dans ce monorepo (cf.
+   * services/whatsapp/src/processor.ts : `msg.type`, `msg.text?.body`) — hypothèse raisonnable
+   * puisque Whapi réutilise généralement le même objet "message" pour les webhooks et les
+   * endpoints d'historique, mais NON vérifiée pour /newsletters/{id}/messages précisément :
+   *   - id/type/timestamp : lus directement à la racine de l'item.
+   *   - text : `text.body` (message texte, forme confirmée côté webhook entrant).
+   *   - caption : `caption` à la racine en repli, sinon `image.caption`/`video.caption` (légende
+   *     d'un post média — mêmes clés imbriquées que `text.body` par cohérence de schéma).
+   * Confiance : BASSE-MOYENNE sur la forme exacte — à vérifier contre un vrai historique de canal
+   * avant usage en prod.
+   */
+  async getChannelMessages(
+    newsletterId: string,
+    count = 20,
+  ): Promise<Array<{ id?: string; type?: string; caption?: string; text?: string; timestamp?: number }>> {
+    const params = new URLSearchParams({ count: String(count) })
+    const res = (await this.request('GET', `/newsletters/${newsletterId}/messages?${params}`)) as
+      | { messages?: Array<Record<string, unknown>> }
+      | Array<Record<string, unknown>>
+    const list = Array.isArray(res) ? res : (res.messages ?? [])
+    return list.map((item) => {
+      const text = item.text as Record<string, unknown> | undefined
+      const image = item.image as Record<string, unknown> | undefined
+      const video = item.video as Record<string, unknown> | undefined
+      return {
+        id: typeof item.id === 'string' ? item.id : undefined,
+        type: typeof item.type === 'string' ? item.type : undefined,
+        text: typeof text?.body === 'string' ? text.body : undefined,
+        caption:
+          typeof item.caption === 'string'
+            ? item.caption
+            : typeof image?.caption === 'string'
+              ? image.caption
+              : typeof video?.caption === 'string'
+                ? video.caption
+                : undefined,
+        timestamp: typeof item.timestamp === 'number' ? item.timestamp : undefined,
+      }
+    })
+  }
+
+  /**
    * QR code de connexion à distance, en base64 — GET /users/login. Méthode et chemin confirmés
    * via whapi.readme.io/reference/loginuser (non documenté dans .agents/skills/whapi/references/).
    * Nom du champ `base64` INFÉRÉ de la description de l'outil MCP loginUser ("returns an image

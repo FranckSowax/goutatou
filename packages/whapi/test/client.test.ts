@@ -218,6 +218,81 @@ describe('WhapiClient', () => {
     })
   })
 
+  it('getNewsletters : GET /newsletters?count=100, réponse tableau brut, parse id/name/picture/role/subscribers', async () => {
+    const fetchFn = mockFetch([{
+      status: 200,
+      body: [
+        { id: '120363@newsletter', name: 'Promos Goutatou', picture: 'https://cdn.example.com/pic.jpg', role: 'owner', subscribers: 42 },
+      ],
+    }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.getNewsletters()
+    expect(res).toEqual([
+      { id: '120363@newsletter', name: 'Promos Goutatou', picture: 'https://cdn.example.com/pic.jpg', role: 'owner', subscribers: 42 },
+    ])
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/newsletters?count=100')
+    expect(init.method).toBe('GET')
+  })
+
+  it('getNewsletters : réponse enveloppée sous `newsletters`, repli sur user_role/subscribers_count, champs manquants → undefined', async () => {
+    const fetchFn = mockFetch([{
+      status: 200,
+      body: { newsletters: [{ id: '999@newsletter', user_role: 'admin', subscribers_count: 7 }, {}] },
+    }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.getNewsletters()
+    expect(res).toEqual([
+      { id: '999@newsletter', name: undefined, picture: undefined, role: 'admin', subscribers: 7 },
+      { id: undefined, name: undefined, picture: undefined, role: undefined, subscribers: undefined },
+    ])
+  })
+
+  it('sendChannelVideo : POST /messages/video avec to déjà suffixé @newsletter, laissé tel quel', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { message: { id: 'NW3' } } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.sendChannelVideo('120363@newsletter', 'https://cdn.example.com/promo.mp4', 'Notre nouveau plat')
+    expect(res.id).toBe('NW3')
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/messages/video')
+    expect(JSON.parse(init.body)).toEqual({
+      to: '120363@newsletter', media: 'https://cdn.example.com/promo.mp4', caption: 'Notre nouveau plat',
+    })
+  })
+
+  it('sendChannelVideo : ajoute le suffixe @newsletter si absent de newsletterId', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: { message: { id: 'NW4' } } }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    await client.sendChannelVideo('120363', 'https://cdn.example.com/promo.mp4')
+    const [, init] = fetchFn.mock.calls[0]
+    expect(JSON.parse(init.body).to).toBe('120363@newsletter')
+  })
+
+  it('getChannelMessages : GET /newsletters/{id}/messages?count=20 (défaut), parse id/type/text/timestamp', async () => {
+    const fetchFn = mockFetch([{
+      status: 200,
+      body: { messages: [{ id: 'M1', type: 'text', text: { body: 'Promo du jour' }, timestamp: 1700000000 }] },
+    }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.getChannelMessages('120363@newsletter')
+    expect(res).toEqual([{ id: 'M1', type: 'text', text: 'Promo du jour', caption: undefined, timestamp: 1700000000 }])
+    const [url, init] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/newsletters/120363@newsletter/messages?count=20')
+    expect(init.method).toBe('GET')
+  })
+
+  it('getChannelMessages : réponse tableau brut, caption via image.caption, count personnalisé dans l\'URL', async () => {
+    const fetchFn = mockFetch([{
+      status: 200,
+      body: [{ id: 'M2', type: 'image', image: { caption: 'Nouveau menu' } }],
+    }])
+    const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
+    const res = await client.getChannelMessages('120363@newsletter', 5)
+    expect(res).toEqual([{ id: 'M2', type: 'image', text: undefined, caption: 'Nouveau menu', timestamp: undefined }])
+    const [url] = fetchFn.mock.calls[0]
+    expect(url).toBe('https://gate.whapi.cloud/newsletters/120363@newsletter/messages?count=5')
+  })
+
   it('getLoginQr : GET /users/login, parse base64', async () => {
     const fetchFn = mockFetch([{ status: 200, body: { base64: 'data:image/png;base64,AAAA' } }])
     const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
