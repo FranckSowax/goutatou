@@ -171,6 +171,7 @@ export async function runAutoStatusOnce(deps: AutoStatusWorkerDeps): Promise<voi
           content: buildStatusCaption({ name: dish.name, price: dish.price }, cursor + i),
           mediaUrl: dish.photoUrl,
           scheduledAt,
+          echoToChannel: c.autoStatusEchoChannel,
         })
       }
       cursor = (cursor + count) % dishes.length

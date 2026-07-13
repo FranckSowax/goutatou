@@ -25,6 +25,7 @@ function candidate(over: Partial<AutoStatusCandidate> = {}): AutoStatusCandidate
     autoStatusManagerPhone: null,
     contactPhone: null,
     staffGroupId: null,
+    autoStatusEchoChannel: false,
     ...over,
   }
 }
@@ -83,8 +84,18 @@ describe('runAutoStatusOnce — créneau dû / non dû / déjà exécuté', () =
       content: expect.stringContaining('Poulet braisé'),
       mediaUrl: 'https://x/d1.jpg',
       scheduledAt: '2026-07-13T10:30:00.000Z', // créneau 11:30 Libreville = 10:30 UTC — PAS "now" (10:35)
+      echoToChannel: false,
     })
     expect(repo.bumpCursor).toHaveBeenCalledWith('r1', 1)
+  })
+
+  it('auto_status_echo_channel activé sur le resto → rows générées portent echoToChannel: true', async () => {
+    const repo = makeRepo({}, [candidate({ autoStatusEchoChannel: true })])
+    const whapi = makeWhapiStub()
+    await runAutoStatusOnce({ repo, now: () => NOW_1135_LIBREVILLE, makeWhapi: () => whapi })
+
+    const rows = repo.insertGeneratedStatuses.mock.calls[0][0] as NewAutoStatusRow[]
+    expect(rows[0].echoToChannel).toBe(true)
   })
 
   it('créneau pas encore dans la fenêtre d\'avance (now < créneau - 120min) → aucune action', async () => {

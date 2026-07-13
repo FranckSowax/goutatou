@@ -24,6 +24,7 @@ describe('createAutoStatusRepo — listCandidates', () => {
         auto_status_cursor: 1, auto_status_last_slot: '2026-07-12 11:30',
         auto_status_validation: 'manager', auto_status_manager_phone: '24177000001@s.whatsapp.net',
         contact_phone: '24177000009@s.whatsapp.net', staff_group_id: null,
+        auto_status_echo_channel: true,
       },
     ])
     const from = vi.fn().mockReturnValue(chain)
@@ -36,7 +37,9 @@ describe('createAutoStatusRepo — listCandidates', () => {
       autoStatusCursor: 1, autoStatusLastSlot: '2026-07-12 11:30',
       autoStatusValidation: 'manager', autoStatusManagerPhone: '24177000001@s.whatsapp.net',
       contactPhone: '24177000009@s.whatsapp.net', staffGroupId: null,
+      autoStatusEchoChannel: true,
     }])
+    expect(chain.select).toHaveBeenCalledWith(expect.stringContaining('auto_status_echo_channel'))
     expect(chain.eq).toHaveBeenCalledWith('auto_status_enabled', true)
     expect(chain.eq).toHaveBeenCalledWith('subscriptions.plan', 'premium')
     expect(chain.eq).toHaveBeenCalledWith('subscriptions.status', 'active')
@@ -132,6 +135,24 @@ describe('createAutoStatusRepo — bumpCursor / insertGeneratedStatuses', () => 
     expect(chain.insert).toHaveBeenCalledWith([{
       restaurant_id: 'r1', kind: 'image', content: 'Légende', media_url: 'https://x/a.jpg',
       scheduled_at: '2026-07-13T10:35:00.000Z', state: 'scheduled', audience: 'all', auto_generated: true,
+      echo_to_channel: false,
+    }])
+  })
+
+  it('insertGeneratedStatuses insère echo_to_channel: true quand la row le porte', async () => {
+    const chain = makeChain(null)
+    chain.then = (resolve: (v: { error: null }) => unknown) => Promise.resolve({ error: null }).then(resolve)
+    const from = vi.fn().mockReturnValue(chain)
+    const repo = createAutoStatusRepo({ from } as unknown as SupabaseClient, TOKEN_KEY)
+
+    await repo.insertGeneratedStatuses([
+      { restaurantId: 'r1', content: 'Légende', mediaUrl: 'https://x/a.jpg', scheduledAt: '2026-07-13T10:35:00.000Z', echoToChannel: true },
+    ])
+
+    expect(chain.insert).toHaveBeenCalledWith([{
+      restaurant_id: 'r1', kind: 'image', content: 'Légende', media_url: 'https://x/a.jpg',
+      scheduled_at: '2026-07-13T10:35:00.000Z', state: 'scheduled', audience: 'all', auto_generated: true,
+      echo_to_channel: true,
     }])
   })
 
@@ -156,8 +177,25 @@ describe('createAutoStatusRepo — insertPendingApprovalStatuses', () => {
     expect(chain.insert).toHaveBeenCalledWith([{
       restaurant_id: 'r1', kind: 'image', content: 'Légende', media_url: 'https://x/a.jpg',
       scheduled_at: '2026-07-13T10:30:00.000Z', state: 'pending_approval', audience: 'all', auto_generated: true,
+      echo_to_channel: false,
     }])
     expect(refs).toEqual([{ id: 's1', content: 'Légende', mediaUrl: 'https://x/a.jpg' }])
+  })
+
+  it('insertPendingApprovalStatuses insère echo_to_channel: true quand la row le porte', async () => {
+    const chain = makeChain([{ id: 's1', content: 'Légende', media_url: 'https://x/a.jpg' }])
+    const from = vi.fn().mockReturnValue(chain)
+    const repo = createAutoStatusRepo({ from } as unknown as SupabaseClient, TOKEN_KEY)
+
+    await repo.insertPendingApprovalStatuses([
+      { restaurantId: 'r1', content: 'Légende', mediaUrl: 'https://x/a.jpg', scheduledAt: '2026-07-13T10:30:00.000Z', echoToChannel: true },
+    ])
+
+    expect(chain.insert).toHaveBeenCalledWith([{
+      restaurant_id: 'r1', kind: 'image', content: 'Légende', media_url: 'https://x/a.jpg',
+      scheduled_at: '2026-07-13T10:30:00.000Z', state: 'pending_approval', audience: 'all', auto_generated: true,
+      echo_to_channel: true,
+    }])
   })
 
   it('tableau vide → aucun appel, renvoie []', async () => {

@@ -15,6 +15,8 @@ export interface AutoStatusCandidate {
   autoStatusManagerPhone: string | null
   contactPhone: string | null
   staffGroupId: string | null
+  /** Toggle premium « Écho chaîne par défaut » (restaurants.auto_status_echo_channel) — propagé aux statuts auto générés. */
+  autoStatusEchoChannel: boolean
 }
 
 /** Plat disponible AVEC photo, position stable (catégorie puis plat) — rotation cursor dessus. */
@@ -30,6 +32,8 @@ export interface NewAutoStatusRow {
   content: string
   mediaUrl: string
   scheduledAt: string
+  /** Mirror de restaurants.auto_status_echo_channel (cf. statuses/repo.ts echoToChannel) — défaut false. */
+  echoToChannel?: boolean
 }
 
 /** Ligne insérée en `pending_approval` — id + contenu nécessaires pour l'envoi (image + boutons/sondage). */
@@ -76,6 +80,7 @@ interface CandidateRow {
   auto_status_manager_phone: string | null
   contact_phone: string | null
   staff_group_id: string | null
+  auto_status_echo_channel: boolean
 }
 
 /**
@@ -94,6 +99,7 @@ export function createAutoStatusRepo(db: SupabaseClient, tokenKey?: string): Aut
         .select(
           'id, auto_status_times, auto_status_count, auto_status_cursor, auto_status_last_slot, ' +
             'auto_status_validation, auto_status_manager_phone, contact_phone, staff_group_id, ' +
+            'auto_status_echo_channel, ' +
             'subscriptions!inner(plan, status), whapi_channels!inner(status)',
         )
         .eq('auto_status_enabled', true)
@@ -111,6 +117,7 @@ export function createAutoStatusRepo(db: SupabaseClient, tokenKey?: string): Aut
         autoStatusManagerPhone: r.auto_status_manager_phone,
         contactPhone: r.contact_phone,
         staffGroupId: r.staff_group_id,
+        autoStatusEchoChannel: r.auto_status_echo_channel,
       }))
     },
 
@@ -159,6 +166,7 @@ export function createAutoStatusRepo(db: SupabaseClient, tokenKey?: string): Aut
         state: 'scheduled',
         audience: 'all',
         auto_generated: true,
+        echo_to_channel: r.echoToChannel ?? false,
       }))
       const { error } = await db.from('statuses').insert(payload)
       if (error) throw new Error(`insertGeneratedStatuses: ${error.message}`)
@@ -175,6 +183,7 @@ export function createAutoStatusRepo(db: SupabaseClient, tokenKey?: string): Aut
         state: 'pending_approval',
         audience: 'all',
         auto_generated: true,
+        echo_to_channel: r.echoToChannel ?? false,
       }))
       const { data, error } = await db.from('statuses').insert(payload).select('id, content, media_url')
       if (error) throw new Error(`insertPendingApprovalStatuses: ${error.message}`)
