@@ -324,6 +324,17 @@ export async function saveAutoChannelSettings(formData: FormData) {
     throw new Error('Nombre de posts par créneau invalide (1 à 3).')
   }
 
+  // Ancrage anti-rattrapage (même logique que saveAutoStatusSettings) : à
+  // l'enregistrement on pose auto_channel_last_slot sur le dernier créneau déjà
+  // passé AUJOURD'HUI (heure de Libreville, UTC+1 fixe), pour que le worker ne
+  // publie qu'à partir du PROCHAIN créneau — activer à 19 h ne rattrape pas
+  // celui de 11 h 30.
+  const lbv = new Date(Date.now() + 3600_000)
+  const dateKey = lbv.toISOString().slice(0, 10)
+  const hhmm = lbv.toISOString().slice(11, 16)
+  const pastSlots = timesResult.times.filter((t) => t <= hhmm).sort()
+  const anchor = pastSlots.length > 0 ? `${dateKey} ${pastSlots[pastSlots.length - 1]}` : null
+
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('restaurants')
@@ -331,6 +342,7 @@ export async function saveAutoChannelSettings(formData: FormData) {
       auto_channel_enabled: enabled,
       auto_channel_times: timesResult.times,
       auto_channel_count: count,
+      auto_channel_last_slot: anchor,
     })
     .eq('id', restaurantId)
     .select('id')
