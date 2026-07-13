@@ -106,7 +106,10 @@ export function shouldOfferSpin(recuperatedCount: number, triggerN: number): boo
   return triggerN >= 1 && recuperatedCount > 0 && recuperatedCount % triggerN === 0
 }
 
-export type StatusState = 'draft' | 'scheduled' | 'posting' | 'posted' | 'failed' | 'canceled'
+// 'pending_approval' ajouté par la migration 0025 (validation statuts, cf.
+// docs/superpowers/specs/2026-07-13-validation-statuts-design.md) : statut auto en attente
+// de validation gérant/groupe avant de passer à 'scheduled' (ou 'canceled' sur refus/expiration).
+export type StatusState = 'draft' | 'scheduled' | 'posting' | 'posted' | 'failed' | 'canceled' | 'pending_approval'
 export type StatusKind = 'text' | 'image'
 
 const STATUS_LABELS: Record<StatusState, string> = {
@@ -116,6 +119,7 @@ const STATUS_LABELS: Record<StatusState, string> = {
   posted: 'Publié',
   failed: 'Échec',
   canceled: 'Annulé',
+  pending_approval: 'En attente de validation',
 }
 
 export function statusStateLabel(s: StatusState): string {

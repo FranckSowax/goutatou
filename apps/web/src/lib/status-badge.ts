@@ -9,5 +9,8 @@ export function badgeVariantForCampaign(s: CampaignStatus): BadgeTone {
   return ({ draft: 'muted', scheduled: 'warning', sending: 'default', sent: 'success', canceled: 'destructive' } as const)[s]
 }
 export function badgeVariantForStatus(s: StatusState): BadgeTone {
-  return ({ draft: 'muted', scheduled: 'warning', posting: 'default', posted: 'success', failed: 'destructive', canceled: 'muted' } as const)[s]
+  return ({
+    draft: 'muted', scheduled: 'warning', posting: 'default', posted: 'success',
+    failed: 'destructive', canceled: 'muted', pending_approval: 'warning',
+  } as const)[s]
 }
