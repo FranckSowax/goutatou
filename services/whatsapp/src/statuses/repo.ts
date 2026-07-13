@@ -16,6 +16,8 @@ export interface DueStatus {
 }
 export interface StatusChannel { token: string; status: string }
 
+export const NOT_VALIDATED_IN_TIME_ERROR = 'Non validé à temps — non publié.'
+
 export interface StatusRepo {
   claimDue(nowIso: string): Promise<DueStatus[]>
   getChannel(restaurantId: string): Promise<StatusChannel | null>
@@ -23,6 +25,13 @@ export interface StatusRepo {
   optInChatIds(restaurantId: string): Promise<string[]>
   markPosted(id: string, whapiId: string | undefined): Promise<void>
   markFailed(id: string, error: string): Promise<void>
+  /**
+   * Sécurité « sans réponse = ne pas publier » (spec validation-statuts §4) : tout statut
+   * `pending_approval` MODE GÉRANT (pas de sondage groupe — celui-là est décidé par le
+   * status-decision worker) dont le créneau est atteint (scheduled_at <= now) et toujours en
+   * attente → `canceled`, jamais publié.
+   */
+  cancelExpiredPendingApproval(nowIso: string): Promise<void>
 }
 
 export function createStatusRepo(db: SupabaseClient, tokenKey: string): StatusRepo {
@@ -58,6 +67,22 @@ export function createStatusRepo(db: SupabaseClient, tokenKey: string): StatusRe
     },
     async markFailed(id, error) {
       await db.from('statuses').update({ state: 'failed', error }).eq('id', id)
+    },
+
+    async cancelExpiredPendingApproval(nowIso) {
+      // La table `statuses` ne porte pas le mode de validation — jointure sur restaurants pour ne
+      // cibler QUE le mode 'manager' (le mode 'group' est décidé par status-decision worker, cf.
+      // autostatus/decision-repo.ts listDueGroupBatches ; les statuts manuels n'entrent jamais en
+      // pending_approval, cf. design doc §4 — non-régression garantie par le filtre d'état seul).
+      const { data } = await db
+        .from('statuses')
+        .select('id, restaurants!inner(auto_status_validation)')
+        .eq('state', 'pending_approval')
+        .eq('restaurants.auto_status_validation', 'manager')
+        .lte('scheduled_at', nowIso)
+      const ids = ((data ?? []) as { id: string }[]).map((r) => r.id)
+      if (ids.length === 0) return
+      await db.from('statuses').update({ state: 'canceled', error: NOT_VALIDATED_IN_TIME_ERROR }).in('id', ids)
     },
   }
 }

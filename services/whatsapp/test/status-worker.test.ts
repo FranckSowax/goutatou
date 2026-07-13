@@ -1,21 +1,24 @@
 import { describe, expect, it, vi } from 'vitest'
-import { processStatusOnce, type StatusWorkerDeps } from '../src/statuses/worker.js'
+import { processStatusOnce, runStatusWorkerOnce, type StatusWorkerDeps } from '../src/statuses/worker.js'
 import type { DueStatus, StatusRepo } from '../src/statuses/repo.js'
 
 const status: DueStatus = { id: 's1', restaurantId: 'r1', kind: 'text', content: 'Promo du jour !', mediaUrl: null }
+
+const NOW = new Date('2026-07-13T12:00:00.000Z')
 
 function makeDeps(over: Partial<StatusWorkerDeps> = {}): { deps: StatusWorkerDeps; postStatusText: ReturnType<typeof vi.fn>; postStatusMedia: ReturnType<typeof vi.fn>; repo: StatusRepo } {
   const postStatusText = vi.fn().mockResolvedValue({ id: 'X' })
   const postStatusMedia = vi.fn().mockResolvedValue({ id: 'Y' })
   const repo: StatusRepo = {
-    claimDue: vi.fn(),
+    claimDue: vi.fn().mockResolvedValue([]),
     getChannel: vi.fn().mockResolvedValue({ token: 'tok', status: 'active' }),
     optInChatIds: vi.fn().mockResolvedValue([]),
     markPosted: vi.fn().mockResolvedValue(undefined),
     markFailed: vi.fn().mockResolvedValue(undefined),
+    cancelExpiredPendingApproval: vi.fn().mockResolvedValue(undefined),
   }
   const deps: StatusWorkerDeps = {
-    repo, makeWhapi: () => ({ postStatusText, postStatusMedia }), ...over,
+    repo, makeWhapi: () => ({ postStatusText, postStatusMedia }), now: () => NOW, ...over,
   }
   return { deps, postStatusText, postStatusMedia, repo }
 }
@@ -102,5 +105,49 @@ describe('processStatusOnce', () => {
     expect(postStatusMedia).toHaveBeenCalledWith('https://cdn/vip.mp4', 'Vidéo VIP', {
       mime: 'video/mp4', contacts: ['24177000001@s.whatsapp.net'],
     })
+  })
+})
+
+describe('runStatusWorkerOnce', () => {
+  it('annule d\'abord les pending_approval expirés, PUIS réclame et publie les scheduled dus (ordre)', async () => {
+    const { deps, postStatusText, repo } = makeDeps()
+    const calls: string[] = []
+    repo.cancelExpiredPendingApproval = vi.fn().mockImplementation(async () => { calls.push('cancel') })
+    repo.claimDue = vi.fn().mockImplementation(async () => {
+      calls.push('claim')
+      return [status]
+    })
+
+    await runStatusWorkerOnce(deps)
+
+    expect(calls).toEqual(['cancel', 'claim'])
+    expect(repo.cancelExpiredPendingApproval).toHaveBeenCalledWith(NOW.toISOString())
+    expect(repo.claimDue).toHaveBeenCalledWith(NOW.toISOString())
+    expect(postStatusText).toHaveBeenCalledWith('Promo du jour !')
+    expect(repo.markPosted).toHaveBeenCalledWith('s1', 'X')
+  })
+
+  it('non-régression : aucun statut dû → aucune publication, cancel appelé quand même', async () => {
+    const { deps, postStatusText, repo } = makeDeps()
+    repo.claimDue = vi.fn().mockResolvedValue([])
+
+    await runStatusWorkerOnce(deps)
+
+    expect(repo.cancelExpiredPendingApproval).toHaveBeenCalledTimes(1)
+    expect(postStatusText).not.toHaveBeenCalled()
+  })
+
+  it('plusieurs statuts scheduled dus → tous publiés (non-régression statuts manuels)', async () => {
+    const { deps, postStatusText, repo } = makeDeps()
+    const manual1: DueStatus = { id: 'm1', restaurantId: 'r1', kind: 'text', content: 'Manuel 1', mediaUrl: null }
+    const manual2: DueStatus = { id: 'm2', restaurantId: 'r1', kind: 'text', content: 'Manuel 2', mediaUrl: null }
+    repo.claimDue = vi.fn().mockResolvedValue([manual1, manual2])
+
+    await runStatusWorkerOnce(deps)
+
+    expect(postStatusText).toHaveBeenCalledWith('Manuel 1')
+    expect(postStatusText).toHaveBeenCalledWith('Manuel 2')
+    expect(repo.markPosted).toHaveBeenCalledWith('m1', 'X')
+    expect(repo.markPosted).toHaveBeenCalledWith('m2', 'X')
   })
 })

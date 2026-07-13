@@ -4,6 +4,8 @@ import type { DueStatus, StatusRepo } from './repo.js'
 export interface StatusWorkerDeps {
   repo: StatusRepo
   makeWhapi: (token: string) => Pick<WhapiClient, 'postStatusText' | 'postStatusMedia'>
+  /** Horloge injectée — jamais Date.now() en dur (contrat de test, cf. autostatus/worker.ts). */
+  now: () => Date
 }
 
 const NO_OPTIN_ERROR = 'Aucun client opt-in pour ce statut VIP.'
@@ -86,13 +88,25 @@ export async function processStatusOnce(s: DueStatus, deps: StatusWorkerDeps): P
   }
 }
 
+/**
+ * Un tick complet : (1) annule d'abord les `pending_approval` mode gérant dont le créneau est
+ * dépassé sans validation (sécurité « sans réponse = ne pas publier », cf. statuses/repo.ts
+ * cancelExpiredPendingApproval) — AVANT de réclamer les `scheduled` dus, pour ne jamais publier un
+ * statut resté en attente. (2) publie ensuite les `scheduled` dus (inchangé).
+ */
+export async function runStatusWorkerOnce(deps: StatusWorkerDeps): Promise<void> {
+  const nowIso = deps.now().toISOString()
+  await deps.repo.cancelExpiredPendingApproval(nowIso)
+  const due = await deps.repo.claimDue(nowIso)
+  for (const s of due) {
+    await processStatusOnce(s, deps)
+  }
+}
+
 export function startStatusWorker(deps: StatusWorkerDeps & { pollMs: number }): void {
   const tick = async () => {
     try {
-      const due = await deps.repo.claimDue(new Date().toISOString())
-      for (const s of due) {
-        await processStatusOnce(s, deps)
-      }
+      await runStatusWorkerOnce(deps)
     } catch (err) {
       console.error('[status-worker]', err)
     } finally {
