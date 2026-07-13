@@ -16,6 +16,7 @@ const CHANNEL_ERROR = 'L’envoi a échoué — vérifiez le canal WhatsApp.'
 const NO_CHANNEL_ERROR = 'Créez d’abord votre chaîne WhatsApp.'
 const NO_GROUP_ERROR = 'Configurez d’abord votre groupe staff.'
 const NO_TEASER_ERROR = 'Chaîne ou lien d’invitation manquant pour le statut-teaser.'
+const TEASER_CHANNEL_FAILED = 'Sondage chaîne en échec — statut-teaser non publié (rien à annoncer).'
 const NO_OPTIN_ERROR = 'Aucun client opt-in — faites scanner votre QR PROMOS.'
 const ALL_FAILED_ERROR = 'Tous les envois ont échoué — vérifiez le canal.'
 
@@ -67,14 +68,21 @@ export async function processPollOnce(poll: ClaimedPoll, deps: PollWorkerDeps): 
     // Multi-surfaces (v2). Rétrocompat : lignes historiques `surfaces` vide + `target==='channel'`
     // → traitées comme `['channel']` (migration douce 0027 couvre déjà la majorité des lignes,
     // ce fallback couvre celles non migrées / créées entre migration et déploiement bot).
-    const surfaces: PollSurface[] = poll.surfaces.length > 0 ? poll.surfaces : poll.target === 'channel' ? ['channel'] : []
+    const requested: PollSurface[] = poll.surfaces.length > 0 ? poll.surfaces : poll.target === 'channel' ? ['channel'] : []
 
-    if (surfaces.length === 0) {
+    if (requested.length === 0) {
       await deps.repo.finish(poll.id, { status: 'failed', sentCount: 0, error: CHANNEL_ERROR })
       return
     }
 
+    // Ordre canonique channel→group→status_teaser : le teaser dépend du SUCCÈS de la chaîne (il
+    // annonce le sondage natif publié dessus), on doit donc traiter `channel` avant `status_teaser`
+    // quel que soit l'ordre stocké en base.
+    const surfaces = (['channel', 'group', 'status_teaser'] as PollSurface[]).filter((s) => requested.includes(s))
+    const wantsChannel = requested.includes('channel')
+
     let sentCount = 0
+    let channelSucceeded = false
     const errors: string[] = []
 
     for (const surface of surfaces) {
@@ -87,6 +95,7 @@ export async function processPollOnce(poll: ClaimedPoll, deps: PollWorkerDeps): 
           }
           const res = await send(channel.waChannelId)
           await deps.repo.recordSurface(poll.id, 'channel', { status: 'sent', messageId: res.id })
+          channelSucceeded = true
           sentCount++
         } else if (surface === 'group') {
           if (!channel.staffGroupId) {
@@ -101,6 +110,15 @@ export async function processPollOnce(poll: ClaimedPoll, deps: PollWorkerDeps): 
           if (!channel.waChannelId || !channel.waChannelInvite) {
             await deps.repo.recordSurface(poll.id, 'status_teaser', { status: 'failed' })
             errors.push(NO_TEASER_ERROR)
+            continue
+          }
+          // Le teaser annonce le sondage natif de la chaîne : on ne le publie QUE si l'envoi chaîne
+          // a réussi ce tour-ci (sinon les abonnés cliquent et ne trouvent aucun vote). `wantsChannel`
+          // est toujours vrai en pratique (normalizeSurfaces force channel), le garde-fou couvre les
+          // insertions directes en base sans channel.
+          if (!wantsChannel || !channelSucceeded) {
+            await deps.repo.recordSurface(poll.id, 'status_teaser', { status: 'failed' })
+            errors.push(TEASER_CHANNEL_FAILED)
             continue
           }
           const text = `📊 ${poll.question}\n\nVotez sur notre chaîne 👉 ${channel.waChannelInvite}`

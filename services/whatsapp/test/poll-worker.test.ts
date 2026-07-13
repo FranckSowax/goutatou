@@ -164,9 +164,12 @@ describe('processPollOnce — surfaces v2', () => {
     expect(repo.finish).toHaveBeenCalledWith('p1', expect.objectContaining({ status: 'failed', sentCount: 0 }))
   })
 
-  it("surfaces=['status_teaser'] avec chaîne+invite → insertTeaserStatus avec un texte contenant le lien, recordSurface sent", async () => {
+  it("surfaces=['channel','status_teaser'] avec envoi chaîne OK → insertTeaserStatus avec un texte contenant le lien, recordSurface sent", async () => {
+    // normalizeSurfaces (web) force toujours 'channel' quand 'status_teaser' est coché : le teaser
+    // annonce le sondage natif de la chaîne, il ne part que si l'envoi chaîne a réussi.
     const { deps, repo } = makeDeps()
-    await processPollOnce(poll({ surfaces: ['status_teaser'], teaserImageUrl: 'https://x/img.jpg' }), deps)
+    await processPollOnce(poll({ surfaces: ['channel', 'status_teaser'], teaserImageUrl: 'https://x/img.jpg' }), deps)
+    expect(repo.recordSurface).toHaveBeenCalledWith('p1', 'channel', { status: 'sent', messageId: 'wa-msg' })
     expect(repo.insertTeaserStatus).toHaveBeenCalledWith(
       'r1',
       expect.stringContaining('https://wa.me/channel/abc'),
@@ -174,7 +177,15 @@ describe('processPollOnce — surfaces v2', () => {
       'p1',
     )
     expect(repo.recordSurface).toHaveBeenCalledWith('p1', 'status_teaser', { status: 'sent' })
-    expect(repo.finish).toHaveBeenCalledWith('p1', { status: 'sent', sentCount: 1 })
+    expect(repo.finish).toHaveBeenCalledWith('p1', { status: 'sent', sentCount: 2 })
+  })
+
+  it("surfaces=['status_teaser'] SEUL (sans channel, ex. insert direct) → failed, aucun insertTeaserStatus", async () => {
+    const { deps, repo } = makeDeps()
+    await processPollOnce(poll({ surfaces: ['status_teaser'] }), deps)
+    expect(repo.insertTeaserStatus).not.toHaveBeenCalled()
+    expect(repo.recordSurface).toHaveBeenCalledWith('p1', 'status_teaser', { status: 'failed' })
+    expect(repo.finish).toHaveBeenCalledWith('p1', expect.objectContaining({ status: 'failed', sentCount: 0 }))
   })
 
   it("surfaces=['status_teaser'] sans wa_channel_invite → failed, aucun insertTeaserStatus", async () => {
@@ -200,6 +211,16 @@ describe('processPollOnce — surfaces v2', () => {
     expect(repo.recordSurface).toHaveBeenCalledWith('p1', 'group', { status: 'failed' })
     expect(repo.recordSurface).toHaveBeenCalledWith('p1', 'status_teaser', { status: 'sent' })
     expect(repo.finish).toHaveBeenCalledWith('p1', expect.objectContaining({ status: 'sent', sentCount: 2 }))
+  })
+
+  it("surfaces=['channel','status_teaser'] : si l’envoi chaîne échoue au runtime → teaser NON publié (rien à annoncer)", async () => {
+    const { deps, sendPoll, repo } = makeDeps()
+    sendPoll.mockRejectedValue(new Error('whapi 500'))
+    await processPollOnce(poll({ surfaces: ['channel', 'status_teaser'] }), deps)
+    expect(repo.recordSurface).toHaveBeenCalledWith('p1', 'channel', { status: 'failed' })
+    expect(repo.insertTeaserStatus).not.toHaveBeenCalled()
+    expect(repo.recordSurface).toHaveBeenCalledWith('p1', 'status_teaser', { status: 'failed' })
+    expect(repo.finish).toHaveBeenCalledWith('p1', expect.objectContaining({ status: 'failed', sentCount: 0 }))
   })
 
   it("quiz_correct non nul + surfaces=['group'] → sendQuiz avec l’index", async () => {
