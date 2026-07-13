@@ -6,9 +6,18 @@ const status: DueStatus = { id: 's1', restaurantId: 'r1', kind: 'text', content:
 
 const NOW = new Date('2026-07-13T12:00:00.000Z')
 
-function makeDeps(over: Partial<StatusWorkerDeps> = {}): { deps: StatusWorkerDeps; postStatusText: ReturnType<typeof vi.fn>; postStatusMedia: ReturnType<typeof vi.fn>; repo: StatusRepo } {
+function makeDeps(over: Partial<StatusWorkerDeps> = {}): {
+  deps: StatusWorkerDeps
+  postStatusText: ReturnType<typeof vi.fn>
+  postStatusMedia: ReturnType<typeof vi.fn>
+  sendNewsletterText: ReturnType<typeof vi.fn>
+  sendNewsletterImage: ReturnType<typeof vi.fn>
+  repo: StatusRepo
+} {
   const postStatusText = vi.fn().mockResolvedValue({ id: 'X' })
   const postStatusMedia = vi.fn().mockResolvedValue({ id: 'Y' })
+  const sendNewsletterText = vi.fn().mockResolvedValue({ id: 'N' })
+  const sendNewsletterImage = vi.fn().mockResolvedValue({ id: 'N' })
   const repo: StatusRepo = {
     claimDue: vi.fn().mockResolvedValue([]),
     getChannel: vi.fn().mockResolvedValue({ token: 'tok', status: 'active' }),
@@ -18,9 +27,9 @@ function makeDeps(over: Partial<StatusWorkerDeps> = {}): { deps: StatusWorkerDep
     cancelExpiredPendingApproval: vi.fn().mockResolvedValue(undefined),
   }
   const deps: StatusWorkerDeps = {
-    repo, makeWhapi: () => ({ postStatusText, postStatusMedia }), now: () => NOW, ...over,
+    repo, makeWhapi: () => ({ postStatusText, postStatusMedia, sendNewsletterText, sendNewsletterImage }), now: () => NOW, ...over,
   }
-  return { deps, postStatusText, postStatusMedia, repo }
+  return { deps, postStatusText, postStatusMedia, sendNewsletterText, sendNewsletterImage, repo }
 }
 
 describe('processStatusOnce', () => {
@@ -105,6 +114,63 @@ describe('processStatusOnce', () => {
     expect(postStatusMedia).toHaveBeenCalledWith('https://cdn/vip.mp4', 'Vidéo VIP', {
       mime: 'video/mp4', contacts: ['24177000001@s.whatsapp.net'],
     })
+  })
+
+  it('statut sans echoToChannel → aucun appel newsletter (rétrocompat stricte)', async () => {
+    const { deps, sendNewsletterText, sendNewsletterImage, repo } = makeDeps()
+    await processStatusOnce(status, deps)
+    expect(sendNewsletterText).not.toHaveBeenCalled()
+    expect(sendNewsletterImage).not.toHaveBeenCalled()
+    expect(repo.markPosted).toHaveBeenCalledWith('s1', 'X')
+  })
+
+  it('echoToChannel + waChannelId, statut texte → sendNewsletterText appelé après markPosted', async () => {
+    const { deps, sendNewsletterText, repo } = makeDeps()
+    const withEcho: DueStatus = {
+      id: 's8', restaurantId: 'r1', kind: 'text', content: 'Promo échoée', mediaUrl: null,
+      echoToChannel: true, waChannelId: '12345@newsletter',
+    }
+    await processStatusOnce(withEcho, deps)
+    expect(repo.markPosted).toHaveBeenCalledWith('s8', 'X')
+    expect(sendNewsletterText).toHaveBeenCalledWith('12345@newsletter', 'Promo échoée')
+  })
+
+  it('echoToChannel + waChannelId, statut image → sendNewsletterImage appelé après markPosted', async () => {
+    const { deps, sendNewsletterImage, repo } = makeDeps()
+    const withEcho: DueStatus = {
+      id: 's9', restaurantId: 'r1', kind: 'image', content: 'Promo photo', mediaUrl: 'https://cdn/promo.jpg',
+      echoToChannel: true, waChannelId: '12345@newsletter',
+    }
+    await processStatusOnce(withEcho, deps)
+    expect(repo.markPosted).toHaveBeenCalledWith('s9', 'Y')
+    expect(sendNewsletterImage).toHaveBeenCalledWith('12345@newsletter', 'https://cdn/promo.jpg', 'Promo photo')
+  })
+
+  it('echoToChannel sans waChannelId → aucun appel newsletter', async () => {
+    const { deps, sendNewsletterText, sendNewsletterImage, repo } = makeDeps()
+    const noChannel: DueStatus = {
+      id: 's10', restaurantId: 'r1', kind: 'text', content: 'Promo', mediaUrl: null,
+      echoToChannel: true, waChannelId: null,
+    }
+    await processStatusOnce(noChannel, deps)
+    expect(repo.markPosted).toHaveBeenCalledWith('s10', 'X')
+    expect(sendNewsletterText).not.toHaveBeenCalled()
+    expect(sendNewsletterImage).not.toHaveBeenCalled()
+  })
+
+  it('échec de l\'écho → statut reste posted (pas de markFailed)', async () => {
+    const { deps, sendNewsletterText, repo } = makeDeps()
+    sendNewsletterText.mockRejectedValueOnce(new Error('whapi newsletter 500'))
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const withEcho: DueStatus = {
+      id: 's11', restaurantId: 'r1', kind: 'text', content: 'Promo', mediaUrl: null,
+      echoToChannel: true, waChannelId: '12345@newsletter',
+    }
+    await processStatusOnce(withEcho, deps)
+    expect(repo.markPosted).toHaveBeenCalledWith('s11', 'X')
+    expect(repo.markFailed).not.toHaveBeenCalled()
+    expect(errSpy).toHaveBeenCalledWith('[status-echo]', expect.any(Error))
+    errSpy.mockRestore()
   })
 })
 

@@ -3,7 +3,7 @@ import type { DueStatus, StatusRepo } from './repo.js'
 
 export interface StatusWorkerDeps {
   repo: StatusRepo
-  makeWhapi: (token: string) => Pick<WhapiClient, 'postStatusText' | 'postStatusMedia'>
+  makeWhapi: (token: string) => Pick<WhapiClient, 'postStatusText' | 'postStatusMedia' | 'sendNewsletterImage' | 'sendNewsletterText'>
   /** Horloge injectée — jamais Date.now() en dur (contrat de test, cf. autostatus/worker.ts). */
   now: () => Date
 }
@@ -85,6 +85,23 @@ export async function processStatusOnce(s: DueStatus, deps: StatusWorkerDeps): P
     await deps.repo.markPosted(s.id, res.id)
   } catch (err) {
     await deps.repo.markFailed(s.id, String(err))
+    return
+  }
+
+  // Écho best-effort statut → chaîne (migration 0026) : le statut est déjà publié avec succès à ce
+  // stade, un échec d'écho ne doit JAMAIS le repasser en failed — logué seulement. Statuts sans écho
+  // (echoToChannel absent/false, cas existant avant cette migration) : aucun appel newsletter,
+  // comportement byte-identique à avant.
+  if (s.echoToChannel && s.waChannelId) {
+    try {
+      if (s.mediaUrl) {
+        await whapi.sendNewsletterImage(s.waChannelId, s.mediaUrl, s.content || undefined)
+      } else {
+        await whapi.sendNewsletterText(s.waChannelId, s.content)
+      }
+    } catch (err) {
+      console.error('[status-echo]', err)
+    }
   }
 }
 

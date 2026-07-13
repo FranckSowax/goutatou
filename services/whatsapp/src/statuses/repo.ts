@@ -13,6 +13,10 @@ export interface DueStatus {
   captionColor?: string | null
   fontType?: number | null
   audience?: 'all' | 'optin'
+  // Écho statut → chaîne (migration 0026) : absents des fixtures existantes, le worker les traite
+  // comme "pas d'écho" — comportement byte-identique à avant.
+  echoToChannel?: boolean
+  waChannelId?: string | null
 }
 export interface StatusChannel { token: string; status: string }
 
@@ -41,11 +45,17 @@ export function createStatusRepo(db: SupabaseClient, tokenKey: string): StatusRe
       await db.from('statuses').update({ state: 'posting' })
         .eq('state', 'scheduled').lte('scheduled_at', nowIso)
       const { data } = await db.from('statuses')
-        .select('id, restaurant_id, kind, content, media_url, bg_color, caption_color, font_type, audience')
+        .select('id, restaurant_id, kind, content, media_url, bg_color, caption_color, font_type, audience, echo_to_channel, restaurants(wa_channel_id)')
         .eq('state', 'posting')
-      return (data ?? []).map((s) => ({
+      const rows = (data ?? []) as unknown as Array<{
+        id: string; restaurant_id: string; kind: DueStatus['kind']; content: string; media_url: string | null
+        bg_color?: string | null; caption_color?: string | null; font_type?: number | null; audience?: 'all' | 'optin'
+        echo_to_channel?: boolean; restaurants: { wa_channel_id: string | null } | null
+      }>
+      return rows.map((s) => ({
         id: s.id, restaurantId: s.restaurant_id, kind: s.kind, content: s.content, mediaUrl: s.media_url,
         bgColor: s.bg_color, captionColor: s.caption_color, fontType: s.font_type, audience: s.audience,
+        echoToChannel: s.echo_to_channel, waChannelId: s.restaurants?.wa_channel_id ?? null,
       })) as unknown as DueStatus[]
     },
     async getChannel(restaurantId) {
