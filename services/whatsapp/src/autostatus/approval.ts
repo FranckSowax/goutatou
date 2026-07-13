@@ -25,6 +25,22 @@ const PREFIX_TO_ACTION: Array<[string, ApprovalAction]> = [
  * commence par aucun des 4 préfixes connus (pas un bouton de validation — le processor
  * doit retomber sur le flux machine normal) ou si le statusId est vide.
  */
+/**
+ * Vrai si le numéro qui répond (chat_id « 24106…@s.whatsapp.net » ou brut) correspond au
+ * numéro du gérant validateur. Comparaison sur les chiffres seuls (formats hétérogènes).
+ * managerPhone null/absent → true : on ne verrouille pas quand le numéro n'est pas connu
+ * (la portée par restaurant + l'id UUID délivré au seul gérant restent les gardes).
+ */
+export function isManagerSender(chatId: string, managerPhone: string | null | undefined): boolean {
+  if (!managerPhone) return true
+  const digits = (s: string) => s.replace(/\D/g, '')
+  const a = digits(chatId)
+  const b = digits(managerPhone)
+  if (!a || !b) return true
+  // Égalité ou suffixe commun (l'un peut porter l'indicatif, l'autre non).
+  return a === b || a.endsWith(b) || b.endsWith(a)
+}
+
 export function parseApprovalButton(id: string): ParsedApprovalButton | null {
   for (const [prefix, action] of PREFIX_TO_ACTION) {
     if (id.startsWith(prefix)) {
