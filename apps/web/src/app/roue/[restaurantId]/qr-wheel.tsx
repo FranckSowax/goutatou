@@ -129,7 +129,7 @@ export function QrWheel({
       const unlockRes = await fetch('/api/roue/unlock', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ restaurantId, phone, action: selectedAction.key }),
+        body: JSON.stringify({ restaurantId, phone, action: selectedAction.key, optIn }),
       })
       const unlockJson = (await unlockRes.json().catch(() => ({ error: GENERIC_ERROR }))) as UnlockResponse
       if (!unlockRes.ok || 'error' in unlockJson) {

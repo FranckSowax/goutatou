@@ -18,7 +18,7 @@ const ACTION_ENABLED_COLUMN: Record<WheelAction, 'wheel_action_google' | 'wheel_
 }
 
 export async function POST(req: Request) {
-  const body = await req.json().catch(() => null) as { restaurantId?: string; phone?: string; action?: string } | null
+  const body = await req.json().catch(() => null) as { restaurantId?: string; phone?: string; action?: string; optIn?: boolean } | null
 
   const action = body?.action
   if (!action || !ACTIONS.includes(action as WheelAction)) {
@@ -57,7 +57,12 @@ export async function POST(req: Request) {
   }
 
   // Upsert client par téléphone (multi-tenant : toujours scopé à ce restaurant).
-  // Opt-in marketing implicite : le client redonne volontairement son numéro.
+  // Opt-in marketing : case PRÉ-COCHÉE côté page publique, mais RESPECTÉE — une case
+  // décochable sans effet serait une UI trompeuse. `optIn` absent → true (défaut opt-in).
+  // Décocher n'empêche PAS l'envoi du gain (transactionnel, pas du marketing) et ne
+  // ré-abonne jamais un client qui avait envoyé STOP.
+  const optIn = body?.optIn !== false
+
   const { data: existing } = await db
     .from('customers')
     .select('id, opted_out')
@@ -68,7 +73,7 @@ export async function POST(req: Request) {
   let customerId: string
   if (existing) {
     customerId = existing.id
-    if (existing.opted_out === true) {
+    if (existing.opted_out === true && optIn) {
       const { error: updErr } = await db
         .from('customers')
         .update({ marketing_opt_in: true, opted_out: false })
@@ -86,7 +91,7 @@ export async function POST(req: Request) {
         phone,
         chat_id: `${phone}@s.whatsapp.net`,
         name: null,
-        marketing_opt_in: true,
+        marketing_opt_in: optIn,
         opted_out: false,
       })
       .select('id')
