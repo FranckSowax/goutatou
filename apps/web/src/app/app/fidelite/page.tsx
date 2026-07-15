@@ -1,11 +1,14 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { isPro } from '@/lib/premium'
+import { qrSvg } from '@/lib/qr'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Prizes } from './prizes'
 import { RedeemForm } from './redeem-form'
+import { WheelPreview } from './wheel-preview'
+import { QrSection } from './qr-section'
 import { Badge } from '@/components/ui/badge'
 import { updateWheelSettings, updateWheelWeights } from './actions'
 
@@ -33,7 +36,9 @@ export default async function FidelitePage() {
   const [{ data: prizesRaw }, { data: restaurant }, { data: spins }] = await Promise.all([
     supabase.from('prizes').select('id, label, weight, stock, active, image_url').eq('restaurant_id', restaurantId).order('position'),
     supabase.from('restaurants')
-      .select('wheel_enabled, wheel_trigger_orders, wheel_unlucky_weight, wheel_retry_weight')
+      .select(
+        'wheel_enabled, wheel_trigger_orders, wheel_unlucky_weight, wheel_retry_weight, wheel_qr_public, wheel_action_google, wheel_action_tiktok, wheel_action_channel, wheel_google_url, wheel_tiktok_url, wheel_channel_url, wheel_spin_period_days, wa_channel_invite',
+      )
       .eq('id', restaurantId).single(),
     supabase.from('wheel_spins')
       .select('code, created_at, expires_at, prizes(label)')
@@ -44,6 +49,15 @@ export default async function FidelitePage() {
       .limit(20),
   ])
   const prizes = (prizesRaw ?? []).map((p) => ({ ...p, imageUrl: p.image_url }))
+  const activePrizes = prizes.filter((p) => p.active)
+
+  // QR imprimable : rendu côté serveur (jamais de fonction en prop, cf. lib/qr.ts) — même
+  // pattern que l'invitation de chaîne (marketing/chaine/page.tsx). WHEEL_BASE_URL est déjà
+  // utilisé par le bot (services/whatsapp) pour signer les liens de roue v2.
+  const wheelQrPublic = restaurant?.wheel_qr_public ?? false
+  const baseUrl = (process.env.WHEEL_BASE_URL ?? '').replace(/\/$/, '')
+  const publicUrl = baseUrl ? `${baseUrl}/roue/${restaurantId}` : null
+  const qrCodeSvg = publicUrl ? await qrSvg(publicUrl) : null
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8">
@@ -63,18 +77,30 @@ export default async function FidelitePage() {
               Activer la roue de la fidélité
             </label>
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <Label htmlFor="wheel_trigger_orders" className="font-normal">
+              <Label
+                htmlFor="wheel_trigger_orders"
+                className={wheelQrPublic ? 'font-normal text-muted-foreground' : 'font-normal'}
+              >
                 Déclencher après
               </Label>
+              {/* readOnly (pas disabled) quand la roue QR est active : le champ reste inclus
+                  dans le FormData au submit (valeur inchangée), sinon un `disabled` ferait
+                  disparaître ce champ du formulaire et écraserait wheel_trigger_orders à 1
+                  au prochain enregistrement des réglages ci-dessus. */}
               <Input
                 id="wheel_trigger_orders"
                 name="wheel_trigger_orders"
                 type="number"
                 min="1"
                 defaultValue={restaurant?.wheel_trigger_orders ?? 5}
-                className="w-20"
+                readOnly={wheelQrPublic}
+                aria-disabled={wheelQrPublic}
+                className={wheelQrPublic ? 'w-20 opacity-50' : 'w-20'}
               />
               commande(s) récupérée(s)
+              {wheelQrPublic && (
+                <span className="text-xs text-muted-foreground">(Remplacé par la roue QR)</span>
+              )}
             </div>
             <Button type="submit" className="w-fit">
               Enregistrer
@@ -122,6 +148,30 @@ export default async function FidelitePage() {
           </form>
         </Card>
       </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="font-display text-lg font-semibold">Aperçu de la roue</h2>
+        <Card className="rounded-2xl p-4">
+          <WheelPreview
+            prizes={activePrizes}
+            unluckyWeight={restaurant?.wheel_unlucky_weight ?? 0}
+            retryWeight={restaurant?.wheel_retry_weight ?? 0}
+          />
+        </Card>
+      </section>
+
+      <QrSection
+        wheelQrPublic={wheelQrPublic}
+        actionGoogle={restaurant?.wheel_action_google ?? false}
+        actionTiktok={restaurant?.wheel_action_tiktok ?? false}
+        actionChannel={restaurant?.wheel_action_channel ?? false}
+        googleUrl={restaurant?.wheel_google_url ?? ''}
+        tiktokUrl={restaurant?.wheel_tiktok_url ?? ''}
+        channelUrl={restaurant?.wheel_channel_url || restaurant?.wa_channel_invite || ''}
+        spinPeriodDays={restaurant?.wheel_spin_period_days ?? 30}
+        svg={qrCodeSvg}
+        publicUrl={publicUrl}
+      />
 
       <Prizes prizes={prizes} />
 

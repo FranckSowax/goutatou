@@ -94,6 +94,50 @@ export async function updateWheelWeights(formData: FormData) {
   revalidatePath('/app/fidelite')
 }
 
+// Roue par QR (Fidélité v3) : toggle public + actions sociales + période de rejeu.
+// Même contrainte RLS que updateWheelSettings/updateWheelWeights ci-dessus (pas de policy
+// UPDATE tenant sur restaurants) → client admin après le même gate myRestaurantId + assertPlan.
+export async function updateWheelQrSettings(formData: FormData) {
+  const { supabase, restaurantId } = await myRestaurantId()
+  await assertPlan(supabase, restaurantId, ['pro', 'premium'])
+
+  const wheelQrPublic = formData.get('wheel_qr_public') === 'on'
+  const actionGoogle = formData.get('wheel_action_google') === 'on'
+  const actionTiktok = formData.get('wheel_action_tiktok') === 'on'
+  const actionChannel = formData.get('wheel_action_channel') === 'on'
+  const googleUrl = String(formData.get('wheel_google_url') ?? '').trim()
+  const tiktokUrl = String(formData.get('wheel_tiktok_url') ?? '').trim()
+  const channelUrl = String(formData.get('wheel_channel_url') ?? '').trim()
+  const spinPeriodDays = Math.max(0, Math.trunc(Number(formData.get('wheel_spin_period_days') ?? 30)))
+
+  for (const url of [googleUrl, tiktokUrl, channelUrl]) {
+    if (url && !url.startsWith('http')) throw new Error('Lien invalide.')
+  }
+
+  if (wheelQrPublic) {
+    const hasActiveAction =
+      (actionGoogle && googleUrl) || (actionTiktok && tiktokUrl) || (actionChannel && channelUrl)
+    if (!hasActiveAction) throw new Error('Activez au moins une action avec son lien.')
+  }
+
+  const admin = createAdminClient()
+  const { data, error } = await admin.from('restaurants')
+    .update({
+      wheel_qr_public: wheelQrPublic,
+      wheel_action_google: actionGoogle,
+      wheel_action_tiktok: actionTiktok,
+      wheel_action_channel: actionChannel,
+      wheel_google_url: googleUrl || null,
+      wheel_tiktok_url: tiktokUrl || null,
+      wheel_channel_url: channelUrl || null,
+      wheel_spin_period_days: spinPeriodDays,
+    })
+    .eq('id', restaurantId)
+    .select('id')
+  if (error || !data || data.length === 0) throw new Error('Enregistrement impossible.')
+  revalidatePath('/app/fidelite')
+}
+
 const MAX_PRIZE_IMAGE_BYTES = 4 * 1024 * 1024
 
 // Image d'un lot (roue v2), même pattern que la photo menu (apps/web/src/app/app/menu/actions.ts)
