@@ -33,7 +33,7 @@ export async function POST(req: Request) {
   // justement d'enregistrer un wheel_spin, donc l'éligibilité le refuserait toujours et
   // le rejeu serait mort-né. Le rejeu reste borné par mintRetryToken (un seul `:r1`,
   // anti-chaîne) et par le jti single-use de spin_wheel.
-  if (claims.jti.startsWith('qr:') && !claims.jti.includes(':r')) {
+  if (claims.jti.startsWith('qr:') && !claims.jti.endsWith(':r1')) {
     const { data: resto } = await db
       .from('restaurants')
       .select('wheel_spin_period_days')
