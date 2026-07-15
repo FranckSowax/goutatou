@@ -27,7 +27,13 @@ export async function POST(req: Request) {
   // Ré-vérification autoritaire de l'éligibilité pour les jetons QR public uniquement
   // (jti préfixé `qr:`). Les jetons v2 (`order`, sans préfixe) ne passent pas par ce
   // contrôle → zéro régression du flux existant.
-  if (claims.jti.startsWith('qr:')) {
+  //
+  // EXCLUSION des jetons de rejeu (`qr:<uuid>:r1`, cf. mintRetryToken) : le segment
+  // « Rejouez ! » accorde un second tour AU SEIN du même passage — le client vient
+  // justement d'enregistrer un wheel_spin, donc l'éligibilité le refuserait toujours et
+  // le rejeu serait mort-né. Le rejeu reste borné par mintRetryToken (un seul `:r1`,
+  // anti-chaîne) et par le jti single-use de spin_wheel.
+  if (claims.jti.startsWith('qr:') && !claims.jti.includes(':r')) {
     const { data: resto } = await db
       .from('restaurants')
       .select('wheel_spin_period_days')
