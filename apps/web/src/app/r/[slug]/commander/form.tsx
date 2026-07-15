@@ -54,10 +54,10 @@ export function CheckoutForm({ slug, driveEnabled, driveSlots }: {
               <span>{it.name}</span>
               <span className="flex items-center gap-2">
                 <button type="button" aria-label="Moins" onClick={() => setQty(lineKey(it), it.qty - 1)}
-                  className="h-7 w-7 rounded-full border border-white/30">−</button>
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/30 sm:h-7 sm:w-7">−</button>
                 <span className="w-6 text-center">{it.qty}</span>
                 <button type="button" aria-label="Plus" onClick={() => setQty(lineKey(it), it.qty + 1)}
-                  className="h-7 w-7 rounded-full border border-white/30">+</button>
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/30 sm:h-7 sm:w-7">+</button>
                 <span className="ml-2 w-24 text-right font-semibold">{formatFcfa(cartLineUnitPrice(it) * it.qty)}</span>
               </span>
             </div>
