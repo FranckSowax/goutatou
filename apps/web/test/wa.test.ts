@@ -13,6 +13,17 @@ describe('normalizeGabonPhone', () => {
     expect(normalizeGabonPhone('123')).toBeNull()
     expect(normalizeGabonPhone('abc')).toBeNull()
   })
+
+  it('canonicalise local et international vers la MÊME valeur (roue QR, gate anti-doublon)', () => {
+    const local = normalizeGabonPhone('05 52 65 22')
+    const international = normalizeGabonPhone('+241 05 52 65 22')
+    expect(local).toBe('24105526522')
+    expect(international).toBe(local)
+  })
+
+  it("rejette le préfixe '00' (international ambigu) plutôt que de créer un doublon", () => {
+    expect(normalizeGabonPhone('00241 05 52 65 22')).toBeNull()
+  })
 })
 
 describe('buildWaLink', () => {

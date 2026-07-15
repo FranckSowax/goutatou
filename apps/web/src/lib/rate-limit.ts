@@ -4,6 +4,11 @@ export const RATE_LIMITS = {
   phone: { limit: 3, windowSeconds: 600 },
   ip: { limit: 12, windowSeconds: 600 },
   resto: { limit: 60, windowSeconds: 3600 },
+  // Roue QR publique (/api/roue/unlock) : endpoint public non authentifié qui insère dans
+  // `customers` et émet des jetons — quelques tentatives par IP et par heure suffisent à un
+  // usage légitime (un client ne tourne qu'une fois par période) tout en bornant le scraping
+  // de codes de lot via des numéros fabriqués.
+  wheelUnlockIp: { limit: 10, windowSeconds: 3600 },
 } as const
 
 /** IP client réelle : header Netlify prioritaire, sinon 1er hop de x-forwarded-for. */
@@ -25,6 +30,11 @@ export function orderRateKeys(slug: string, phone: string, ip: string): RateRule
     { key: `order:ip:${slug}:${ip}`, ...RATE_LIMITS.ip },
     { key: `order:resto:${slug}`, ...RATE_LIMITS.resto },
   ]
+}
+
+/** Rate-limit par IP et par restaurant pour /api/roue/unlock (roue QR publique). */
+export function wheelUnlockRateKeys(restaurantId: string, ip: string): RateRule[] {
+  return [{ key: `wheel-unlock:ip:${restaurantId}:${ip}`, ...RATE_LIMITS.wheelUnlockIp }]
 }
 
 export type RlDb = {

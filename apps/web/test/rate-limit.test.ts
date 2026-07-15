@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clientIp, orderRateKeys, RATE_LIMITS } from '../src/lib/rate-limit'
+import { clientIp, orderRateKeys, wheelUnlockRateKeys, RATE_LIMITS } from '../src/lib/rate-limit'
 
 function h(init: Record<string, string>): Headers {
   return new Headers(init)
@@ -31,5 +31,14 @@ describe('orderRateKeys', () => {
     expect(rules[0]).toMatchObject({ limit: RATE_LIMITS.phone.limit, windowSeconds: RATE_LIMITS.phone.windowSeconds })
     expect(rules[1]).toMatchObject({ limit: RATE_LIMITS.ip.limit, windowSeconds: RATE_LIMITS.ip.windowSeconds })
     expect(rules[2]).toMatchObject({ limit: RATE_LIMITS.resto.limit, windowSeconds: RATE_LIMITS.resto.windowSeconds })
+  })
+})
+
+describe('wheelUnlockRateKeys', () => {
+  it('produit 1 couche par IP scopée au restaurant', () => {
+    const rules = wheelUnlockRateKeys('resto-1', '41.1.2.3')
+    expect(rules).toEqual([
+      { key: 'wheel-unlock:ip:resto-1:41.1.2.3', ...RATE_LIMITS.wheelUnlockIp },
+    ])
   })
 })

@@ -4,8 +4,9 @@ import { signWheelToken } from '@goutatou/db/wheel'
 import type { WheelAction } from '@goutatou/db/types'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { checkEligibility } from '@/lib/wheel-eligibility'
-import { normalizePhone } from '@/lib/wheel-phone'
+import { normalizeGabonPhone } from '@/lib/lp/wa'
 import { formatExpiryFr } from '@/lib/wheel'
+import { clientIp, enforceRateLimit, wheelUnlockRateKeys } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -25,7 +26,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Action invalide.' }, { status: 400 })
   }
 
-  const phone = normalizePhone(body?.phone ?? '')
+  // normalizeGabonPhone canonicalise local/national/international vers UNE seule valeur et
+  // rejette le préfixe `00…` (ambigu) — une normalisation « chiffres seuls » laissait passer
+  // 3 écritures différentes du même numéro comme 3 clients distincts (unique sur
+  // (restaurant_id, phone)) et pouvait produire un chat_id WhatsApp invalide.
+  const phone = normalizeGabonPhone(body?.phone ?? '')
   if (!phone) {
     return NextResponse.json({ error: 'Numéro invalide.' }, { status: 400 })
   }
@@ -42,6 +47,17 @@ export async function POST(req: Request) {
 
   const db = createAdminClient()
 
+  // Endpoint public non authentifié qui insère dans `customers` et émet des jetons de roue :
+  // rate-limit par IP et par restaurant pour empêcher un scraping de codes de lot via des
+  // numéros fabriqués (quelques tentatives par IP et par heure, cf. apps/web/src/lib/rate-limit.ts).
+  const rl = await enforceRateLimit(db, wheelUnlockRateKeys(restaurantId, clientIp(req.headers)))
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: `Trop de tentatives. Réessayez dans ${Math.ceil(rl.retryAfter / 60)} min.` },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } },
+    )
+  }
+
   const { data: resto } = await db
     .from('restaurants')
     .select('id, wheel_qr_public, wheel_spin_period_days, wheel_action_google, wheel_action_tiktok, wheel_action_channel')
@@ -57,15 +73,17 @@ export async function POST(req: Request) {
   }
 
   // Upsert client par téléphone (multi-tenant : toujours scopé à ce restaurant).
-  // Opt-in marketing : case PRÉ-COCHÉE côté page publique, mais RESPECTÉE — une case
-  // décochable sans effet serait une UI trompeuse. `optIn` absent → true (défaut opt-in).
-  // Décocher n'empêche PAS l'envoi du gain (transactionnel, pas du marketing) et ne
-  // ré-abonne jamais un client qui avait envoyé STOP.
+  // Opt-in marketing : case PRÉ-COCHÉE côté page publique → le consentement qu'elle exprime
+  // est présumé, pas donné, donc on ne s'en sert QUE pour la création d'un nouveau client.
+  // Pour un client déjà existant, `opted_out`/`marketing_opt_in` ne sont JAMAIS modifiés ici :
+  // l'envoi du gain est transactionnel (pas du marketing) et ne dépend pas de l'opt-in, et un
+  // client qui avait envoyé STOP ne doit pouvoir se ré-abonner que via une action explicite
+  // (pas une case pré-cochée sur un autre formulaire).
   const optIn = body?.optIn !== false
 
   const { data: existing } = await db
     .from('customers')
-    .select('id, opted_out')
+    .select('id')
     .eq('restaurant_id', resto.id)
     .eq('phone', phone)
     .maybeSingle()
@@ -73,16 +91,6 @@ export async function POST(req: Request) {
   let customerId: string
   if (existing) {
     customerId = existing.id
-    if (existing.opted_out === true && optIn) {
-      const { error: updErr } = await db
-        .from('customers')
-        .update({ marketing_opt_in: true, opted_out: false })
-        .eq('id', existing.id)
-      if (updErr) {
-        console.error('[roue-unlock] update opt-in échoué', updErr)
-        return NextResponse.json({ error: 'Erreur interne.' }, { status: 500 })
-      }
-    }
   } else {
     const { data: created, error: insErr } = await db
       .from('customers')
