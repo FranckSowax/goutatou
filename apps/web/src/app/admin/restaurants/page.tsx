@@ -95,17 +95,74 @@ export default async function AdminRestaurantsPage() {
             <p className="text-sm text-muted-foreground">Aucun restaurant pour l’instant.</p>
           )}
           {(restos ?? []).length > 0 && (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>Slug</TableHead>
-                  <TableHead>Canal Whapi</TableHead>
-                  <TableHead>Plan</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* ≥ md : tableau shadcn inchangé. */}
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nom</TableHead>
+                      <TableHead>Slug</TableHead>
+                      <TableHead>Canal Whapi</TableHead>
+                      <TableHead>Plan</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(restos ?? []).map((r) => {
+                      const chan = r.whapi_channels as unknown as {
+                        id: string
+                        token_encrypted: string
+                        status: string
+                        last_webhook_at: string | null
+                      } | null
+                      const sub = r.subscriptions as unknown as { plan: string } | null
+
+                      return (
+                        <RestaurantRow key={r.id} restaurantId={r.id}>
+                          <TableCell className="font-medium">{r.name}</TableCell>
+                          <TableCell className="text-muted-foreground">/{r.slug}</TableCell>
+                          <TableCell>
+                            <Badge variant={badgeVariantForChannel(chan?.status)}>
+                              {channelLabel(chan?.status)}
+                            </Badge>
+                            {chan && (
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Dernier webhook : {chan.last_webhook_at ?? 'jamais'} · URL :{' '}
+                                {process.env.PUBLIC_WEBHOOK_BASE_URL}/hook/{chan.id}
+                              </p>
+                            )}
+                          </TableCell>
+                          <TableCell className="capitalize">{sub?.plan ?? '—'}</TableCell>
+                          <ActionsCell>
+                            <div className="flex flex-wrap justify-end gap-2">
+                              {chan && (
+                                <form
+                                  action={configureWebhook.bind(
+                                    null,
+                                    chan.id,
+                                    decryptToken(chan.token_encrypted, process.env.TOKEN_ENCRYPTION_KEY!)
+                                  )}
+                                >
+                                  <Button type="submit" size="sm" variant="outline">
+                                    Configurer le webhook
+                                  </Button>
+                                </form>
+                              )}
+                              <Button size="sm" variant="outline" asChild>
+                                <Link href={'/admin/restaurants/' + r.id}>Voir la fiche</Link>
+                              </Button>
+                            </div>
+                          </ActionsCell>
+                        </RestaurantRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* < md : une carte par restaurant. */}
+              <div className="flex flex-col gap-3 md:hidden">
                 {(restos ?? []).map((r) => {
                   const chan = r.whapi_channels as unknown as {
                     id: string
@@ -116,46 +173,47 @@ export default async function AdminRestaurantsPage() {
                   const sub = r.subscriptions as unknown as { plan: string } | null
 
                   return (
-                    <RestaurantRow key={r.id} restaurantId={r.id}>
-                      <TableCell className="font-medium">{r.name}</TableCell>
-                      <TableCell className="text-muted-foreground">/{r.slug}</TableCell>
-                      <TableCell>
+                    <div key={r.id} className="rounded-2xl border border-border p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium">{r.name}</span>
                         <Badge variant={badgeVariantForChannel(chan?.status)}>
                           {channelLabel(chan?.status)}
                         </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">/{r.slug}</p>
+                      {chan && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Dernier webhook : {chan.last_webhook_at ?? 'jamais'} · URL :{' '}
+                          {process.env.PUBLIC_WEBHOOK_BASE_URL}/hook/{chan.id}
+                        </p>
+                      )}
+                      <p className="mt-1 text-sm">
+                        <span className="text-muted-foreground">Plan : </span>
+                        <span className="capitalize">{sub?.plan ?? '—'}</span>
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
                         {chan && (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            Dernier webhook : {chan.last_webhook_at ?? 'jamais'} · URL :{' '}
-                            {process.env.PUBLIC_WEBHOOK_BASE_URL}/hook/{chan.id}
-                          </p>
+                          <form
+                            action={configureWebhook.bind(
+                              null,
+                              chan.id,
+                              decryptToken(chan.token_encrypted, process.env.TOKEN_ENCRYPTION_KEY!)
+                            )}
+                          >
+                            <Button type="submit" size="sm" variant="outline">
+                              Configurer le webhook
+                            </Button>
+                          </form>
                         )}
-                      </TableCell>
-                      <TableCell className="capitalize">{sub?.plan ?? '—'}</TableCell>
-                      <ActionsCell>
-                        <div className="flex flex-wrap justify-end gap-2">
-                          {chan && (
-                            <form
-                              action={configureWebhook.bind(
-                                null,
-                                chan.id,
-                                decryptToken(chan.token_encrypted, process.env.TOKEN_ENCRYPTION_KEY!)
-                              )}
-                            >
-                              <Button type="submit" size="sm" variant="outline">
-                                Configurer le webhook
-                              </Button>
-                            </form>
-                          )}
-                          <Button size="sm" variant="outline" asChild>
-                            <Link href={'/admin/restaurants/' + r.id}>Voir la fiche</Link>
-                          </Button>
-                        </div>
-                      </ActionsCell>
-                    </RestaurantRow>
+                        <Button size="sm" variant="outline" asChild>
+                          <Link href={'/admin/restaurants/' + r.id}>Voir la fiche</Link>
+                        </Button>
+                      </div>
+                    </div>
                   )
                 })}
-              </TableBody>
-            </Table>
+              </div>
+            </>
           )}
         </Card>
       </section>
