@@ -61,6 +61,10 @@ export async function POST(req: Request) {
   })
   if (error) {
     const msg = String(error.message)
+    // `already_spun_period` AVANT `already_spun` : le second est un préfixe du premier
+    // (includes matcherait les deux). Levé par la garde atomique QR de spin_wheel
+    // (migration 0029) — 1 tour / client / période, vérifié sous verrou.
+    if (msg.includes('already_spun_period')) return NextResponse.json({ error: 'Vous avez déjà tourné.' }, { status: 409 })
     if (msg.includes('already_spun')) return NextResponse.json({ error: 'Vous avez déjà tourné la roue.' }, { status: 409 })
     if (msg.includes('no_prize')) return NextResponse.json({ error: 'Aucun lot disponible pour le moment.' }, { status: 409 })
     return NextResponse.json({ error: 'Une erreur est survenue.' }, { status: 500 })
