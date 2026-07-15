@@ -40,7 +40,7 @@ export function CampaignDetail({ c }: { c: C }) {
       <Card className="mb-6 rounded-2xl p-4">
         <p className="whitespace-pre-wrap text-sm">{c.body}</p>
       </Card>
-      <div className="grid grid-cols-3 gap-3 text-center">
+      <div className="grid grid-cols-1 gap-3 text-center sm:grid-cols-3">
         <Card className="rounded-2xl p-3"><p className="text-2xl font-bold">{p.sent}</p><p className="text-xs text-muted-foreground">Envoyés</p></Card>
         <Card className="rounded-2xl p-3"><p className="text-2xl font-bold">{p.pending}</p><p className="text-xs text-muted-foreground">En attente</p></Card>
         <Card className="rounded-2xl p-3"><p className="text-2xl font-bold text-destructive">{p.failed}</p><p className="text-xs text-muted-foreground">Échecs</p></Card>
