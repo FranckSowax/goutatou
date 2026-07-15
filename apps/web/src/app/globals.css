@@ -27,6 +27,11 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Garde-fou anti-scroll horizontal mobile : filet de sécurité en plus des
+       vraies corrections de layout (tabs.tsx, menu-studio.tsx, roue/wheel.tsx),
+       jamais à la place. Un futur composant mal dimensionné ne doit plus
+       provoquer de scroll latéral de toute la page. */
+    overflow-x: hidden;
   }
   html {
     @apply font-sans;
