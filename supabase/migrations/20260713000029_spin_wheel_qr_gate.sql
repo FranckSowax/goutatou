@@ -13,7 +13,8 @@
 -- est pris APRÈS celui du jti — ordre d'acquisition constant pour tous les appelants, donc
 -- pas de deadlock.
 --
--- PORTÉE : uniquement les jetons du flux QR public (`qr:%`) hors rejeu (`%:r%`).
+-- PORTÉE : uniquement les jetons du flux QR public (`qr:%`) hors rejeu (suffixe exact `:r1`,
+-- cf. mintRetryToken qui suffixe TOUJOURS `:r1` — anti-chaîne, un seul rejeu par jeton d'origine).
 --   - flux v2 (jeton émis après N commandes, jti sans préfixe) → condition fausse, inchangé ;
 --   - second tour « Rejouez ! » (`qr:<uuid>:r1`) → exclu, sinon le tour que la roue vient
 --     d'accorder serait refusé par le tour qui vient d'être enregistré.
@@ -44,8 +45,10 @@ begin
     raise exception 'already_spun';
   end if;
 
-  -- Garde « 1 tour / client / période » du flux QR public (cf. en-tête).
-  if p_jti like 'qr:%' and p_jti not like '%:r%' then
+  -- Garde « 1 tour / client / période » du flux QR public (cf. en-tête). Suffixe exact `:r1`
+  -- (posé par mintRetryToken), pas `%:r%` : ce dernier ne fonctionnait que par coïncidence des
+  -- uuid hexadécimaux (jamais de lettre `r`), un invariant implicite et fragile.
+  if p_jti like 'qr:%' and p_jti not like '%:r1' then
     perform pg_advisory_xact_lock(hashtext(p_customer_id::text));
 
     select coalesce(wheel_spin_period_days, 30) into v_period
