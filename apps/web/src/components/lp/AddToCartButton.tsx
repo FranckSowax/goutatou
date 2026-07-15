@@ -13,7 +13,8 @@ import { Button } from '@/components/ui/button'
 import { useCart } from './CartProvider'
 import type { LpMenuItem } from '@/lib/lp/data'
 
-const triggerClassName = 'rounded-full px-3 py-1 text-sm font-bold text-white'
+const triggerClassName =
+  'inline-flex min-h-11 items-center rounded-full px-4 py-2 text-sm font-bold text-white sm:min-h-0 sm:px-3 sm:py-1'
 const triggerStyle = { backgroundColor: 'var(--lp-primary)' }
 
 export function AddToCartButton({ item }: { item: LpMenuItem }) {
