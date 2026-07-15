@@ -71,11 +71,15 @@ export function Wheel({ token, segments }: { token: string; segments: WheelSegme
   }
 
   const sector = 360 / (segments.length || 1)
-  const radius = 96
+  // Rayon des libellés en % de la taille du conteneur (cqw) plutôt qu'en px fixe :
+  // la roue n'a plus une taille fixe (80vw/340px/380px selon le breakpoint), donc
+  // le placement radial doit suivre le conteneur réel. Ratio repris de l'ancien
+  // radius=96 sur un conteneur fixe de 288px (96/288 ≈ 33.33%).
+  const radius = '33.33cqw'
 
   return (
     <div className="flex flex-col items-center gap-6">
-      <div className="relative h-72 w-72">
+      <div className="relative h-[80vw] max-h-[340px] w-[80vw] max-w-[340px] [container-type:inline-size] sm:h-[380px] sm:w-[380px]">
         <div className="absolute left-1/2 top-0 z-10 -ml-2 h-0 w-0 border-x-8 border-t-16 border-x-transparent border-t-yellow-400" />
         <div
           className="relative h-full w-full rounded-full border-4 border-yellow-400 transition-transform duration-4000 ease-out"
@@ -90,7 +94,7 @@ export function Wheel({ token, segments }: { token: string; segments: WheelSegme
               <div
                 key={s.kind === 'prize' ? s.id : `${s.kind}-${i}`}
                 className="absolute left-1/2 top-1/2 flex h-0 w-0 items-start justify-center"
-                style={{ transform: `rotate(${mid}deg) translateY(-${radius}px)` }}
+                style={{ transform: `rotate(${mid}deg) translateY(-${radius})` }}
               >
                 <div className="flex flex-col items-center gap-1" style={{ transform: `rotate(${-mid}deg)` }}>
                   {s.kind === 'prize' && s.imageUrl ? (
