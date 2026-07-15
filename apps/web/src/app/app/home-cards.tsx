@@ -15,8 +15,48 @@ const ICONS: Record<keyof typeof TINTS, LucideIcon> = {
   rose: Wallet,
 }
 
-/** Carte KPI pastel de l'Accueil (chiffre du jour). */
-export function KpiCard({ tint, label, value }: { tint: keyof typeof TINTS; label: string; value: string }) {
+/** Pastille de tendance : ▲ +12 % (vert), ▼ -8 % (rouge), — (discret) si `null`. */
+function DeltaBadge({ delta, invert }: { delta: number | null; invert: boolean }) {
+  if (delta === null) {
+    return (
+      <p className="mt-1 text-xs font-medium text-muted-foreground">
+        — <span className="font-normal">vs période précédente</span>
+      </p>
+    )
+  }
+
+  const arrow = delta > 0 ? '▲' : delta < 0 ? '▼' : '—'
+  const sign = delta > 0 ? '+' : ''
+  const isGood = delta === 0 ? null : invert ? delta < 0 : delta > 0
+  const colorClass = isGood === null ? 'text-muted-foreground' : isGood ? 'text-success' : 'text-destructive'
+
+  return (
+    <p className={cn('mt-1 text-xs font-medium', colorClass)}>
+      {arrow} {sign}
+      {delta} % <span className="font-normal text-muted-foreground">vs période précédente</span>
+    </p>
+  )
+}
+
+/**
+ * Carte KPI pastel de l'Accueil (chiffre du jour) — aussi utilisée par /app/stats.
+ * `delta` est optionnel : sans lui, le rendu est strictement identique à l'existant (rétrocompat
+ * pour la page d'accueil). `invert` inverse la lecture couleur (utile pour un KPI où une hausse
+ * est mauvaise, ex. taux d'annulation).
+ */
+export function KpiCard({
+  tint,
+  label,
+  value,
+  delta,
+  invert = false,
+}: {
+  tint: keyof typeof TINTS
+  label: string
+  value: string
+  delta?: number | null
+  invert?: boolean
+}) {
   const Icon = ICONS[tint]
   return (
     <div className={cn(
@@ -29,6 +69,7 @@ export function KpiCard({ tint, label, value }: { tint: keyof typeof TINTS; labe
       <div>
         <p className="font-display text-2xl font-bold tracking-tight text-foreground">{value}</p>
         <p className="mt-0.5 text-sm font-medium text-muted-foreground">{label}</p>
+        {delta !== undefined && <DeltaBadge delta={delta} invert={invert} />}
       </div>
     </div>
   )
