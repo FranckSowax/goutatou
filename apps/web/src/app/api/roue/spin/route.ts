@@ -2,13 +2,18 @@ import { NextResponse } from 'next/server'
 import { mintRetryToken, verifyWheelToken } from '@goutatou/db/wheel'
 import { decryptToken } from '@goutatou/db/crypto'
 import { WhapiClient } from '@goutatou/whapi'
+import type { WheelAction } from '@goutatou/db/types'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { checkEligibility } from '@/lib/wheel-eligibility'
+
+const WHEEL_ACTIONS: WheelAction[] = ['google', 'tiktok', 'channel']
 
 export const runtime = 'nodejs'
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null)
   const token = (body as { t?: string })?.t
+  const action = (body as { action?: string })?.action
   if (!token) return NextResponse.json({ error: 'Lien invalide.' }, { status: 400 })
   if (!process.env.WHEEL_JWT_SECRET) {
     console.error('[roue] WHEEL_JWT_SECRET manquant')
@@ -18,6 +23,33 @@ export async function POST(req: Request) {
   if (!claims) return NextResponse.json({ error: 'Lien invalide ou expiré.' }, { status: 400 })
 
   const db = createAdminClient()
+
+  // Ré-vérification autoritaire de l'éligibilité pour les jetons QR public uniquement
+  // (jti préfixé `qr:`). Les jetons v2 (`order`, sans préfixe) ne passent pas par ce
+  // contrôle → zéro régression du flux existant.
+  if (claims.jti.startsWith('qr:')) {
+    const { data: resto } = await db
+      .from('restaurants')
+      .select('wheel_spin_period_days')
+      .eq('id', claims.rid)
+      .maybeSingle()
+    const { data: lastSpin } = await db
+      .from('wheel_spins')
+      .select('created_at')
+      .eq('customer_id', claims.cid)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    const eligibility = checkEligibility(
+      lastSpin ? new Date(lastSpin.created_at) : null,
+      resto?.wheel_spin_period_days ?? 30,
+      new Date(),
+    )
+    if (!eligibility.eligible) {
+      return NextResponse.json({ error: 'Vous avez déjà tourné.' }, { status: 409 })
+    }
+  }
+
   const { data, error } = await db.rpc('spin_wheel', {
     p_restaurant_id: claims.rid, p_customer_id: claims.cid, p_jti: claims.jti,
   })
@@ -32,6 +64,17 @@ export async function POST(req: Request) {
     outcome: 'prize' | 'lose' | 'retry'; expires_at: string | null
   } | undefined
   if (!row) return NextResponse.json({ error: 'Une erreur est survenue.' }, { status: 500 })
+
+  // Stat best-effort (roue QR uniquement) : marque la ligne comme issue du flux public,
+  // avec l'action déclarée. Un échec ici est logué mais n'affecte jamais la réponse —
+  // l'éligibilité ne dépend jamais de `source`.
+  if (claims.jti.startsWith('qr:') && action && WHEEL_ACTIONS.includes(action as WheelAction)) {
+    const { error: statErr } = await db
+      .from('wheel_spins')
+      .update({ source: 'qr_public', declared_action: action })
+      .eq('jti', claims.jti)
+    if (statErr) console.error('[roue] maj stat source/declared_action échouée', statErr)
+  }
 
   if (row.outcome === 'lose') {
     return NextResponse.json({ outcome: 'lose' })
