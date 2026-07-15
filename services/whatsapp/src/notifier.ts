@@ -99,8 +99,11 @@ export async function handleOrderUpdate(
 
     if (newRow.status === 'recuperee' && wheelSecret && wheelBaseUrl) {
       const { data: resto } = await db.from('restaurants')
-        .select('wheel_enabled, wheel_trigger_orders').eq('id', newRow.restaurant_id).single()
-      if (resto?.wheel_enabled) {
+        .select('wheel_enabled, wheel_trigger_orders, wheel_qr_public').eq('id', newRow.restaurant_id).single()
+      // wheel_qr_public actif → la roue QR publique remplace le trigger post-commandes (cf. UI
+      // admin « Remplacé par la roue QR ») : ne pas émettre ce jeton v2 (jti sans préfixe `qr:`),
+      // il échapperait à la garde atomique de spin_wheel et bloquerait le client 30 j sur la roue QR.
+      if (resto?.wheel_enabled && !resto.wheel_qr_public) {
         const { count } = await db.from('orders').select('id', { count: 'exact', head: true })
           .eq('restaurant_id', newRow.restaurant_id).eq('customer_id', newRow.customer_id).eq('status', 'recuperee')
         const { count: prizeCount } = await db.from('prizes').select('id', { count: 'exact', head: true })

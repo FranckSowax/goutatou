@@ -37,7 +37,7 @@ describe('handleOrderUpdate', () => {
     expect(sendText).toHaveBeenCalledWith('24177@s.whatsapp.net', expect.stringContaining('n°7'))
   })
 
-  function fakeDbWithWheel(chatId: string, restaurant: { wheel_enabled: boolean; wheel_trigger_orders: number } | null, recupCount: number, prizeCount: number) {
+  function fakeDbWithWheel(chatId: string, restaurant: { wheel_enabled: boolean; wheel_trigger_orders: number; wheel_qr_public?: boolean } | null, recupCount: number, prizeCount: number) {
     return {
       from: vi.fn((table: string) => {
         if (table === 'customers') {
@@ -73,7 +73,7 @@ describe('handleOrderUpdate', () => {
     const sendText = vi.fn().mockResolvedValue({ id: 'x' })
     const sendInteractiveUrl = vi.fn().mockResolvedValue({ id: 'i1' })
     const decrypt = vi.fn().mockReturnValue('tok')
-    const db = fakeDbWithWheel('24177@s.whatsapp.net', { wheel_enabled: true, wheel_trigger_orders: 3 }, 3, 1)
+    const db = fakeDbWithWheel('24177@s.whatsapp.net', { wheel_enabled: true, wheel_trigger_orders: 3, wheel_qr_public: false }, 3, 1)
     await handleOrderUpdate(db as never, 'k'.repeat(64), oldRow,
       { ...oldRow, status: 'recuperee' }, () => ({ sendText, sendInteractiveUrl }), decrypt, 's'.repeat(32), 'https://x.test')
     // 1 seul sendText (le message de statut) : le lien roue passe par le bouton interactif, pas de fallback.
@@ -90,7 +90,7 @@ describe('handleOrderUpdate', () => {
     const sendText = vi.fn().mockResolvedValue({ id: 'x' })
     const sendInteractiveUrl = vi.fn().mockRejectedValue(new Error('whapi interactive 400'))
     const decrypt = vi.fn().mockReturnValue('tok')
-    const db = fakeDbWithWheel('24177@s.whatsapp.net', { wheel_enabled: true, wheel_trigger_orders: 3 }, 3, 1)
+    const db = fakeDbWithWheel('24177@s.whatsapp.net', { wheel_enabled: true, wheel_trigger_orders: 3, wheel_qr_public: false }, 3, 1)
     await handleOrderUpdate(db as never, 'k'.repeat(64), oldRow,
       { ...oldRow, status: 'recuperee' }, () => ({ sendText, sendInteractiveUrl }), decrypt, 's'.repeat(32), 'https://x.test')
     expect(sendInteractiveUrl).toHaveBeenCalledTimes(1)
@@ -101,7 +101,7 @@ describe('handleOrderUpdate', () => {
   it('recuperee + roue activée : makeWhapi sans sendInteractiveUrl (v1) → fallback sendText inchangé', async () => {
     const sendText = vi.fn().mockResolvedValue({ id: 'x' })
     const decrypt = vi.fn().mockReturnValue('tok')
-    const db = fakeDbWithWheel('24177@s.whatsapp.net', { wheel_enabled: true, wheel_trigger_orders: 3 }, 3, 1)
+    const db = fakeDbWithWheel('24177@s.whatsapp.net', { wheel_enabled: true, wheel_trigger_orders: 3, wheel_qr_public: false }, 3, 1)
     await handleOrderUpdate(db as never, 'k'.repeat(64), oldRow,
       { ...oldRow, status: 'recuperee' }, () => ({ sendText }) as never, decrypt, 's'.repeat(32), 'https://x.test')
     expect(sendText).toHaveBeenCalledTimes(2)
@@ -111,10 +111,22 @@ describe('handleOrderUpdate', () => {
   it('recuperee + roue désactivée : pas d’envoi du lien roue', async () => {
     const sendText = vi.fn().mockResolvedValue({ id: 'x' })
     const decrypt = vi.fn().mockReturnValue('tok')
-    const db = fakeDbWithWheel('24177@s.whatsapp.net', { wheel_enabled: false, wheel_trigger_orders: 3 }, 3, 1)
+    const db = fakeDbWithWheel('24177@s.whatsapp.net', { wheel_enabled: false, wheel_trigger_orders: 3, wheel_qr_public: false }, 3, 1)
     await handleOrderUpdate(db as never, 'k'.repeat(64), oldRow,
       { ...oldRow, status: 'recuperee' }, () => ({ sendText }), decrypt, 's'.repeat(32), 'https://x.test')
     expect(sendText).toHaveBeenCalledTimes(1)
+  })
+
+  it('recuperee + roue activée MAIS roue QR publique active : aucune offre de roue (remplacée par la roue QR)', async () => {
+    const sendText = vi.fn().mockResolvedValue({ id: 'x' })
+    const sendInteractiveUrl = vi.fn().mockResolvedValue({ id: 'i1' })
+    const decrypt = vi.fn().mockReturnValue('tok')
+    const db = fakeDbWithWheel('24177@s.whatsapp.net', { wheel_enabled: true, wheel_trigger_orders: 3, wheel_qr_public: true }, 3, 1)
+    await handleOrderUpdate(db as never, 'k'.repeat(64), oldRow,
+      { ...oldRow, status: 'recuperee' }, () => ({ sendText, sendInteractiveUrl }), decrypt, 's'.repeat(32), 'https://x.test')
+    // Seul le message de statut part ; ni bouton interactif ni fallback texte pour le jeton v2.
+    expect(sendText).toHaveBeenCalledTimes(1)
+    expect(sendInteractiveUrl).not.toHaveBeenCalled()
   })
 })
 
