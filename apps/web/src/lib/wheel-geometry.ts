@@ -17,6 +17,18 @@ export interface WheelSeg {
  * `current` = rotation actuelle (deg). Le résultat est toujours strictement supérieur à
  * `current` (au moins `extraSpins` tours complets) : la roue ne tourne jamais en arrière.
  */
+/**
+ * Trouve l'index du segment visuel correspondant au résultat renvoyé par le serveur.
+ * Aucune décision de tirage ici : le lot vient toujours du serveur. Renvoie -1 si aucun
+ * segment ne correspond (config de lots désynchronisée du serveur) — l'appelant ne doit
+ * alors PAS animer un atterrissage sur un autre segment que celui annoncé.
+ */
+export function indexForOutcome(segments: WheelSeg[], outcome: 'prize' | 'lose' | 'retry', prizeId?: string | null): number {
+  return outcome === 'prize'
+    ? segments.findIndex((s) => s.kind === 'prize' && s.key === prizeId)
+    : segments.findIndex((s) => s.kind === outcome)
+}
+
 export function targetRotation(index: number, total: number, current: number, rand: number): number {
   const segmentAngle = 360 / total
   const segmentCenterAngle = index * segmentAngle + segmentAngle / 2 - 90

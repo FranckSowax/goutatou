@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { distributeSegments, segmentPath, targetRotation, type WheelSeg } from '../src/lib/wheel-geometry'
+import { distributeSegments, indexForOutcome, segmentPath, targetRotation, type WheelSeg } from '../src/lib/wheel-geometry'
 
 describe('targetRotation', () => {
   it('calcule la rotation exacte pour amener le segment 0 (8 segments) sous le pointeur', () => {
@@ -56,6 +56,28 @@ describe('distributeSegments', () => {
 
   it('renvoie un tableau vide pour une entrée vide', () => {
     expect(distributeSegments([])).toEqual([])
+  })
+})
+
+describe('indexForOutcome', () => {
+  const segs: WheelSeg[] = [
+    { key: 'p1', label: 'Prize 1', kind: 'prize', color: '#fff' },
+    { key: 'lose', label: 'Perdu', kind: 'lose', color: '#000' },
+    { key: 'retry', label: 'Rejouer', kind: 'retry', color: '#00f' },
+  ]
+
+  it('trouve le segment prize par sa clé', () => {
+    expect(indexForOutcome(segs, 'prize', 'p1')).toBe(0)
+  })
+
+  it('trouve le segment lose/retry par kind', () => {
+    expect(indexForOutcome(segs, 'lose')).toBe(1)
+    expect(indexForOutcome(segs, 'retry')).toBe(2)
+  })
+
+  it('renvoie -1 (jamais un repli silencieux sur 0) si aucun segment ne correspond', () => {
+    expect(indexForOutcome(segs, 'prize', 'inconnu')).toBe(-1)
+    expect(indexForOutcome([{ key: 'p1', label: 'Prize 1', kind: 'prize', color: '#fff' }], 'lose')).toBe(-1)
   })
 })
 

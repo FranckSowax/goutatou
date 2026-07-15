@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { formatExpiryFr } from '@/lib/wheel'
-import { targetRotation, type WheelSeg } from '@/lib/wheel-geometry'
+import { indexForOutcome, targetRotation, type WheelSeg } from '@/lib/wheel-geometry'
 import { WheelSvg } from './wheel-svg'
 import { useConfetti } from './use-confetti'
 
@@ -29,16 +29,6 @@ type SpinResponse =
 const WAIT_SECONDS = 25
 const SPIN_MS = 5200
 const GENERIC_ERROR = 'Une erreur est survenue. Réessayez.'
-
-/** Trouve l'index du segment visuel correspondant au résultat renvoyé par le serveur.
- *  Aucune décision de tirage ici : le lot vient toujours du serveur. */
-function indexForOutcome(segments: WheelSeg[], outcome: 'prize' | 'lose' | 'retry', prizeId?: string | null): number {
-  const idx =
-    outcome === 'prize'
-      ? segments.findIndex((s) => s.kind === 'prize' && s.key === prizeId)
-      : segments.findIndex((s) => s.kind === outcome)
-  return idx >= 0 ? idx : 0
-}
 
 export function QrWheel({
   restaurantId,
@@ -96,12 +86,8 @@ export function QrWheel({
 
     const prizeId = spin.outcome === 'prize' ? spin.prizeId : undefined
     const index = indexForOutcome(segments, spin.outcome, prizeId)
-    const rand = Math.random()
-    setRotation((prev) => targetRotation(index, segments.length || 1, prev, rand))
-    setSpinning(true)
-    setPhase('spinning')
 
-    setTimeout(() => {
+    const showResult = () => {
       setSpinning(false)
       setSubmitting(false)
       setRetryBusy(false)
@@ -116,7 +102,22 @@ export function QrWheel({
         setRetryToken(spin.retryToken)
       }
       setPhase('result')
-    }, SPIN_MS)
+    }
+
+    if (index < 0) {
+      // Aucun segment visuel ne correspond au résultat serveur (config de lots désynchronisée) :
+      // ne pas animer un atterrissage trompeur sur un AUTRE lot que celui annoncé, afficher le
+      // résultat réel directement.
+      console.error('[qr-wheel] segment introuvable pour le résultat', spin.outcome, prizeId)
+      showResult()
+      return
+    }
+
+    const rand = Math.random()
+    setRotation((prev) => targetRotation(index, segments.length || 1, prev, rand))
+    setSpinning(true)
+    setPhase('spinning')
+    setTimeout(showResult, SPIN_MS)
   }
 
   async function handleSubmit(e: React.FormEvent) {
