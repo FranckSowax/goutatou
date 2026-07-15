@@ -1,21 +1,57 @@
 import { formatFcfa } from '@goutatou/db/types'
 import { createSupabaseServer } from '@/lib/supabase/server'
-import { dailySeries, topItems, modeSplit, hourHistogram } from '@/lib/stats'
+import {
+  cancelRate,
+  dailySeries,
+  hourHistogram,
+  modeSplit,
+  newVsReturning,
+  pctDelta,
+  sourceSplit,
+  topItems,
+  weekdayCa,
+} from '@/lib/stats'
 import { AreaChart } from '@/components/charts/AreaChart'
 import { BarChart } from '@/components/charts/BarChart'
 import { HBarList } from '@/components/charts/HBarList'
 import { KpiCard } from '../home-cards'
+import { PeriodSelector } from './period-selector'
 
 export const dynamic = 'force-dynamic'
 
 interface StatsOrderRow {
+  customer_id: string
+  source: string
   status: string
   mode: string
   total: number
   created_at: string
 }
 
-export default async function StatsPage() {
+const VALID_PERIODS = [7, 30, 90] as const
+type Period = (typeof VALID_PERIODS)[number]
+
+function parsePeriod(raw: string | undefined): Period {
+  const n = Number(raw)
+  return (VALID_PERIODS as readonly number[]).includes(n) ? (n as Period) : 30
+}
+
+/** Somme CA/nb commandes hors annulées sur un tableau déjà filtré à la fenêtre voulue. */
+function sumCaCount(orders: { status: string; total: number }[]): { ca: number; count: number } {
+  let ca = 0
+  let count = 0
+  for (const o of orders) {
+    if (o.status === 'annulee') continue
+    ca += o.total
+    count += 1
+  }
+  return { ca, count }
+}
+
+export default async function StatsPage({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
+  const { p: pParam } = await searchParams
+  const period = parsePeriod(pParam)
+
   const supabase = await createSupabaseServer()
   const { data: member } = await supabase
     .from('restaurant_members')
@@ -32,72 +68,137 @@ export default async function StatsPage() {
   }
 
   const now = new Date()
-  const since30 = new Date(now.getTime() - 30 * 24 * 3600 * 1000).toISOString()
-  const since7 = new Date(now.getTime() - 7 * 24 * 3600 * 1000).toISOString()
+  const sinceCurrent = new Date(now.getTime() - period * 24 * 3600 * 1000).toISOString()
+  const sincePrevious = new Date(now.getTime() - 2 * period * 24 * 3600 * 1000).toISOString()
 
-  const [{ data: ordersRaw }, { data: itemsRaw }] = await Promise.all([
+  const [{ data: ordersRaw }, { data: customersRaw }, { data: itemsRaw }] = await Promise.all([
+    // Fenêtre = 2 × période, pour pouvoir comparer la période courante à la précédente.
     supabase
       .from('orders')
-      .select('id, status, mode, total, created_at')
-      .gte('created_at', since30)
+      .select('customer_id, source, status, mode, total, created_at')
+      .gte('created_at', sincePrevious)
       .order('created_at', { ascending: false }),
+    supabase.from('customers').select('id, created_at'),
     // Embed inner + filtres sur la table jointe (syntaxe PostgREST : `.gte('orders.created_at', …)`
     // et `.neq('orders.status', …)` ciblent la ressource `orders!inner`, pas order_items elle-même).
     supabase
       .from('order_items')
       .select('name, qty, unit_price, orders!inner(status, created_at)')
-      .gte('orders.created_at', since30)
+      .gte('orders.created_at', sinceCurrent)
       .neq('orders.status', 'annulee'),
   ])
 
-  const orders: StatsOrderRow[] = ordersRaw ?? []
+  const allOrders: StatsOrderRow[] = ordersRaw ?? []
+  const customers = customersRaw ?? []
   const items = (itemsRaw ?? []).map((it) => ({
     name: it.name as string,
     qty: it.qty as number,
     unit_price: it.unit_price as number,
   }))
 
-  const series30 = dailySeries(orders, 30, now)
-  const ca30 = series30.reduce((sum, d) => sum + d.ca, 0)
-  const count30 = series30.reduce((sum, d) => sum + d.count, 0)
-  const panierMoyen30 = count30 > 0 ? Math.round(ca30 / count30) : 0
+  const ordersCurrent = allOrders.filter((o) => o.created_at >= sinceCurrent)
+  const ordersPrevious = allOrders.filter((o) => o.created_at >= sincePrevious && o.created_at < sinceCurrent)
 
-  const series14 = dailySeries(orders, 14, now)
+  const { ca: caCurrent, count: countCurrent } = sumCaCount(ordersCurrent)
+  const { ca: caPrevious, count: countPrevious } = sumCaCount(ordersPrevious)
+  const panierMoyenCurrent = countCurrent > 0 ? Math.round(caCurrent / countCurrent) : 0
+  const panierMoyenPrevious = countPrevious > 0 ? Math.round(caPrevious / countPrevious) : 0
+
+  const nvrCurrent = newVsReturning(ordersCurrent, customers, sinceCurrent)
+  const nvrPrevious = newVsReturning(ordersPrevious, customers, sincePrevious)
+
+  const cancelRateCurrent = cancelRate(ordersCurrent)
+  const cancelRatePrevious = cancelRate(ordersPrevious)
+
+  const series = dailySeries(ordersCurrent, period, now)
+  const weekday = weekdayCa(ordersCurrent, now, period)
   const top5 = topItems(items, 5)
-  const modes = modeSplit(orders)
-  const orders7 = orders.filter((o) => o.created_at >= since7)
-  const hours = hourHistogram(orders7)
+  const modes = modeSplit(ordersCurrent)
+  const hours = hourHistogram(ordersCurrent)
+  const sources = sourceSplit(ordersCurrent)
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-display text-2xl font-semibold">Statistiques</h1>
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <KpiCard tint="mint" label="CA (30 jours)" value={formatFcfa(ca30)} />
-        <KpiCard tint="sky" label="Commandes (30 jours)" value={String(count30)} />
-        <KpiCard tint="peach" label="Panier moyen (30 jours)" value={formatFcfa(panierMoyen30)} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-display text-2xl font-semibold">Statistiques</h1>
+        <PeriodSelector active={period} />
       </div>
 
-      <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-xs">
-        <h2 className="font-display text-lg font-semibold">Chiffre d&apos;affaires (14 jours)</h2>
-        <AreaChart
-          data={series14.map((d) => ({ label: d.label, value: d.ca }))}
-          valueFormat={formatFcfa}
-          ariaLabel="Chiffre d'affaires des 14 derniers jours"
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <KpiCard
+          tint="mint"
+          label={`CA (${period} jours)`}
+          value={formatFcfa(caCurrent)}
+          delta={pctDelta(caCurrent, caPrevious)}
         />
-      </section>
-
-      <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-xs">
-        <h2 className="font-display text-lg font-semibold">Commandes (14 jours)</h2>
-        <BarChart
-          data={series14.map((d) => ({ label: d.label, value: d.count }))}
-          ariaLabel="Nombre de commandes des 14 derniers jours"
+        <KpiCard
+          tint="sky"
+          label={`Commandes (${period} jours)`}
+          value={String(countCurrent)}
+          delta={pctDelta(countCurrent, countPrevious)}
         />
-      </section>
+        <KpiCard
+          tint="peach"
+          label="Panier moyen"
+          value={formatFcfa(panierMoyenCurrent)}
+          delta={pctDelta(panierMoyenCurrent, panierMoyenPrevious)}
+        />
+        <KpiCard
+          tint="rose"
+          label="Nouveaux clients"
+          value={String(nvrCurrent.nouveaux)}
+          delta={pctDelta(nvrCurrent.nouveaux, nvrPrevious.nouveaux)}
+        />
+        <KpiCard
+          tint="mint"
+          label="Taux d'annulation"
+          value={`${cancelRateCurrent} %`}
+          delta={pctDelta(cancelRateCurrent, cancelRatePrevious)}
+          invert
+        />
+      </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-xs">
-          <h2 className="font-display text-lg font-semibold">Top 5 plats (30 jours)</h2>
+          <h2 className="font-display text-lg font-semibold">Chiffre d&apos;affaires ({period} jours)</h2>
+          <AreaChart
+            data={series.map((d) => ({ label: d.label, value: d.ca }))}
+            height={120}
+            valueFormat={formatFcfa}
+            ariaLabel={`Chiffre d'affaires des ${period} derniers jours`}
+          />
+        </section>
+
+        <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-xs">
+          <h2 className="font-display text-lg font-semibold">Commandes ({period} jours)</h2>
+          <BarChart
+            data={series.map((d) => ({ label: d.label, value: d.count }))}
+            height={120}
+            ariaLabel={`Nombre de commandes des ${period} derniers jours`}
+          />
+        </section>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-xs">
+          <h2 className="font-display text-lg font-semibold">CA par jour de semaine ({period} jours)</h2>
+          <BarChart
+            data={weekday.map((d) => ({ label: d.label, value: d.ca }))}
+            valueFormat={formatFcfa}
+            ariaLabel="Chiffre d'affaires cumulé par jour de semaine"
+          />
+        </section>
+
+        <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-xs">
+          <h2 className="font-display text-lg font-semibold">Heures de pointe ({period} jours)</h2>
+          <BarChart
+            data={hours.map((h) => ({ label: `${h.hour}h`, value: h.count }))}
+            ariaLabel="Répartition des commandes par heure"
+          />
+        </section>
+
+        <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-xs">
+          <h2 className="font-display text-lg font-semibold">Top 5 plats ({period} jours)</h2>
           <HBarList
             data={top5.map((it) => ({
               label: it.name,
@@ -109,21 +210,32 @@ export default async function StatsPage() {
         </section>
 
         <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-xs">
-          <h2 className="font-display text-lg font-semibold">Répartition par mode (30 jours)</h2>
+          <h2 className="font-display text-lg font-semibold">Répartition par mode ({period} jours)</h2>
           <HBarList
             data={modes.map((m) => ({ label: m.label, value: m.count }))}
             ariaLabel="Répartition des commandes par mode"
           />
         </section>
-      </div>
 
-      <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-xs">
-        <h2 className="font-display text-lg font-semibold">Heures de pointe (7 jours)</h2>
-        <BarChart
-          data={hours.map((h) => ({ label: `${h.hour}h`, value: h.count }))}
-          ariaLabel="Répartition des commandes par heure"
-        />
-      </section>
+        <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-xs">
+          <h2 className="font-display text-lg font-semibold">Nouveaux vs récurrents ({period} jours)</h2>
+          <HBarList
+            data={[
+              { label: 'Nouveaux', value: nvrCurrent.nouveaux },
+              { label: 'Récurrents', value: nvrCurrent.recurrents },
+            ]}
+            ariaLabel="Nouveaux clients vs clients récurrents"
+          />
+        </section>
+
+        <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-xs">
+          <h2 className="font-display text-lg font-semibold">Source des commandes ({period} jours)</h2>
+          <HBarList
+            data={sources.map((s) => ({ label: s.label, value: s.count }))}
+            ariaLabel="Répartition des commandes par source"
+          />
+        </section>
+      </div>
     </div>
   )
 }
