@@ -374,58 +374,67 @@ function ItemRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        'grid grid-cols-[auto_40px_1fr_auto_auto_auto] items-center gap-3 rounded-xl border border-transparent px-2 py-2 hover:border-border hover:bg-muted/40',
+        // Mobile (<md) : 2 lignes empilées pour ne jamais déborder à 375px/320px.
+        // À partir de md: retour exact à la grille 1 ligne d'origine — les deux
+        // wrapper divs passent en `md:contents` pour redevenir des enfants directs
+        // de la grille, dans le même ordre que les 6 colonnes.
+        'flex flex-col gap-2 rounded-xl border border-transparent px-2 py-2 hover:border-border hover:bg-muted/40',
+        'md:grid md:grid-cols-[auto_40px_1fr_auto_auto_auto] md:items-center md:gap-3',
         isDragging && 'opacity-60'
       )}
     >
-      <button
-        type="button"
-        ref={setActivatorNodeRef}
-        {...attributes}
-        {...listeners}
-        aria-label={`Réordonner ${item.name}`}
-        className="flex size-7 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg text-muted-foreground hover:bg-muted active:cursor-grabbing"
-      >
-        <GripVertical className="size-4" />
-      </button>
+      <div className="flex items-center gap-3 md:contents">
+        <button
+          type="button"
+          ref={setActivatorNodeRef}
+          {...attributes}
+          {...listeners}
+          aria-label={`Réordonner ${item.name}`}
+          className="flex size-7 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg text-muted-foreground hover:bg-muted active:cursor-grabbing"
+        >
+          <GripVertical className="size-4" />
+        </button>
 
-      {item.photo_url ? (
-        <img
-          src={item.photo_url}
-          alt={item.name}
-          className="size-10 shrink-0 rounded-lg object-cover"
-        />
-      ) : (
-        <div className="size-10 shrink-0 rounded-lg bg-muted" aria-hidden="true" />
-      )}
+        {item.photo_url ? (
+          <img
+            src={item.photo_url}
+            alt={item.name}
+            className="size-10 shrink-0 rounded-lg object-cover"
+          />
+        ) : (
+          <div className="size-10 shrink-0 rounded-lg bg-muted" aria-hidden="true" />
+        )}
 
-      <div className="min-w-0">
-        <div className="flex items-center gap-1.5">
-          <p className="truncate font-medium">{item.name}</p>
-          {item.supplements.length > 0 && (
-            <Badge variant="outline" className="shrink-0">
-              {item.supplements.length} suppl.
-            </Badge>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <p className="truncate font-medium">{item.name}</p>
+            {item.supplements.length > 0 && (
+              <Badge variant="outline" className="shrink-0">
+                {item.supplements.length} suppl.
+              </Badge>
+            )}
+          </div>
+          {item.description && (
+            <p className="truncate text-xs text-muted-foreground">{item.description}</p>
           )}
         </div>
-        {item.description && (
-          <p className="truncate text-xs text-muted-foreground">{item.description}</p>
-        )}
+
+        <span className="whitespace-nowrap font-bold text-primary">{formatFcfa(item.price)}</span>
       </div>
 
-      <span className="whitespace-nowrap font-bold text-primary">{formatFcfa(item.price)}</span>
+      <div className="flex items-center justify-between gap-2 md:contents">
+        <form
+          action={toggleItemAvailable.bind(null, item.id, !item.available)}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Button type="submit" variant="outline" size="sm">
+            {item.available ? 'Disponible' : 'Rupture'}
+          </Button>
+        </form>
 
-      <form
-        action={toggleItemAvailable.bind(null, item.id, !item.available)}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <Button type="submit" variant="outline" size="sm">
-          {item.available ? 'Disponible' : 'Rupture'}
-        </Button>
-      </form>
-
-      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-        {actions}
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          {actions}
+        </div>
       </div>
     </div>
   )
