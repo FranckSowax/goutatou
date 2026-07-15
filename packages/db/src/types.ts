@@ -138,3 +138,9 @@ export type ChannelPostState =
 // surfaces de publication d'un même sondage natif. Pas de type Poll explicite dans ce package
 // (les repos lisent en colonnes brutes) — on n'ajoute donc que le type de surface.
 export type PollSurface = 'channel' | 'group' | 'status_teaser'
+
+// Roue QR + action sociale (migration 0028, cf.
+// docs/superpowers/plans/2026-07-13-roue-qr-sociale.md) : action déclarative honor-system
+// choisie avant de tourner, et provenance du tour (v2 après-commande vs QR public).
+export type WheelAction = 'google' | 'tiktok' | 'channel'
+export type WheelSpinSource = 'order' | 'qr_public'
