@@ -88,7 +88,7 @@ describe('processor — panier WhatsApp natif entrant (message type "order")', (
     expect(sendText).toHaveBeenCalledTimes(2)
     expect(sendText.mock.calls[0]).toEqual([CHAT_ID, copy.cartRecap(expectedCart)])
     expect(sendText.mock.calls[1]).toEqual([
-      CHAT_ID, copy.chooseMode(['🚗 Drive (retrait sur créneau)', '🛵 Livraison', '🍽️ Sur place']),
+      CHAT_ID, copy.chooseMode(['🚗 Drive (retrait sur créneau)', '🛵 Livraison', '🥡 À emporter']),
     ])
     expect(repo.logMessage).toHaveBeenCalledWith('resto-1', 'in', CHAT_ID, '🛒 Panier WhatsApp', 'MSG-ORDER')
   })

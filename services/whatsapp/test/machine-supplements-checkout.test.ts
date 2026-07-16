@@ -47,7 +47,7 @@ describe('beginCheckout — sans suppléments, comportement inchangé', () => {
     expect(r.state).toBe('MODE')
     expect(r.replies).toEqual([
       copy.cartRecap(cart),
-      copy.chooseMode(['🚗 Drive (retrait sur créneau)', '🛵 Livraison', '🍽️ Sur place']),
+      copy.chooseMode(['🚗 Drive (retrait sur créneau)', '🛵 Livraison', '🥡 À emporter']),
     ])
   })
 })
@@ -127,7 +127,7 @@ describe('SUPPLEMENTS_CHECKOUT — sortie, item unique', () => {
     expect(r.replies).toEqual(plain.replies)
     expect(r.replies).toEqual([
       copy.cartRecap(equivalentCart),
-      copy.chooseMode(['🚗 Drive (retrait sur créneau)', '🛵 Livraison', '🍽️ Sur place']),
+      copy.chooseMode(['🚗 Drive (retrait sur créneau)', '🛵 Livraison', '🥡 À emporter']),
     ])
   })
 
@@ -162,7 +162,7 @@ describe('SUPPLEMENTS_CHECKOUT — sortie, plusieurs items avec suppléments', (
     expect(afterDg.state).toBe('MODE')
     expect(afterDg.replies).toEqual([
       copy.cartRecap(afterDg.cart),
-      copy.chooseMode(['🚗 Drive (retrait sur créneau)', '🛵 Livraison', '🍽️ Sur place']),
+      copy.chooseMode(['🚗 Drive (retrait sur créneau)', '🛵 Livraison', '🥡 À emporter']),
     ])
     expect(afterDg.cart.items.find((it) => it.menuItemId === 'item-dg')?.suppAsked).toBe(true)
 

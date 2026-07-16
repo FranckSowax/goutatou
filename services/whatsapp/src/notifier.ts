@@ -32,7 +32,7 @@ export interface OrderCustomer {
 const MODE_LABELS_FR: Record<OrderMode, string> = {
   drive: 'Retrait',
   livraison: 'Livraison',
-  sur_place: 'Sur place',
+  sur_place: 'À emporter',
 }
 
 /**

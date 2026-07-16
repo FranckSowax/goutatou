@@ -80,7 +80,7 @@ export function topItems(
 }
 
 const MODE_ORDER: { mode: string; label: string }[] = [
-  { mode: 'sur_place', label: 'Sur place' },
+  { mode: 'sur_place', label: 'À emporter' },
   { mode: 'drive', label: 'Drive' },
   { mode: 'livraison', label: 'Livraison' },
 ]

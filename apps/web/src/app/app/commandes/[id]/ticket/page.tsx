@@ -17,7 +17,7 @@ function heureLibreville(iso: string): string {
 function modeDetail(o: { mode: string; driveSlotLabel: string | null; deliveryAddress: string | null }): string {
   if (o.mode === 'drive') return `🚗 Drive${o.driveSlotLabel ? ` · ${o.driveSlotLabel}` : ''}`
   if (o.mode === 'livraison') return `🛵 Livraison${o.deliveryAddress ? ` · ${o.deliveryAddress}` : ''}`
-  return '🍽️ Sur place'
+  return '🥡 À emporter'
 }
 
 function TicketIndisponible() {

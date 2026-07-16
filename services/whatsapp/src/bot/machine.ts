@@ -51,7 +51,7 @@ export function renderMenu(ctx: BotContext): string {
 const MODE_DEFS: { mode: OrderMode; label: string }[] = [
   { mode: 'drive', label: '🚗 Drive (retrait sur créneau)' },
   { mode: 'livraison', label: '🛵 Livraison' },
-  { mode: 'sur_place', label: '🍽️ Sur place' },
+  { mode: 'sur_place', label: '🥡 À emporter' },
 ]
 
 export function availableModes(ctx: BotContext): { mode: OrderMode; label: string }[] {

@@ -77,7 +77,7 @@ export function CheckoutForm({ slug, driveEnabled, driveSlots }: {
         className="rounded-xl border border-white/20 bg-transparent p-3" />
 
       <div className="flex gap-2">
-        {([['drive', '🚗 Drive'], ['livraison', '🛵 Livraison'], ['sur_place', '🍽️ Sur place']] as const)
+        {([['drive', '🚗 Drive'], ['livraison', '🛵 Livraison'], ['sur_place', '🥡 À emporter']] as const)
           .filter(([m]) => m !== 'drive' || driveEnabled)
           .map(([m, label]) => (
             <button key={m} type="button" onClick={() => setMode(m)}

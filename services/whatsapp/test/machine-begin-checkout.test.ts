@@ -29,7 +29,7 @@ describe('beginCheckout — addition pure (panier importé, ex. panier WhatsApp 
     expect(r.cart).toBe(twoDishesCart)
     expect(r.replies).toEqual([
       copy.cartRecap(twoDishesCart),
-      copy.chooseMode(['🚗 Drive (retrait sur créneau)', '🛵 Livraison', '🍽️ Sur place']),
+      copy.chooseMode(['🚗 Drive (retrait sur créneau)', '🛵 Livraison', '🥡 À emporter']),
     ])
   })
 

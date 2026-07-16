@@ -56,7 +56,7 @@ function isToday(iso: string): boolean {
 function modeLabel(o: OrderCard): { label: string; detail: string | null } {
   if (o.mode === 'drive') return { label: '🚗 Drive', detail: o.drive_slot_label }
   if (o.mode === 'livraison') return { label: '🛵 Livraison', detail: o.delivery_address }
-  return { label: '🍽️ Sur place', detail: null }
+  return { label: '🥡 À emporter', detail: null }
 }
 
 /**

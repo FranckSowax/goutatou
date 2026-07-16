@@ -102,7 +102,7 @@ describe('modeSplit', () => {
     const result = modeSplit(orders)
 
     expect(result).toEqual([
-      { mode: 'sur_place', label: 'Sur place', count: 1 },
+      { mode: 'sur_place', label: 'À emporter', count: 1 },
       { mode: 'drive', label: 'Drive', count: 2 },
       { mode: 'livraison', label: 'Livraison', count: 0 },
     ])
@@ -121,7 +121,7 @@ describe('modeSplit', () => {
 
   it('retourne les 3 modes à 0 pour une liste vide', () => {
     expect(modeSplit([])).toEqual([
-      { mode: 'sur_place', label: 'Sur place', count: 0 },
+      { mode: 'sur_place', label: 'À emporter', count: 0 },
       { mode: 'drive', label: 'Drive', count: 0 },
       { mode: 'livraison', label: 'Livraison', count: 0 },
     ])

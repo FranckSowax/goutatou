@@ -18,7 +18,7 @@ describe('flow drive complet', () => {
     const r = transition('MENU', cartWithItem, 'valider', ctx)
     expect(r.state).toBe('MODE')
     expect(r.replies[0]).toContain('1. 🚗 Drive')
-    expect(r.replies[0]).toContain('3. 🍽️ Sur place')
+    expect(r.replies[0]).toContain('3. 🥡 À emporter')
   })
 
   it('MODE "1" (drive) → CRENEAU avec les créneaux', () => {

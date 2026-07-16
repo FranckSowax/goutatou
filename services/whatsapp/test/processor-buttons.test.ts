@@ -138,7 +138,7 @@ describe('processor — boutons WhatsApp sur les choix fermés', () => {
       expect(sendQuickReplies).toHaveBeenCalledTimes(1)
       const [to, body, buttons] = sendQuickReplies.mock.calls[0]
       expect(to).toBe(CHAT_ID)
-      expect(body).toBe(copy.chooseMode(['🚗 Drive (retrait sur créneau)', '🛵 Livraison', '🍽️ Sur place']))
+      expect(body).toBe(copy.chooseMode(['🚗 Drive (retrait sur créneau)', '🛵 Livraison', '🥡 À emporter']))
       expect(buttons.map((b: { id: string }) => b.id)).toEqual(['in:1', 'in:2', 'in:3'])
       expect(sendText).not.toHaveBeenCalled()
       expect(repo.logMessage).toHaveBeenCalledWith('resto-1', 'out', CHAT_ID, body, 'OUT-QR')
@@ -204,7 +204,7 @@ describe('processor — boutons WhatsApp sur les choix fermés', () => {
       })
       await process()('chan-uuid', webhookPayload('valider'))
 
-      const expectedBody = copy.chooseMode(['🚗 Drive (retrait sur créneau)', '🛵 Livraison', '🍽️ Sur place'])
+      const expectedBody = copy.chooseMode(['🚗 Drive (retrait sur créneau)', '🛵 Livraison', '🥡 À emporter'])
       expect(sendQuickReplies).toHaveBeenCalledTimes(1)
       expect(sendText).toHaveBeenCalledWith(CHAT_ID, expectedBody)
       expect(repo.logMessage).toHaveBeenCalledWith('resto-1', 'out', CHAT_ID, expectedBody, 'OUT-TEXT')
