@@ -388,6 +388,7 @@ export async function resendInvitation(id: string): Promise<{ inviteLink: string
     .select('user_id')
     .eq('restaurant_id', id)
     .eq('role', 'owner')
+    .limit(1)
     .maybeSingle()
   if (memberErr || !member) throw new Error('Gérant introuvable pour ce restaurant.')
 
