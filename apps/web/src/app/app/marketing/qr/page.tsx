@@ -71,12 +71,12 @@ export default async function QrOptInPage() {
   )
 
   return (
-    <div className="mx-auto max-w-3xl p-6">
+    <div className="p-6">
       <h1 className="mb-1 font-display text-2xl font-semibold">QR opt-in</h1>
-      <p className="mb-6 text-sm text-muted-foreground">
+      <p className="mb-6 max-w-2xl text-sm text-muted-foreground">
         Un QR par mot-clé : le client scanne, WhatsApp s’ouvre avec le message pré-rempli, il l’envoie et le bot répond aussitôt.
       </p>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
         {cards.map((c) => (
           <QrCard key={c.keyword} keyword={c.keyword} description={c.description} link={c.link} svg={c.svg} count={c.count} />
         ))}
