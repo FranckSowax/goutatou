@@ -92,7 +92,7 @@ describe('processor — arrivée Drive (bouton arr:)', () => {
   })
 
   it('tap valide (drive, prete) → markArrived appelé + confirmation FR', async () => {
-    arrivalRepo.getOrder = vi.fn().mockResolvedValue({ id: 'o1', restaurantId: 'resto-1', mode: 'drive', status: 'prete' })
+    arrivalRepo.getOrder = vi.fn().mockResolvedValue({ id: 'o1', restaurantId: 'resto-1', mode: 'drive', status: 'prete', customerChatId: CHAT_ID })
     arrivalRepo.markArrived = vi.fn().mockResolvedValue(true)
 
     await process()('chan-uuid', replyPayload('arr:o1'))
@@ -103,7 +103,7 @@ describe('processor — arrivée Drive (bouton arr:)', () => {
   })
 
   it('idempotence markArrived : 2e tap (déjà arrivé) → 0 ligne → réponse neutre, pas de 2e "c\'est noté"', async () => {
-    arrivalRepo.getOrder = vi.fn().mockResolvedValue({ id: 'o1', restaurantId: 'resto-1', mode: 'drive', status: 'prete' })
+    arrivalRepo.getOrder = vi.fn().mockResolvedValue({ id: 'o1', restaurantId: 'resto-1', mode: 'drive', status: 'prete', customerChatId: CHAT_ID })
     arrivalRepo.markArrived = vi.fn().mockResolvedValue(false) // condition arrived_at is null ne matche plus
 
     await process()('chan-uuid', replyPayload('arr:o1'))
@@ -142,7 +142,7 @@ describe('processor — arrivée Drive (bouton arr:)', () => {
   })
 
   it('garde — statut annulee → message FR neutre, aucune écriture', async () => {
-    arrivalRepo.getOrder = vi.fn().mockResolvedValue({ id: 'o1', restaurantId: 'resto-1', mode: 'drive', status: 'annulee' })
+    arrivalRepo.getOrder = vi.fn().mockResolvedValue({ id: 'o1', restaurantId: 'resto-1', mode: 'drive', status: 'annulee', customerChatId: CHAT_ID })
 
     await process()('chan-uuid', replyPayload('arr:o1'))
 
@@ -150,10 +150,25 @@ describe('processor — arrivée Drive (bouton arr:)', () => {
     expect(sendText).toHaveBeenCalledWith(CHAT_ID, "Cette commande n'est plus en attente.")
   })
 
+  it('garde anti-usurpation — tap avec l\'id d\'une commande drive/prete d\'un AUTRE client du même resto → aucune écriture, réponse neutre', async () => {
+    // La commande existe, est drive/prete (toutes les autres gardes passeraient), mais appartient
+    // à un client dont le chat_id diffère de l'émetteur du tap (CHAT_ID) — cf. IMPORTANT 2.
+    arrivalRepo.getOrder = vi.fn().mockResolvedValue({
+      id: 'o1', restaurantId: 'resto-1', mode: 'drive', status: 'prete',
+      customerChatId: '24177999999@s.whatsapp.net',
+    })
+
+    await process()('chan-uuid', replyPayload('arr:o1'))
+
+    expect(arrivalRepo.getOrder).toHaveBeenCalledWith('o1', 'resto-1')
+    expect(arrivalRepo.markArrived).not.toHaveBeenCalled()
+    expect(sendText).toHaveBeenCalledWith(CHAT_ID, "Cette commande n'est plus en attente.")
+  })
+
   describe('repli par contexte — texte (id de bouton non revenu)', () => {
     it('texte d\'arrivée + 1 commande drive en attente → markArrived appelé + confirmation FR', async () => {
       arrivalRepo.findPendingDriveOrder = vi.fn().mockResolvedValue({ id: 'o1' })
-      arrivalRepo.getOrder = vi.fn().mockResolvedValue({ id: 'o1', restaurantId: 'resto-1', mode: 'drive', status: 'prete' })
+      arrivalRepo.getOrder = vi.fn().mockResolvedValue({ id: 'o1', restaurantId: 'resto-1', mode: 'drive', status: 'prete', customerChatId: CHAT_ID })
       arrivalRepo.markArrived = vi.fn().mockResolvedValue(true)
 
       await process()('chan-uuid', textPayload('je suis arrive'))
@@ -178,7 +193,7 @@ describe('processor — arrivée Drive (bouton arr:)', () => {
 
     it('texte d\'arrivée + commande déjà arrivée (idempotent, 0 ligne) → réponse neutre, pas de double alerte', async () => {
       arrivalRepo.findPendingDriveOrder = vi.fn().mockResolvedValue({ id: 'o1' })
-      arrivalRepo.getOrder = vi.fn().mockResolvedValue({ id: 'o1', restaurantId: 'resto-1', mode: 'drive', status: 'prete' })
+      arrivalRepo.getOrder = vi.fn().mockResolvedValue({ id: 'o1', restaurantId: 'resto-1', mode: 'drive', status: 'prete', customerChatId: CHAT_ID })
       arrivalRepo.markArrived = vi.fn().mockResolvedValue(false)
 
       await process()('chan-uuid', textPayload('JE SUIS ARRIVÉ !'))

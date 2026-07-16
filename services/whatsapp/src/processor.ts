@@ -442,6 +442,14 @@ async function handleApprovalButton(
  * loggé côté appelant (tap bouton : `handleArrivalButton` ci-dessous ; repli texte par contexte :
  * boucle principale via `findPendingDriveOrder`) — mêmes gardes, même idempotence, mêmes copies
  * FR quel que soit le chemin d'entrée.
+ *
+ * Garde anti-usurpation (le chemin bouton n'a PAS de `customer` résolu — il est intercepté avant
+ * `upsertCustomer`, cf. createProcessor — donc rien d'autre ne scope par client sur ce chemin) :
+ * `order.customerChatId` (ramené par `getOrder`, jointure `customers`) doit correspondre au
+ * `chatId` de l'émetteur du tap. Sans cette vérification, un client pourrait rejouer l'id
+ * `arr:<uuid>` d'une commande d'un AUTRE client du même resto et déclencher sa fausse alerte
+ * cuisine. Le chemin repli par contexte (`findPendingDriveOrder`) est déjà scopé par
+ * `customer.id` en amont — cette garde y est donc redondante mais inoffensive (même client).
  */
 async function resolveArrivalOrder(
   whapi: ProcessorWhapi,
@@ -453,6 +461,7 @@ async function resolveArrivalOrder(
 ): Promise<void> {
   const order = await arrivalRepo.getOrder(orderId, restaurantId)
   const eligible = !!order && order.mode === 'drive' && order.status !== 'recuperee' && order.status !== 'annulee'
+    && order.customerChatId === chatId
   if (!eligible) {
     await sendOneReply(whapi, repo, restaurantId, chatId, ARRIVAL_COPY.notPending, null)
     return

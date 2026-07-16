@@ -6,6 +6,13 @@ export interface ArrivalOrderRow {
   restaurantId: string
   mode: OrderMode
   status: OrderStatus
+  /**
+   * `chat_id` du CLIENT propriétaire de la commande (jointure `customers!inner`) — permet à
+   * l'appelant (processor.ts resolveArrivalOrder) de vérifier que l'émetteur du tap `arr:<id>`
+   * est bien le client de CETTE commande, pas un autre client du même resto qui aurait rejoué
+   * l'id d'une commande qui n'est pas la sienne (cf. drive/arrival-repo.test.ts).
+   */
+  customerChatId: string
 }
 
 export interface ArrivalRepo {
@@ -13,7 +20,8 @@ export interface ArrivalRepo {
    * Lecture SÉCURISÉE : filtre `restaurant_id` dans la requête même (pas de check applicatif
    * après coup) — aucune validation croisée entre restaurants n'est possible. `null` si la
    * commande n'existe pas ou appartient à un autre restaurant que celui du canal (mirror
-   * autostatus/approval-repo.ts getStatus).
+   * autostatus/approval-repo.ts getStatus). Ramène aussi `customerChatId` (jointure `customers`)
+   * pour que l'appelant puisse vérifier que l'émetteur du tap est bien le client de la commande.
    */
   getOrder(orderId: string, restaurantId: string): Promise<ArrivalOrderRow | null>
   /**
@@ -39,6 +47,7 @@ interface OrderRowDb {
   restaurant_id: string
   mode: OrderMode
   status: OrderStatus
+  customers: { chat_id: string } | { chat_id: string }[] | null
 }
 
 export function createArrivalRepo(db: SupabaseClient): ArrivalRepo {
@@ -46,13 +55,20 @@ export function createArrivalRepo(db: SupabaseClient): ArrivalRepo {
     async getOrder(orderId, restaurantId) {
       const { data } = await db
         .from('orders')
-        .select('id, restaurant_id, mode, status')
+        .select('id, restaurant_id, mode, status, customers!inner(chat_id)')
         .eq('id', orderId)
         .eq('restaurant_id', restaurantId)
         .maybeSingle()
       const row = data as OrderRowDb | null
       if (!row) return null
-      return { id: row.id, restaurantId: row.restaurant_id, mode: row.mode, status: row.status }
+      // `customers!inner(...)` renvoie un objet pour cette relation belongs-to ; défensif si le
+      // client Supabase le sérialise en tableau à un seul élément selon la version.
+      const customer = Array.isArray(row.customers) ? row.customers[0] : row.customers
+      if (!customer) return null
+      return {
+        id: row.id, restaurantId: row.restaurant_id, mode: row.mode, status: row.status,
+        customerChatId: customer.chat_id,
+      }
     },
 
     async markArrived(orderId) {

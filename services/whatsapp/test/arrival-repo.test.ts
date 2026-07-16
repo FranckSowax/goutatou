@@ -15,16 +15,33 @@ function makeChain(finalData: unknown) {
 }
 
 describe('createArrivalRepo — getOrder', () => {
-  it('filtre id + restaurant_id, mappe les colonnes', async () => {
-    const chain = makeChain({ id: 'o1', restaurant_id: 'r1', mode: 'drive', status: 'prete' })
+  it('filtre id + restaurant_id, mappe les colonnes + le chat_id client (jointure)', async () => {
+    const chain = makeChain({
+      id: 'o1', restaurant_id: 'r1', mode: 'drive', status: 'prete', customers: { chat_id: '241xxx@s.whatsapp.net' },
+    })
     const from = vi.fn().mockReturnValue(chain)
     const repo = createArrivalRepo({ from } as unknown as SupabaseClient)
 
     const order = await repo.getOrder('o1', 'r1')
 
-    expect(order).toEqual({ id: 'o1', restaurantId: 'r1', mode: 'drive', status: 'prete' })
+    expect(order).toEqual({
+      id: 'o1', restaurantId: 'r1', mode: 'drive', status: 'prete', customerChatId: '241xxx@s.whatsapp.net',
+    })
     expect(chain.eq).toHaveBeenCalledWith('id', 'o1')
     expect(chain.eq).toHaveBeenCalledWith('restaurant_id', 'r1')
+    expect(chain.select).toHaveBeenCalledWith('id, restaurant_id, mode, status, customers!inner(chat_id)')
+  })
+
+  it('supabase renvoie `customers` en tableau (défensif) → chat_id quand même extrait', async () => {
+    const chain = makeChain({
+      id: 'o1', restaurant_id: 'r1', mode: 'drive', status: 'prete', customers: [{ chat_id: '241yyy@s.whatsapp.net' }],
+    })
+    const from = vi.fn().mockReturnValue(chain)
+    const repo = createArrivalRepo({ from } as unknown as SupabaseClient)
+
+    const order = await repo.getOrder('o1', 'r1')
+
+    expect(order?.customerChatId).toBe('241yyy@s.whatsapp.net')
   })
 
   it('aucune ligne (id inconnu ou autre restaurant) → null', async () => {
