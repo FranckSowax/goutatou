@@ -63,7 +63,7 @@ export default async function MenuPage() {
   }))
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6">
+    <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between gap-4">
         <h1 className="font-display text-2xl font-semibold">Menu</h1>
         <div className="flex items-center gap-2">
@@ -72,20 +72,33 @@ export default async function MenuPage() {
         </div>
       </div>
 
-      <MenuStudio
-        categories={studioCategories}
-        itemActions={Object.fromEntries(
-          studioCategories.flatMap((cat) =>
-            cat.items.map((item) => [
-              item.id,
-              <>
-                <EditItemDialog item={item} categoryId={cat.id} categories={studioCategories} />
-                <DeleteItemDialog item={item} />
-              </>,
-            ])
-          )
-        )}
-      />
+      {studioCategories.length === 0 ? (
+        <div className="mx-auto max-w-xl p-8 text-center text-muted-foreground">
+          Aucune catégorie pour l’instant. Créez une première catégorie pour commencer à composer votre
+          menu, puis ajoutez-y des plats.
+        </div>
+      ) : (
+        // MenuStudio embarque un seul arbre dnd-kit (catégories + plats, y compris le
+        // déplacement d'un plat d'une catégorie à l'autre) : toutes les catégories et
+        // leurs plats doivent rester montés simultanément dans le même SortableContext
+        // pour que le drag & drop inter-catégories fonctionne. On ne le disloque donc
+        // pas en 2 colonnes (catégories / plats) — la pleine largeur profite déjà aux
+        // lignes de plat (moins de troncature sur le nom/description).
+        <MenuStudio
+          categories={studioCategories}
+          itemActions={Object.fromEntries(
+            studioCategories.flatMap((cat) =>
+              cat.items.map((item) => [
+                item.id,
+                <>
+                  <EditItemDialog item={item} categoryId={cat.id} categories={studioCategories} />
+                  <DeleteItemDialog item={item} />
+                </>,
+              ])
+            )
+          )}
+        />
+      )}
     </div>
   )
 }
