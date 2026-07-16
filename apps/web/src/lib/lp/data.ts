@@ -28,6 +28,7 @@ export interface LpData {
   driveSlots: { id: string; label: string }[]
   driveEnabled: boolean
   whatsappPhone: string | null
+  isPremium: boolean
 }
 
 // Mémoïsé par requête (React cache) : layout, page et generateMetadata appellent
@@ -36,7 +37,7 @@ export const getLpData = cache(async (slug: string): Promise<LpData | null> => {
   const db = createAdminClient()
   const { data: resto } = await db
     .from('restaurants')
-    .select('id, slug, name, lp_config, drive_enabled, whapi_channels(phone)')
+    .select('id, slug, name, lp_config, drive_enabled, whapi_channels(phone), subscriptions(plan, status)')
     .eq('slug', slug)
     .maybeSingle()
   if (!resto) return null
@@ -79,6 +80,9 @@ export const getLpData = cache(async (slug: string): Promise<LpData | null> => {
     .slice(0, 4)
 
   const channel = resto.whapi_channels as unknown as { phone: string | null } | null
+  // Même définition que lib/premium.ts (isPremium) : plan 'premium' ET status 'active'.
+  const sub = resto.subscriptions as unknown as { plan: string; status: string } | null
+  const isPremium = sub?.plan === 'premium' && sub?.status === 'active'
 
   return {
     restaurantId: resto.id,
@@ -90,5 +94,6 @@ export const getLpData = cache(async (slug: string): Promise<LpData | null> => {
     driveSlots: (slots ?? []).map((s) => ({ id: s.id, label: s.label })),
     driveEnabled: resto.drive_enabled,
     whatsappPhone: channel?.phone ?? config.whatsappPhone,
+    isPremium,
   }
 })

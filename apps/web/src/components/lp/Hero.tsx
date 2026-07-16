@@ -10,12 +10,14 @@ import type { LpHeroFrames } from '@/lib/lp/config'
 
 gsap.registerPlugin(ScrollTrigger, useGSAP)
 
-export function Hero({ title, subtitle, mediaUrl, mediaType, waPhone, restaurantName, frames }: {
+export function Hero({ title, subtitle, mediaUrl, mediaType, waPhone, restaurantName, frames, isPremium }: {
   title: string; subtitle: string; mediaUrl: string | null
   mediaType: 'image' | 'video'; waPhone: string | null; restaurantName: string
   frames?: LpHeroFrames | null
+  isPremium: boolean
 }) {
-  if (frames?.status === 'ready' && frames.count > 0) {
+  // Scrub scroll réservé au premium : les non-premium retombent sur le hero fallback existant.
+  if (frames?.status === 'ready' && frames.count > 0 && isPremium) {
     return (
       <HeroScrub
         frames={frames}

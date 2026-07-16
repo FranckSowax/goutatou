@@ -35,6 +35,7 @@ export default async function LpPage({ params }: { params: Promise<{ slug: strin
         waPhone={lp.whatsappPhone}
         restaurantName={lp.name}
         frames={lp.config.hero.frames}
+        isPremium={lp.isPremium}
       />
       <Featured items={lp.featured} />
       <MenuSection categories={lp.categories} />
