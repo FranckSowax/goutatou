@@ -40,6 +40,10 @@ export async function createCounterOrder(formData: FormData): Promise<{ orderId:
   if (phone) {
     const normalized = normalizeGabonPhone(phone)
     if (!normalized) throw new Error('Numéro invalide.')
+    // NE PAS écrire marketing_opt_in/opted_out : un upsert les écraserait sur un client
+    // EXISTANT et ré-abonnerait quelqu'un qui avait envoyé STOP (violation de consentement,
+    // cf. route LP qui les omet aussi). Nouveau client → défauts colonne (false/false) : un
+    // walk-in qui donne son numéro pour le reçu n'a pas consenti au marketing.
     const { data: customer, error: custErr } = await admin
       .from('customers')
       .upsert(
@@ -47,8 +51,6 @@ export async function createCounterOrder(formData: FormData): Promise<{ orderId:
           restaurant_id: restaurantId,
           phone: normalized,
           chat_id: `${normalized}@s.whatsapp.net`,
-          marketing_opt_in: true,
-          opted_out: false,
         },
         { onConflict: 'restaurant_id,phone' },
       )
