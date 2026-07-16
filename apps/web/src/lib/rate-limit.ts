@@ -9,6 +9,11 @@ export const RATE_LIMITS = {
   // usage légitime (un client ne tourne qu'une fois par période) tout en bornant le scraping
   // de codes de lot via des numéros fabriqués.
   wheelUnlockIp: { limit: 10, windowSeconds: 3600 },
+  // Mot de passe oublié (/api/auth/recovery) : endpoint public non authentifié qui déclenche
+  // generateLink + un envoi WhatsApp — un gérant légitime tente rarement plus de 2-3 fois par
+  // heure (il suffit d'un lien reçu). 5/h par IP borne le bruteforce d'emails/l'énumération de
+  // comptes sans gêner un usage normal (même ordre de grandeur que wheelUnlockIp).
+  recoveryIp: { limit: 5, windowSeconds: 3600 },
 } as const
 
 /** IP client réelle : header Netlify prioritaire, sinon 1er hop de x-forwarded-for. */
@@ -35,6 +40,11 @@ export function orderRateKeys(slug: string, phone: string, ip: string): RateRule
 /** Rate-limit par IP et par restaurant pour /api/roue/unlock (roue QR publique). */
 export function wheelUnlockRateKeys(restaurantId: string, ip: string): RateRule[] {
   return [{ key: `wheel-unlock:ip:${restaurantId}:${ip}`, ...RATE_LIMITS.wheelUnlockIp }]
+}
+
+/** Rate-limit par IP pour /api/auth/recovery (mot de passe oublié, self-service). */
+export function recoveryRateKeys(ip: string): RateRule[] {
+  return [{ key: `recovery:ip:${ip}`, ...RATE_LIMITS.recoveryIp }]
 }
 
 export type RlDb = {

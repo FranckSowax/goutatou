@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clientIp, orderRateKeys, wheelUnlockRateKeys, RATE_LIMITS } from '../src/lib/rate-limit'
+import { clientIp, orderRateKeys, wheelUnlockRateKeys, recoveryRateKeys, RATE_LIMITS } from '../src/lib/rate-limit'
 
 function h(init: Record<string, string>): Headers {
   return new Headers(init)
@@ -40,5 +40,19 @@ describe('wheelUnlockRateKeys', () => {
     expect(rules).toEqual([
       { key: 'wheel-unlock:ip:resto-1:41.1.2.3', ...RATE_LIMITS.wheelUnlockIp },
     ])
+  })
+})
+
+describe('recoveryRateKeys', () => {
+  it('produit 1 couche par IP (non scopée à un email, pour ne pas énumérer les comptes)', () => {
+    const rules = recoveryRateKeys('41.1.2.3')
+    expect(rules).toEqual([{ key: 'recovery:ip:41.1.2.3', ...RATE_LIMITS.recoveryIp }])
+  })
+  it('applique la limite/fenêtre recoveryIp', () => {
+    const rules = recoveryRateKeys('41.1.2.3')
+    expect(rules[0]).toMatchObject({
+      limit: RATE_LIMITS.recoveryIp.limit,
+      windowSeconds: RATE_LIMITS.recoveryIp.windowSeconds,
+    })
   })
 })

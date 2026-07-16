@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { UtensilsCrossed } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -30,6 +31,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             </div>
             <Button type="submit" className="w-full">Se connecter</Button>
           </form>
+          <p className="mt-4 text-center text-sm text-muted-foreground">
+            <Link href="/login/mot-de-passe-oublie" className="underline underline-offset-4">
+              Mot de passe oublié ?
+            </Link>
+          </p>
         </CardContent>
       </Card>
     </main>
