@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { decryptToken } from '@goutatou/db/crypto'
 import { WhapiClient } from '@goutatou/whapi'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -8,6 +8,33 @@ import { SITE_BASE_URL } from '@/lib/site'
 export const runtime = 'nodejs'
 
 const NEUTRAL_RESPONSE = { ok: true } as const
+
+/**
+ * Plancher de temps constant anti-timing-oracle. Le corps/status neutres étaient déjà
+ * identiques sur tous les chemins, mais pas la latence : un email inexistant rendait la main
+ * après un seul `listUsers` (~200-400 ms) alors qu'un compte configuré enchaînait plusieurs
+ * requêtes DB + `generateLink` (aller-retour GoTrue), facteur >2 et stable — chronométrable par
+ * un attaquant pour savoir si un compte existe. 700 ms couvre large le chemin le plus lent
+ * mesuré ici (listUsers + jusqu'à 3 `select` + `generateLink`) ; l'envoi WhatsApp ne compte plus
+ * dans ce budget car il est sorti de la requête via `after()` (cf. plus bas).
+ */
+const BUDGET_MS = 700
+
+/**
+ * Unique point de sortie neutre. Applique le plancher `BUDGET_MS` puis renvoie toujours le même
+ * corps/status — en centralisant ici, aucun `return` de la fonction ne peut oublier le plancher
+ * (c'est le point structurel : la protection ne doit pas dépendre de la discipline à chaque
+ * `return`, cf. revue OB2). Seul le 429 du rate-limit (avant tout accès aux données du compte,
+ * dépend uniquement de l'IP) reste en dehors de ce helper.
+ */
+async function neutral(t0: number): Promise<NextResponse> {
+  const elapsed = Date.now() - t0
+  const remaining = BUDGET_MS - elapsed
+  if (remaining > 0) {
+    await new Promise((resolve) => setTimeout(resolve, remaining))
+  }
+  return NextResponse.json(NEUTRAL_RESPONSE)
+}
 
 /**
  * Retrouve un utilisateur par email via l'API auth admin. `@supabase/auth-js@2.110.0`
@@ -40,6 +67,7 @@ async function findUserIdByEmail(admin: ReturnType<typeof createAdminClient>, em
  * gabarit : digits(contact_phone) + `@s.whatsapp.net`).
  */
 export async function POST(req: Request) {
+  const t0 = Date.now()
   const admin = createAdminClient()
 
   const rl = await enforceRateLimit(admin, recoveryRateKeys(clientIp(req.headers)))
@@ -53,28 +81,30 @@ export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as { email?: string } | null
   const email = body?.email?.trim().toLowerCase()
 
-  // Tout échec à partir d'ici est absorbé : la fonction se termine toujours par le même
-  // NEUTRAL_RESPONSE, jamais par une erreur ou un corps différent.
+  // Tout échec à partir d'ici est absorbé : la fonction se termine toujours par `neutral(t0)`,
+  // jamais par une erreur, un corps différent, ni un `NextResponse.json(NEUTRAL_RESPONSE)`
+  // direct qui contournerait le plancher de temps constant.
   try {
     if (!email) {
       console.error('[auth-recovery] email manquant dans le corps de la requête')
-      return NextResponse.json(NEUTRAL_RESPONSE)
+      return neutral(t0)
     }
 
     const userId = await findUserIdByEmail(admin, email)
     if (!userId) {
       console.error('[auth-recovery] aucun compte pour cet email (réponse neutre)')
-      return NextResponse.json(NEUTRAL_RESPONSE)
+      return neutral(t0)
     }
 
     const { data: member } = await admin
       .from('restaurant_members')
       .select('restaurant_id')
       .eq('user_id', userId)
+      .limit(1)
       .maybeSingle()
     if (!member) {
       console.error('[auth-recovery] aucun restaurant_members pour cet utilisateur (réponse neutre)')
-      return NextResponse.json(NEUTRAL_RESPONSE)
+      return neutral(t0)
     }
 
     const { data: resto } = await admin
@@ -85,7 +115,7 @@ export async function POST(req: Request) {
     const digits = (resto?.contact_phone ?? '').replace(/\D/g, '')
     if (!digits) {
       console.error('[auth-recovery] contact_phone absent pour ce restaurant (réponse neutre)')
-      return NextResponse.json(NEUTRAL_RESPONSE)
+      return neutral(t0)
     }
 
     const { data: channel } = await admin
@@ -95,7 +125,7 @@ export async function POST(req: Request) {
       .maybeSingle()
     if (!channel || channel.status !== 'active') {
       console.error('[auth-recovery] canal Whapi absent ou inactif pour ce restaurant (réponse neutre)')
-      return NextResponse.json(NEUTRAL_RESPONSE)
+      return neutral(t0)
     }
 
     const { data: link, error: linkErr } = await admin.auth.admin.generateLink({
@@ -105,21 +135,32 @@ export async function POST(req: Request) {
     })
     if (linkErr || !link.properties) {
       console.error('[auth-recovery] generateLink a échoué', linkErr)
-      return NextResponse.json(NEUTRAL_RESPONSE)
+      return neutral(t0)
     }
 
+    // L'envoi WhatsApp est sorti de la requête avec `after()` (Next 15, exporté par
+    // `next/server` — vérifié dans node_modules/next/server.d.ts et next/dist/server/after,
+    // version installée 15.5.20). Un simple fire-and-forget (promesse non attendue) ne
+    // suffirait pas : sur Netlify/Lambda la promesse pendante est tuée au flush de la réponse.
+    // `after()` garantit l'exécution jusqu'au bout après l'envoi de la réponse, ce qui a le
+    // bénéfice de sécurité recherché ici : le POST externe vers whapi.cloud (~0,5-2 s) ne fait
+    // plus partie du temps de réponse observable par le client, donc plus du tout partie du
+    // canal temporel.
     const token = decryptToken(channel.token_encrypted, process.env.TOKEN_ENCRYPTION_KEY!)
-    const whapi = new WhapiClient(token)
-    const message = `Bonjour ! Vous avez demandé à réinitialiser votre mot de passe Goutatou. Voici votre lien : ${link.properties.action_link}\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez ce message.`
-    try {
-      await whapi.sendText(`${digits}@s.whatsapp.net`, message)
-    } catch (sendErr) {
-      console.error('[auth-recovery] envoi WhatsApp échoué', sendErr)
-    }
+    const actionLink = link.properties.action_link
+    const message = `Bonjour ! Vous avez demandé à réinitialiser votre mot de passe Goutatou. Voici votre lien : ${actionLink}\n\nSi vous n'êtes pas à l'origine de cette demande, ignorez ce message.`
+    after(async () => {
+      try {
+        const whapi = new WhapiClient(token)
+        await whapi.sendText(`${digits}@s.whatsapp.net`, message)
+      } catch (sendErr) {
+        console.error('[auth-recovery] envoi WhatsApp échoué', sendErr)
+      }
+    })
 
-    return NextResponse.json(NEUTRAL_RESPONSE)
+    return neutral(t0)
   } catch (err) {
     console.error('[auth-recovery] erreur inattendue (réponse neutre)', err)
-    return NextResponse.json(NEUTRAL_RESPONSE)
+    return neutral(t0)
   }
 }
