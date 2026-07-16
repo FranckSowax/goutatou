@@ -139,3 +139,33 @@
   --tint-sky: oklch(0.30 0.03 240);
   --tint-mint: oklch(0.30 0.035 166);
 }
+
+/*
+  ---break---
+*/
+/* Cuisine Live (CL2) — overlay plein écran d'alerte. Caché par défaut ; la classe `.on` est
+   ajoutée/retirée impérativement par live-alert-overlay.tsx (reflow forcé entre les deux pour
+   réarmer l'apparition si un 2e événement arrive pendant l'affichage). Simple apparition/disparition
+   uniquement : pas de clignotement, y compris hors `prefers-reduced-motion`. */
+.live-alert-overlay {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease-out;
+}
+.live-alert-overlay.on {
+  opacity: 1;
+  pointer-events: auto;
+  animation: live-alert-pop 0.25s ease-out;
+}
+@keyframes live-alert-pop {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-alert-overlay {
+    transition: none;
+  }
+  .live-alert-overlay.on {
+    animation: none;
+  }
+}

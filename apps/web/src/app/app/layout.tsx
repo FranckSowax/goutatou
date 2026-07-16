@@ -5,6 +5,7 @@ import { planOf } from '@/lib/premium'
 import { AppShell } from '@/components/app-shell'
 import { Badge } from '@/components/ui/badge'
 import type { NavItem } from '@/components/nav-links'
+import { LiveAlertOverlay } from './live-alert-overlay'
 
 const NAV = [
   { href: '/app', label: 'Accueil', icon: 'Home' },
@@ -28,18 +29,23 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const sub = member ? await planOf(supabase, member.restaurant_id) : null
 
   return (
-    <AppShell
-      items={NAV}
-      title="Goutatou"
-      userEmail={user.email}
-      footer={sub ? (
-        <div className="flex items-center justify-between gap-2">
-          <span>Offre</span>
-          <Badge variant="secondary" className="capitalize">{sub.plan}</Badge>
-        </div>
-      ) : undefined}
-    >
-      {children}
-    </AppShell>
+    <>
+      {/* Alerte cuisine plein écran, quelle que soit la page /app ouverte. Données uniquement
+          (restaurantId) depuis ce Server Component — jamais de prop fonction Server→Client. */}
+      {member && <LiveAlertOverlay restaurantId={member.restaurant_id} />}
+      <AppShell
+        items={NAV}
+        title="Goutatou"
+        userEmail={user.email}
+        footer={sub ? (
+          <div className="flex items-center justify-between gap-2">
+            <span>Offre</span>
+            <Badge variant="secondary" className="capitalize">{sub.plan}</Badge>
+          </div>
+        ) : undefined}
+      >
+        {children}
+      </AppShell>
+    </>
   )
 }
