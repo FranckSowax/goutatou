@@ -29,6 +29,7 @@ import { startChannelPostsWorker } from './channelposts/worker.js'
 import { createChannelDecisionRepo } from './autochannel/decision-repo.js'
 import { startChannelDecisionWorker } from './autochannel/decision-worker.js'
 import { createChannelApprovalRepo } from './autochannel/approval-repo.js'
+import { createArrivalRepo } from './drive/arrival-repo.js'
 
 const config = loadConfig()
 const db = createServiceClient(config.supabaseUrl, config.serviceRoleKey)
@@ -122,6 +123,7 @@ startChannelDecisionWorker({
   pollMs: config.autoChannelPollMs,
 })
 const channelApprovalRepo = createChannelApprovalRepo(db)
+const arrivalRepo = createArrivalRepo(db)
 const processWebhook = createProcessor(repo, (token) => new WhapiClient(token), {
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   sendDelayMinMs: config.sendDelayMinMs,
@@ -129,6 +131,7 @@ const processWebhook = createProcessor(repo, (token) => new WhapiClient(token), 
   menuPhotosMax: config.menuPhotosMax,
   approvalRepo,
   channelApprovalRepo,
+  arrivalRepo,
 })
 
 const app = createApp({ processWebhook })

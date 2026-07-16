@@ -15,6 +15,8 @@ import {
 } from './autochannel/approval.js'
 import type { ChannelApprovalRepo } from './autochannel/approval-repo.js'
 import { buildChannelCaption } from './autochannel/captions.js'
+import { ARRIVAL_COPY, parseArrivalButton } from './drive/arrival.js'
+import type { ArrivalRepo } from './drive/arrival-repo.js'
 
 interface WhapiMessage {
   id: string
@@ -73,6 +75,12 @@ export interface ProcessorDeps {
    * taps `chapp:`/`chrej:`/`chreg:`/`chcan:` plutôt que de planter (cf. handleChannelApprovalButton).
    */
   channelApprovalRepo?: ChannelApprovalRepo
+  /**
+   * Optionnel (même contrat que `approvalRepo`/`channelApprovalRepo`) : l'arrivée Drive (CL3) est
+   * une fonctionnalité additive — un déploiement/test qui ne le fournit pas ignore silencieusement
+   * les taps `arr:` plutôt que de planter (cf. handleArrivalButton).
+   */
+  arrivalRepo?: ArrivalRepo
 }
 
 // sendQuickReplies/sendList OPTIONNELS (contrairement aux autres méthodes) : la couche
@@ -413,6 +421,56 @@ async function handleApprovalButton(
 }
 
 /**
+ * Arrivée Drive (« ✅ Je suis arrivé », CL3, cf. docs/superpowers/plans/2026-07-13-cuisine-live.md
+ * § Task CL3) : traite UN tap sur `arr:<orderId>`. Appelée AVANT le flux machine normal (cf.
+ * createProcessor) — la conversation client n'est ni lue ni modifiée ici, on ne fait que router
+ * ce tap précis vers markArrived. Best-effort : logMessage échoué ne bloque rien d'autre.
+ *
+ * Gardes (TOUTES obligatoires avant toute écriture, cf. plan) : la commande existe, appartient au
+ * resto DU CANAL qui a reçu ce webhook (getOrder filtre déjà restaurant_id côté requête — pas de
+ * validation croisée possible), est en mode `drive`, et n'est pas déjà `recuperee`/`annulee`.
+ * Toute garde échouée → même copie FR neutre que le double-tap ci-dessous (le client ne peut pas
+ * distinguer "jamais valide" de "déjà traité", et n'a pas besoin de le savoir).
+ *
+ * Idempotence : `markArrived` est conditionnel en SQL (`arrived_at is null`) — un 2e tap (double-
+ * tap réseau, ou webhook redélivré après le premier succès) renvoie `false` (0 ligne) → on NE
+ * RÉ-ENVOIE PAS la confirmation "c'est noté" une 2e fois (éviterait une double alerte visuelle
+ * en cuisine si un futur canal dupliquait aussi côté overlay), on répond la même copie neutre.
+ */
+async function handleArrivalButton(
+  whapi: ProcessorWhapi,
+  repo: BotRepo,
+  arrivalRepo: ArrivalRepo | undefined,
+  restaurantId: string,
+  chatId: string,
+  whapiMessageId: string,
+  replyTitle: string | undefined,
+  orderId: string,
+): Promise<void> {
+  const logBody = replyTitle ?? `arr:${orderId}`
+  const fresh = await repo.logMessage(restaurantId, 'in', chatId, logBody, whapiMessageId)
+  if (!fresh) return // idempotence : webhook déjà traité (même politique que le flux machine)
+
+  if (!arrivalRepo) {
+    console.error('[arrival] arrivalRepo non configuré — bouton arrivée ignoré')
+    return
+  }
+
+  const order = await arrivalRepo.getOrder(orderId, restaurantId)
+  const eligible = !!order && order.mode === 'drive' && order.status !== 'recuperee' && order.status !== 'annulee'
+  if (!eligible) {
+    await sendOneReply(whapi, repo, restaurantId, chatId, ARRIVAL_COPY.notPending, null)
+    return
+  }
+
+  const updated = await arrivalRepo.markArrived(orderId)
+  await sendOneReply(
+    whapi, repo, restaurantId, chatId,
+    updated ? ARRIVAL_COPY.confirmed : ARRIVAL_COPY.notPending, null,
+  )
+}
+
+/**
  * Envoie l'image régénérée + relance les boutons Valider/Refuser (mêmes ids `chapp:`/`chrej:`
  * que la sollicitation initiale envoyée par le worker auto-channel, mirror `sendApprovalImage`
  * ci-dessus) — le gérant revalide le NOUVEAU contenu exactement comme le premier. Best-effort :
@@ -586,6 +644,24 @@ export function createProcessor(
       // Séparé du bloc try principal (upsertCustomer/loadConversation n'ont pas de sens ici) ;
       // erreur imprévue best-effort loggée, jamais propagée dans la boucle webhook.
       if (isReplyMessage && replyId) {
+        // Arrivée Drive (CL3) : id `arr:<orderId>` INTERCEPTÉ ICI — avant le routage `in:`→machine
+        // ET avant l'opt-out ci-dessous — même raisonnement que les boutons stapp:/chapp: : ce
+        // n'est pas un message client à faire transiter par la machine à états, c'est un signal
+        // ponctuel rattaché à UNE commande précise (identifiée par l'id du bouton, cf. drive/
+        // arrival.ts § round-trip pour pourquoi `matchButtonInput` ne s'applique pas ici).
+        const arrivalOrderId = parseArrivalButton(replyId)
+        if (arrivalOrderId) {
+          try {
+            await handleArrivalButton(
+              whapi, repo, deps.arrivalRepo, channel.restaurantId, msg.chat_id, msg.id,
+              replyTitle, arrivalOrderId,
+            )
+          } catch (err) {
+            console.error(`[arrival] erreur message ${msg.id}`, err)
+          }
+          continue
+        }
+
         const approvalAction = parseApprovalButton(replyId)
         if (approvalAction) {
           try {
