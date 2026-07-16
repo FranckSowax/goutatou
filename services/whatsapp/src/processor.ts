@@ -15,7 +15,7 @@ import {
 } from './autochannel/approval.js'
 import type { ChannelApprovalRepo } from './autochannel/approval-repo.js'
 import { buildChannelCaption } from './autochannel/captions.js'
-import { ARRIVAL_COPY, parseArrivalButton } from './drive/arrival.js'
+import { ARRIVAL_COPY, isArrivalText, parseArrivalButton } from './drive/arrival.js'
 import type { ArrivalRepo } from './drive/arrival-repo.js'
 
 interface WhapiMessage {
@@ -437,6 +437,34 @@ async function handleApprovalButton(
  * RÉ-ENVOIE PAS la confirmation "c'est noté" une 2e fois (éviterait une double alerte visuelle
  * en cuisine si un futur canal dupliquait aussi côté overlay), on répond la même copie neutre.
  */
+/**
+ * Cœur PARTAGÉ du traitement d'une arrivée Drive une fois l'orderId connu et le message DÉJÀ
+ * loggé côté appelant (tap bouton : `handleArrivalButton` ci-dessous ; repli texte par contexte :
+ * boucle principale via `findPendingDriveOrder`) — mêmes gardes, même idempotence, mêmes copies
+ * FR quel que soit le chemin d'entrée.
+ */
+async function resolveArrivalOrder(
+  whapi: ProcessorWhapi,
+  repo: BotRepo,
+  arrivalRepo: ArrivalRepo,
+  restaurantId: string,
+  chatId: string,
+  orderId: string,
+): Promise<void> {
+  const order = await arrivalRepo.getOrder(orderId, restaurantId)
+  const eligible = !!order && order.mode === 'drive' && order.status !== 'recuperee' && order.status !== 'annulee'
+  if (!eligible) {
+    await sendOneReply(whapi, repo, restaurantId, chatId, ARRIVAL_COPY.notPending, null)
+    return
+  }
+
+  const updated = await arrivalRepo.markArrived(orderId)
+  await sendOneReply(
+    whapi, repo, restaurantId, chatId,
+    updated ? ARRIVAL_COPY.confirmed : ARRIVAL_COPY.notPending, null,
+  )
+}
+
 async function handleArrivalButton(
   whapi: ProcessorWhapi,
   repo: BotRepo,
@@ -456,18 +484,7 @@ async function handleArrivalButton(
     return
   }
 
-  const order = await arrivalRepo.getOrder(orderId, restaurantId)
-  const eligible = !!order && order.mode === 'drive' && order.status !== 'recuperee' && order.status !== 'annulee'
-  if (!eligible) {
-    await sendOneReply(whapi, repo, restaurantId, chatId, ARRIVAL_COPY.notPending, null)
-    return
-  }
-
-  const updated = await arrivalRepo.markArrived(orderId)
-  await sendOneReply(
-    whapi, repo, restaurantId, chatId,
-    updated ? ARRIVAL_COPY.confirmed : ARRIVAL_COPY.notPending, null,
-  )
+  await resolveArrivalOrder(whapi, repo, arrivalRepo, restaurantId, chatId, orderId)
 }
 
 /**
@@ -727,6 +744,25 @@ export function createProcessor(
           const orderCtx = await repo.getBotContext(channel.restaurantId, channel.restaurantName, channel.driveEnabled)
           await handleNativeOrder(whapi, repo, channel.restaurantId, customer.id, msg.chat_id, msg.order?.order_id, msg.order?.token, orderCtx)
           continue
+        }
+
+        // Repli par contexte de l'arrivée Drive (CL3 v2, cf. drive/arrival.ts) : si le round-trip
+        // de l'id `arr:<orderId>` n'a pas eu lieu (tap revenu en texte, ou en reply sans id), le
+        // client tapant/relisant le titre du bouton ne doit jamais tomber dans le silence. On ne
+        // s'active QUE si `deps.arrivalRepo` est fourni (fonctionnalité additive, mirror
+        // handleArrivalButton) ET si le texte matche vraiment le titre du bouton — sinon on laisse
+        // filer vers le flux machine normal, pour ne JAMAIS avaler un message client légitime.
+        // Message déjà loggé plus haut (logMessage générique ci-dessus) : pas de re-log ici,
+        // `resolveArrivalOrder` est le même cœur que `handleArrivalButton` mais sans la sienne.
+        if (deps.arrivalRepo && isArrivalText(body)) {
+          const pending = await deps.arrivalRepo.findPendingDriveOrder(channel.restaurantId, customer.id)
+          if (pending) {
+            await resolveArrivalOrder(whapi, repo, deps.arrivalRepo, channel.restaurantId, msg.chat_id, pending.id)
+            continue
+          }
+          // Aucune commande Drive en attente pour ce client : PAS de réponse spéciale (le
+          // client pourrait n'avoir jamais commandé en drive) — le message suit le flux machine
+          // normal ci-dessous, comme n'importe quel texte libre.
         }
 
         if (isOptOutKeyword(body)) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ARRIVAL_COPY, parseArrivalButton } from '../src/drive/arrival.js'
+import { ARRIVAL_COPY, isArrivalText, parseArrivalButton } from '../src/drive/arrival.js'
 
 describe('parseArrivalButton', () => {
   it('arr:<id> → orderId', () => {
@@ -23,6 +23,25 @@ describe('parseArrivalButton', () => {
 
   it('orderId contenant lui-même deux-points → conservé tel quel après le préfixe', () => {
     expect(parseArrivalButton('arr:uuid:with:colons')).toBe('uuid:with:colons')
+  })
+})
+
+describe('isArrivalText', () => {
+  it.each([
+    '✅ Je suis arrivé',
+    'je suis arrive',
+    'Je suis arrivée',
+    'JE SUIS ARRIVÉ !',
+  ])('%s → true', (text) => {
+    expect(isArrivalText(text)).toBe(true)
+  })
+
+  it.each([
+    'bonjour',
+    'menu',
+    'je suis là où ?',
+  ])('%s → false', (text) => {
+    expect(isArrivalText(text)).toBe(false)
   })
 })
 

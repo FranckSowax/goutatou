@@ -21,6 +21,21 @@ function replyPayload(id: string, title = '✅ Je suis arrivé') {
   }
 }
 
+function textPayload(body: string, msgId = 'MSG-ARRIVAL-TXT') {
+  return {
+    messages: [{
+      id: msgId,
+      from_me: false,
+      type: 'text',
+      chat_id: CHAT_ID,
+      from: '24177000001',
+      from_name: 'Client Test',
+      text: { body },
+    }],
+    channel_id: 'WHAPI-CHAN',
+  }
+}
+
 describe('processor — arrivée Drive (bouton arr:)', () => {
   let repo: BotRepo
   let arrivalRepo: ArrivalRepo
@@ -133,6 +148,63 @@ describe('processor — arrivée Drive (bouton arr:)', () => {
 
     expect(arrivalRepo.markArrived).not.toHaveBeenCalled()
     expect(sendText).toHaveBeenCalledWith(CHAT_ID, "Cette commande n'est plus en attente.")
+  })
+
+  describe('repli par contexte — texte (id de bouton non revenu)', () => {
+    it('texte d\'arrivée + 1 commande drive en attente → markArrived appelé + confirmation FR', async () => {
+      arrivalRepo.findPendingDriveOrder = vi.fn().mockResolvedValue({ id: 'o1' })
+      arrivalRepo.getOrder = vi.fn().mockResolvedValue({ id: 'o1', restaurantId: 'resto-1', mode: 'drive', status: 'prete' })
+      arrivalRepo.markArrived = vi.fn().mockResolvedValue(true)
+
+      await process()('chan-uuid', textPayload('je suis arrive'))
+
+      expect(arrivalRepo.findPendingDriveOrder).toHaveBeenCalledWith('resto-1', 'cust-1')
+      expect(arrivalRepo.getOrder).toHaveBeenCalledWith('o1', 'resto-1')
+      expect(arrivalRepo.markArrived).toHaveBeenCalledWith('o1')
+      expect(sendText).toHaveBeenCalledWith(CHAT_ID, "C'est noté, on vous apporte votre commande !")
+    })
+
+    it('texte d\'arrivée + AUCUNE commande drive en attente → aucune écriture, flux machine normal (pas de "plus en attente")', async () => {
+      arrivalRepo.findPendingDriveOrder = vi.fn().mockResolvedValue(null)
+
+      await process()('chan-uuid', textPayload('✅ Je suis arrivé'))
+
+      expect(arrivalRepo.findPendingDriveOrder).toHaveBeenCalledWith('resto-1', 'cust-1')
+      expect(arrivalRepo.getOrder).not.toHaveBeenCalled()
+      expect(arrivalRepo.markArrived).not.toHaveBeenCalled()
+      expect(sendText).not.toHaveBeenCalledWith(CHAT_ID, "Cette commande n'est plus en attente.")
+      expect(repo.loadConversation).toHaveBeenCalled()
+    })
+
+    it('texte d\'arrivée + commande déjà arrivée (idempotent, 0 ligne) → réponse neutre, pas de double alerte', async () => {
+      arrivalRepo.findPendingDriveOrder = vi.fn().mockResolvedValue({ id: 'o1' })
+      arrivalRepo.getOrder = vi.fn().mockResolvedValue({ id: 'o1', restaurantId: 'resto-1', mode: 'drive', status: 'prete' })
+      arrivalRepo.markArrived = vi.fn().mockResolvedValue(false)
+
+      await process()('chan-uuid', textPayload('JE SUIS ARRIVÉ !'))
+
+      expect(arrivalRepo.markArrived).toHaveBeenCalledWith('o1')
+      expect(sendText).toHaveBeenCalledWith(CHAT_ID, "Cette commande n'est plus en attente.")
+      expect(sendText).not.toHaveBeenCalledWith(CHAT_ID, "C'est noté, on vous apporte votre commande !")
+    })
+
+    it('texte quelconque (non-arrivée) → jamais routé vers arrivalRepo, même avec une commande drive en attente', async () => {
+      arrivalRepo.findPendingDriveOrder = vi.fn().mockResolvedValue({ id: 'o1' })
+
+      await process()('chan-uuid', textPayload('menu'))
+
+      expect(arrivalRepo.findPendingDriveOrder).not.toHaveBeenCalled()
+      expect(arrivalRepo.getOrder).not.toHaveBeenCalled()
+      expect(arrivalRepo.markArrived).not.toHaveBeenCalled()
+    })
+
+    it('arrivalRepo non fourni → texte d\'arrivée ignoré par le repli, suit le flux machine, jamais de throw', async () => {
+      deps = { sleep: vi.fn().mockResolvedValue(undefined), sendDelayMinMs: 0, sendDelayMaxMs: 0, menuPhotosMax: 8 }
+
+      await expect(process()('chan-uuid', textPayload('je suis arrive'))).resolves.not.toThrow()
+
+      expect(repo.loadConversation).toHaveBeenCalled()
+    })
   })
 
   describe('non-régression', () => {

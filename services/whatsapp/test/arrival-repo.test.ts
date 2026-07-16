@@ -5,7 +5,7 @@ import { createArrivalRepo } from '../src/drive/arrival-repo.js'
 /** Chaînable minimal reproduisant le style thenable de PostgrestFilterBuilder (cf. approval-repo.test.ts). */
 function makeChain(finalData: unknown) {
   const chain: Record<string, unknown> = {}
-  for (const m of ['select', 'eq', 'is', 'update']) {
+  for (const m of ['select', 'eq', 'is', 'update', 'not', 'order', 'limit']) {
     chain[m] = vi.fn(() => chain)
   }
   chain.maybeSingle = vi.fn(() => Promise.resolve({ data: finalData, error: null }))
@@ -56,5 +56,32 @@ describe('createArrivalRepo — markArrived', () => {
     const repo = createArrivalRepo({ from } as unknown as SupabaseClient)
 
     expect(await repo.markArrived('o1')).toBe(false)
+  })
+})
+
+describe('createArrivalRepo — findPendingDriveOrder', () => {
+  it('une commande drive en attente → filtre restaurant/client/mode/arrivée/statut, trie par plus récente, limite à 1', async () => {
+    const chain = makeChain([{ id: 'o1' }])
+    const from = vi.fn().mockReturnValue(chain)
+    const repo = createArrivalRepo({ from } as unknown as SupabaseClient)
+
+    const order = await repo.findPendingDriveOrder('r1', 'c1')
+
+    expect(order).toEqual({ id: 'o1' })
+    expect(chain.eq).toHaveBeenCalledWith('restaurant_id', 'r1')
+    expect(chain.eq).toHaveBeenCalledWith('customer_id', 'c1')
+    expect(chain.eq).toHaveBeenCalledWith('mode', 'drive')
+    expect(chain.is).toHaveBeenCalledWith('arrived_at', null)
+    expect(chain.not).toHaveBeenCalledWith('status', 'in', '(recuperee,annulee)')
+    expect(chain.order).toHaveBeenCalledWith('created_at', { ascending: false })
+    expect(chain.limit).toHaveBeenCalledWith(1)
+  })
+
+  it('aucune commande en attente → null', async () => {
+    const chain = makeChain([])
+    const from = vi.fn().mockReturnValue(chain)
+    const repo = createArrivalRepo({ from } as unknown as SupabaseClient)
+
+    expect(await repo.findPendingDriveOrder('r1', 'c1')).toBeNull()
   })
 })

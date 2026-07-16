@@ -23,6 +23,15 @@ export interface ArrivalRepo {
    * gardes multi-tenant/mode/état sont déjà appliquées en amont via `getOrder`.
    */
   markArrived(orderId: string): Promise<boolean>
+  /**
+   * Repli par contexte (cf. drive/arrival.ts) quand l'id du bouton `arr:<orderId>` ne revient pas
+   * au tap : dernière commande Drive de CE client, pour CE resto, encore en attente d'arrivée
+   * (`mode = 'drive'`, `arrived_at is null`, `status ∉ {recuperee, annulee}`) — filtrée dans la
+   * requête même (mirror `getOrder`, pas de check applicatif après coup). La plus RÉCENTE
+   * (`order by created_at desc limit 1`) tranche en cas de plusieurs commandes en attente ;
+   * `null` si aucune.
+   */
+  findPendingDriveOrder(restaurantId: string, customerId: string): Promise<{ id: string } | null>
 }
 
 interface OrderRowDb {
@@ -54,6 +63,21 @@ export function createArrivalRepo(db: SupabaseClient): ArrivalRepo {
         .is('arrived_at', null)
         .select('id')
       return ((data ?? []) as { id: string }[]).length > 0
+    },
+
+    async findPendingDriveOrder(restaurantId, customerId) {
+      const { data } = await db
+        .from('orders')
+        .select('id')
+        .eq('restaurant_id', restaurantId)
+        .eq('customer_id', customerId)
+        .eq('mode', 'drive')
+        .is('arrived_at', null)
+        .not('status', 'in', '(recuperee,annulee)')
+        .order('created_at', { ascending: false })
+        .limit(1)
+      const rows = (data ?? []) as { id: string }[]
+      return rows.length > 0 ? { id: rows[0].id } : null
     },
   }
 }
