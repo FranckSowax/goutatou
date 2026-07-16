@@ -82,3 +82,27 @@ const FLOW: Partial<Record<OrderStatus, OrderStatus>> = {
 export function nextStatus(s: OrderStatus): OrderStatus | null {
   return FLOW[s] ?? null
 }
+
+const SUPPLEMENT_PREFIX = '↳ '
+
+/**
+ * Résumé compact des articles d'une commande pour la colonne Détails. Les lignes `↳ …` sont des
+ * suppléments, rattachés au plat précédent. Ex. « 2× Poulet DG +Sauce · 1× Frites ».
+ */
+export function orderItemsSummary(items: { name: string; qty: number }[]): string {
+  const parts: string[] = []
+  for (const item of items) {
+    if (item.name.startsWith(SUPPLEMENT_PREFIX)) {
+      const supplementName = item.name.slice(SUPPLEMENT_PREFIX.length)
+      if (parts.length === 0) {
+        // Supplément orphelin en tête (défensif, ne devrait pas arriver) — rendu tel quel.
+        parts.push(`+${supplementName}`)
+      } else {
+        parts[parts.length - 1] += ` +${supplementName}`
+      }
+      continue
+    }
+    parts.push(`${item.qty}× ${item.name}`)
+  }
+  return parts.join(' · ')
+}
