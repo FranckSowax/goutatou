@@ -124,7 +124,7 @@ describe('newVsReturning', () => {
 })
 
 describe('sourceSplit', () => {
-  it('retourne un ordre fixe whatsapp/web, y compris à 0', () => {
+  it('retourne un ordre fixe whatsapp/web/comptoir, y compris à 0', () => {
     const orders = [
       { status: 'recue', source: 'whatsapp' },
       { status: 'prete', source: 'whatsapp' },
@@ -133,6 +133,7 @@ describe('sourceSplit', () => {
     expect(sourceSplit(orders)).toEqual([
       { source: 'whatsapp', label: 'WhatsApp', count: 2 },
       { source: 'web', label: 'Site web', count: 0 },
+      { source: 'comptoir', label: 'Comptoir', count: 0 },
     ])
   })
 
@@ -145,10 +146,24 @@ describe('sourceSplit', () => {
     expect(sourceSplit(orders).find((s) => s.source === 'web')?.count).toBe(1)
   })
 
-  it('retourne les 2 sources à 0 pour une liste vide', () => {
+  it('compte une commande comptoir sous "Comptoir"', () => {
+    const orders = [
+      { status: 'recue', source: 'comptoir' },
+      { status: 'recue', source: 'web' },
+    ]
+
+    expect(sourceSplit(orders)).toEqual([
+      { source: 'whatsapp', label: 'WhatsApp', count: 0 },
+      { source: 'web', label: 'Site web', count: 1 },
+      { source: 'comptoir', label: 'Comptoir', count: 1 },
+    ])
+  })
+
+  it('retourne les 3 sources à 0 pour une liste vide', () => {
     expect(sourceSplit([])).toEqual([
       { source: 'whatsapp', label: 'WhatsApp', count: 0 },
       { source: 'web', label: 'Site web', count: 0 },
+      { source: 'comptoir', label: 'Comptoir', count: 0 },
     ])
   })
 })

@@ -189,6 +189,7 @@ export function newVsReturning(
 const SOURCE_ORDER: { source: string; label: string }[] = [
   { source: 'whatsapp', label: 'WhatsApp' },
   { source: 'web', label: 'Site web' },
+  { source: 'comptoir', label: 'Comptoir' },
 ]
 
 /** Répartition des commandes (hors annulées) par source, ordre fixe incluant les 0. */
