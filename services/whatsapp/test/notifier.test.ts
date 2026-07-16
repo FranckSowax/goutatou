@@ -128,6 +128,66 @@ describe('handleOrderUpdate', () => {
     expect(sendText).toHaveBeenCalledTimes(1)
     expect(sendInteractiveUrl).not.toHaveBeenCalled()
   })
+
+  describe('bouton "je suis arrivé" (Drive, commande prête)', () => {
+    it('prete + mode drive : envoie le bouton EN PLUS du message de statut (jamais à sa place)', async () => {
+      const sendText = vi.fn().mockResolvedValue({ id: 'x' })
+      const sendQuickReplies = vi.fn().mockResolvedValue({ id: 'qr1' })
+      const decrypt = vi.fn().mockReturnValue('tok')
+      await handleOrderUpdate(fakeDb() as never, 'k'.repeat(64), oldRow,
+        { ...oldRow, status: 'prete' }, () => ({ sendText, sendQuickReplies }), decrypt)
+
+      expect(sendText).toHaveBeenCalledTimes(1)
+      expect(sendText).toHaveBeenCalledWith('24177@s.whatsapp.net', expect.stringContaining('n°7'))
+      expect(sendQuickReplies).toHaveBeenCalledTimes(1)
+      expect(sendQuickReplies).toHaveBeenCalledWith(
+        '24177@s.whatsapp.net',
+        expect.any(String),
+        [{ id: 'arr:o1', title: '✅ Je suis arrivé' }],
+      )
+    })
+
+    it('prete + mode livraison : pas de bouton arrivée (Drive uniquement)', async () => {
+      const sendText = vi.fn().mockResolvedValue({ id: 'x' })
+      const sendQuickReplies = vi.fn().mockResolvedValue({ id: 'qr1' })
+      const decrypt = vi.fn().mockReturnValue('tok')
+      await handleOrderUpdate(fakeDb() as never, 'k'.repeat(64), { ...oldRow, mode: 'livraison' },
+        { ...oldRow, mode: 'livraison', status: 'prete' }, () => ({ sendText, sendQuickReplies }), decrypt)
+
+      expect(sendText).toHaveBeenCalledTimes(1)
+      expect(sendQuickReplies).not.toHaveBeenCalled()
+    })
+
+    it('drive mais statut recuperee (pas prete) : pas de bouton arrivée', async () => {
+      const sendText = vi.fn().mockResolvedValue({ id: 'x' })
+      const sendQuickReplies = vi.fn().mockResolvedValue({ id: 'qr1' })
+      const decrypt = vi.fn().mockReturnValue('tok')
+      await handleOrderUpdate(fakeDb() as never, 'k'.repeat(64), oldRow,
+        { ...oldRow, status: 'recuperee' }, () => ({ sendText, sendQuickReplies }), decrypt)
+
+      expect(sendQuickReplies).not.toHaveBeenCalled()
+    })
+
+    it('makeWhapi sans sendQuickReplies (v1) : le message de statut part quand même, jamais de throw', async () => {
+      const sendText = vi.fn().mockResolvedValue({ id: 'x' })
+      const decrypt = vi.fn().mockReturnValue('tok')
+      await expect(handleOrderUpdate(fakeDb() as never, 'k'.repeat(64), oldRow,
+        { ...oldRow, status: 'prete' }, () => ({ sendText }) as never, decrypt)).resolves.not.toThrow()
+      expect(sendText).toHaveBeenCalledTimes(1)
+    })
+
+    it('sendQuickReplies échoue : best-effort, loggé, jamais bloquant, message de statut déjà parti', async () => {
+      const sendText = vi.fn().mockResolvedValue({ id: 'x' })
+      const sendQuickReplies = vi.fn().mockRejectedValue(new Error('whapi 500'))
+      const decrypt = vi.fn().mockReturnValue('tok')
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      await expect(handleOrderUpdate(fakeDb() as never, 'k'.repeat(64), oldRow,
+        { ...oldRow, status: 'prete' }, () => ({ sendText, sendQuickReplies }), decrypt)).resolves.not.toThrow()
+      expect(sendText).toHaveBeenCalledTimes(1)
+      expect(errSpy).toHaveBeenCalled()
+      errSpy.mockRestore()
+    })
+  })
 })
 
 describe('buildStaffTicket', () => {

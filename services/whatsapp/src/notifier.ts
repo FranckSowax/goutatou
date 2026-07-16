@@ -71,8 +71,16 @@ export function statusMessage(status: OrderStatus, orderNumber: number, mode: Or
   }
 }
 
-type MakeWhapi = (token: string) => Pick<WhapiClient, 'sendText' | 'sendInteractiveUrl'>
+// sendQuickReplies OPTIONNEL (contrairement à sendText/sendInteractiveUrl) : le bouton d'arrivée
+// Drive est un ajout best-effort par-dessus le message de statut (cf. handleOrderUpdate), jamais
+// une dépendance dure — un makeWhapi/mock qui ne le fournit pas continue de fonctionner (message
+// de statut seul), même pattern que ProcessorWhapi dans processor.ts.
+type MakeWhapi = (token: string) =>
+  Pick<WhapiClient, 'sendText' | 'sendInteractiveUrl'> & Partial<Pick<WhapiClient, 'sendQuickReplies'>>
 type Decrypt = (payload: string, keyHex: string) => string
+
+/** Id du bouton d'arrivée Drive (cf. processor.ts handleArrivalButton, préfixe `arr:`). */
+export const ARRIVAL_BUTTON_TITLE = '✅ Je suis arrivé'
 
 export async function handleOrderUpdate(
   db: SupabaseClient,
@@ -96,6 +104,30 @@ export async function handleOrderUpdate(
   try {
     const whapiClient = makeWhapi(decrypt(channel.token_encrypted, tokenKey))
     await whapiClient.sendText(customer.chat_id, message)
+
+    // Bouton d'arrivée Drive (« ✅ Je suis arrivé », id `arr:<orderId>`, cf. processor.ts
+    // handleArrivalButton) : envoyé quand la commande passe `prete`, EN PLUS du message de statut
+    // ci-dessus (jamais à sa place). Choix du jalon : pour un Drive (mode 'Retrait'), le message
+    // `prete` demande déjà au client de « se présenter au point drive » — c'est le moment où le
+    // signal d'arrivée devient actionnable côté cuisine (l'overlay « CLIENT ARRIVÉ — À REMETTRE »
+    // n'a de sens QUE si la commande est prête à être remise). L'envoyer plus tôt (à la création)
+    // ferait apparaître un bouton avant que la commande soit prête à remettre, et un tap précoce
+    // déclencherait une fausse urgence en cuisine pour un plat pas encore terminé. Best-effort :
+    // un échec (ou un makeWhapi/mock sans sendQuickReplies) ne doit jamais empêcher le message de
+    // statut, déjà envoyé ci-dessus.
+    if (newRow.status === 'prete' && newRow.mode === 'drive') {
+      try {
+        if (whapiClient.sendQuickReplies) {
+          await whapiClient.sendQuickReplies(
+            customer.chat_id,
+            'Prévenez-nous dès que vous êtes sur place :',
+            [{ id: `arr:${newRow.id}`, title: ARRIVAL_BUTTON_TITLE }],
+          )
+        }
+      } catch (err) {
+        console.error(`[notifier] envoi bouton arrivée échoué commande ${newRow.id}`, err)
+      }
+    }
 
     if (newRow.status === 'recuperee' && wheelSecret && wheelBaseUrl) {
       const { data: resto } = await db.from('restaurants')
