@@ -76,7 +76,12 @@ function DriveKanbanBadge({ order }: { order: OrderCard }) {
 
 export function Board({ initialOrders, initialQuery = '' }: { initialOrders: OrderCard[]; initialQuery?: string }) {
   const router = useRouter()
-  const [orders] = useState(initialOrders)
+  // Pas de useState ici : `initialOrders` change à chaque nouveau rendu du Server Component
+  // (déclenché par router.refresh() ci-dessous, sur Realtime) — useState(initialOrders) ignorerait
+  // cette prop après le montage initial (même type/position → pas de remontage), et le board ne
+  // bougerait plus qu'au F5 dur. Rien ne mute `orders` : une simple constante suffit et suit
+  // fidèlement chaque nouveau rendu.
+  const orders = initialOrders
   const [filter, setFilter] = useState<Filter>('all')
   const [q, setQ] = useState(initialQuery)
   const [selected, setSelected] = useState<OrderCard | null>(null)
