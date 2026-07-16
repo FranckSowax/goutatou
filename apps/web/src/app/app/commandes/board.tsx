@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
-import { Globe, MessageCircle, Search } from 'lucide-react'
+import { Globe, MessageCircle, Printer, Search } from 'lucide-react'
 import { formatFcfa } from '@goutatou/db/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -10,15 +10,22 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { badgeVariantForOrder } from '@/lib/status-badge'
 import {
-  ADVANCE_LABELS, driveBadge, groupByStatus, nextStatus, ORDER_STATUS_LABELS, ROW_ACTION_LABELS,
+  ADVANCE_LABELS, driveBadge, groupByStatus, nextStatus, orderItemsSummary, ORDER_STATUS_LABELS,
   type OrderCard,
 } from '@/lib/orders'
 import { cancelOrder, updateOrderStatus } from './actions'
 
 type Filter = 'all' | OrderCard['status']
+
+// Ordre d'affichage du dropdown de statut — reprend l'ordre naturel du pipeline déjà
+// utilisé par ORDER_STATUS_LABELS (recue → en_preparation → prete → recuperee, + annulee).
+const STATUS_OPTIONS = Object.keys(ORDER_STATUS_LABELS) as OrderCard['status'][]
 
 const PILLS: { key: Filter; label: string }[] = [
   { key: 'all', label: 'Toutes' },
@@ -131,6 +138,16 @@ export function Board({ initialOrders, initialQuery = '' }: { initialOrders: Ord
     })
   }
 
+  /** Dropdown de statut (colonne Action) : route n'importe quel statut via updateOrderStatus,
+   *  avec confirmation FR avant d'annuler (cancelOrder = même appel, zéro effet de bord). */
+  function changeStatus(o: OrderCard, status: OrderCard['status']) {
+    if (status === o.status) return
+    if (status === 'annulee' && !window.confirm(`Annuler la commande n°${o.order_number} ?`)) return
+    startTransition(async () => {
+      await updateOrderStatus(o.id, status)
+    })
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {/* Bandeau du jour : chiffre d'affaires + recherche */}
@@ -183,21 +200,23 @@ export function Board({ initialOrders, initialQuery = '' }: { initialOrders: Ord
       {/* Bandes commande pleine largeur */}
       <div className="divide-y divide-border rounded-2xl border border-border bg-card shadow-xs">
         {/* En-têtes de colonnes (desktop) */}
-        <div className="hidden gap-x-4 px-6 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground md:grid md:grid-cols-[6.5rem_7rem_1fr_1fr_8rem_9rem_7.5rem]">
+        <div className="hidden gap-x-4 px-6 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground md:grid md:grid-cols-[6.5rem_7rem_1fr_1.5fr_1fr_8rem_9rem_7.5rem_3rem]">
           <span>N°</span>
           <span>Source</span>
           <span>Client</span>
+          <span>Détails</span>
           <span>Mode</span>
           <span className="text-right">Total</span>
           <span className="text-center">Statut</span>
           <span className="text-right">Action</span>
+          <span className="text-right">Imprimer</span>
         </div>
         {visible.length === 0 && (
           <p className="py-12 text-center text-muted-foreground">Aucune commande ici pour l&apos;instant.</p>
         )}
         {visible.map((o) => {
           const m = modeLabel(o)
-          const rowAction = ROW_ACTION_LABELS[o.status]
+          const details = orderItemsSummary(o.items)
           return (
             <div
               key={o.id}
@@ -205,7 +224,7 @@ export function Board({ initialOrders, initialQuery = '' }: { initialOrders: Ord
               tabIndex={0}
               onClick={() => setSelected(o)}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(o) } }}
-              className="grid cursor-pointer grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-1 px-4 py-4 transition-colors hover:bg-accent/40 focus-visible:outline-2 focus-visible:outline-primary md:grid-cols-[6.5rem_7rem_1fr_1fr_8rem_9rem_7.5rem] md:px-6"
+              className="grid cursor-pointer grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-1 px-4 py-4 transition-colors hover:bg-accent/40 focus-visible:outline-2 focus-visible:outline-primary md:grid-cols-[6.5rem_7rem_1fr_1.5fr_1fr_8rem_9rem_7.5rem_3rem] md:px-6"
             >
               {/* N° + heure */}
               <div>
@@ -224,6 +243,14 @@ export function Board({ initialOrders, initialQuery = '' }: { initialOrders: Ord
               <div className="min-w-0">
                 <p className="truncate font-medium">{o.customer_name ?? 'Client'}</p>
                 <p className="truncate font-mono text-xs text-muted-foreground">{o.customer_phone}</p>
+                {details && (
+                  <p className="truncate text-xs text-muted-foreground md:hidden" title={details}>{details}</p>
+                )}
+              </div>
+
+              {/* Détails (desktop) */}
+              <div className="hidden min-w-0 md:block">
+                {details && <p className="truncate text-sm text-muted-foreground" title={details}>{details}</p>}
               </div>
 
               {/* Mode */}
@@ -244,24 +271,45 @@ export function Board({ initialOrders, initialQuery = '' }: { initialOrders: Ord
                 <Badge variant={badgeVariantForOrder(o.status)}>{ORDER_STATUS_LABELS[o.status]}</Badge>
               </div>
 
-              {/* Action rapide */}
-              <div className="col-span-3 flex justify-end gap-2 md:col-span-1">
+              {/* Action rapide : dropdown de statut */}
+              <div
+                className="col-span-2 flex items-center justify-end gap-2 md:col-span-1"
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+              >
                 <Badge className="md:hidden" variant={badgeVariantForOrder(o.status)}>
                   {ORDER_STATUS_LABELS[o.status]}
                 </Badge>
-                {rowAction ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-primary/40 font-semibold text-primary hover:bg-primary hover:text-primary-foreground"
-                    disabled={pending}
-                    onClick={(e) => { e.stopPropagation(); advance(o) }}
-                  >
-                    {rowAction} →
-                  </Button>
-                ) : (
-                  <span className="hidden text-muted-foreground/40 md:inline">—</span>
-                )}
+                <Select
+                  value={o.status}
+                  disabled={pending}
+                  onValueChange={(v) => changeStatus(o, v as OrderCard['status'])}
+                >
+                  <SelectTrigger size="sm" aria-label="Changer le statut de la commande" className="w-full max-w-40 md:max-w-none">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUS_OPTIONS.map((s) => (
+                      <SelectItem key={s} value={s}>{ORDER_STATUS_LABELS[s]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Imprimer */}
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Imprimer le ticket"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    window.open(`/app/commandes/${o.id}/ticket?print=1`, '_blank', 'noopener')
+                  }}
+                >
+                  <Printer className="size-4" />
+                </Button>
               </div>
             </div>
           )

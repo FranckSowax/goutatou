@@ -1,4 +1,7 @@
+import Link from 'next/link'
+import { Store } from 'lucide-react'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { Button } from '@/components/ui/button'
 import type { OrderCard } from '@/lib/orders'
 import { Board } from './board'
 
@@ -31,9 +34,17 @@ export default async function CommandesPage({ searchParams }: { searchParams: Pr
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-baseline justify-between">
-        <h1 className="font-display text-2xl font-semibold">Commandes</h1>
-        <span className="text-sm text-muted-foreground">7 derniers jours</span>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-baseline gap-3">
+          <h1 className="font-display text-2xl font-semibold">Commandes</h1>
+          <span className="text-sm text-muted-foreground">7 derniers jours</span>
+        </div>
+        <Button asChild>
+          <Link href="/app/commandes/sur-place">
+            <Store className="size-4" />
+            Sur Place
+          </Link>
+        </Button>
       </div>
       <Board key={q ?? ''} initialOrders={orders} initialQuery={q ?? ''} />
     </div>
