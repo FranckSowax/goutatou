@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { badgeVariantForOrder } from '@/lib/status-badge'
 import {
-  ADVANCE_LABELS, groupByStatus, nextStatus, ORDER_STATUS_LABELS, ROW_ACTION_LABELS,
+  ADVANCE_LABELS, driveBadge, groupByStatus, nextStatus, ORDER_STATUS_LABELS, ROW_ACTION_LABELS,
   type OrderCard,
 } from '@/lib/orders'
 import { cancelOrder, updateOrderStatus } from './actions'
@@ -50,6 +50,28 @@ function modeLabel(o: OrderCard): { label: string; detail: string | null } {
   if (o.mode === 'drive') return { label: '🚗 Drive', detail: o.drive_slot_label }
   if (o.mode === 'livraison') return { label: '🛵 Livraison', detail: o.delivery_address }
   return { label: '🍽️ Sur place', detail: null }
+}
+
+/**
+ * Badge cuisine Drive (cf. plan CL3) : « 🚗 Drive » en teinte sky atténuée tant que le client
+ * n'est pas arrivé, « 🚗 ARRIVÉ » en sky plein une fois `arrived_at` posé (idempotent côté bot,
+ * cf. services/whatsapp/src/drive/arrival-repo.ts markArrived). `arrival_note` en `title` natif
+ * (tooltip navigateur) — pas de UI dédiée, v1 minimale. Tokens Goutatou uniquement.
+ */
+function DriveKanbanBadge({ order }: { order: OrderCard }) {
+  const badge = driveBadge(order)
+  if (!badge) return null
+  return (
+    <Badge
+      title={badge.title ?? undefined}
+      className={cn(
+        'border-transparent',
+        badge.arrived ? 'bg-tint-sky font-semibold text-foreground' : 'bg-tint-sky/50 text-foreground/70',
+      )}
+    >
+      {badge.label}
+    </Badge>
+  )
 }
 
 export function Board({ initialOrders, initialQuery = '' }: { initialOrders: OrderCard[]; initialQuery?: string }) {
@@ -201,7 +223,11 @@ export function Board({ initialOrders, initialQuery = '' }: { initialOrders: Ord
 
               {/* Mode */}
               <div className="hidden min-w-0 md:block">
-                <p className="text-sm">{m.label}</p>
+                {o.mode === 'drive' ? (
+                  <DriveKanbanBadge order={o} />
+                ) : (
+                  <p className="text-sm">{m.label}</p>
+                )}
                 {m.detail && <p className="truncate text-xs text-muted-foreground">{m.detail}</p>}
               </div>
 

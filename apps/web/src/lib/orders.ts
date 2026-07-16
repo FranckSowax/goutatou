@@ -12,7 +12,28 @@ export interface OrderCard {
   customer_phone: string
   drive_slot_label: string | null
   delivery_address: string | null
+  /** Arrivée Drive (« je suis arrivé », cf. plan CL3) — posé une seule fois par le bot, idempotent. */
+  arrived_at: string | null
+  arrival_note: string | null
   items: { name: string; qty: number; unit_price?: number }[]
+}
+
+export interface DriveBadgeInfo {
+  label: string
+  arrived: boolean
+  /** Détail d'arrivée (ex. "Toyota blanche") à afficher en `title` — seulement une fois arrivé. */
+  title: string | null
+}
+
+/**
+ * Badge cuisine pour une commande Drive (cf. plan CL3 § Badge Kanban). `null` pour les modes
+ * livraison/sur_place (pas de badge Drive à afficher). Pure : aucun style ici, le board choisit
+ * les classes tint-sky atténué/plein selon `arrived`.
+ */
+export function driveBadge(o: Pick<OrderCard, 'mode' | 'arrived_at' | 'arrival_note'>): DriveBadgeInfo | null {
+  if (o.mode !== 'drive') return null
+  const arrived = o.arrived_at != null
+  return { label: arrived ? '🚗 ARRIVÉ' : '🚗 Drive', arrived, title: arrived ? o.arrival_note : null }
 }
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
