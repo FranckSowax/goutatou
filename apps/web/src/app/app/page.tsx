@@ -9,11 +9,13 @@ import { badgeVariantForOrder } from '@/lib/status-badge'
 import { ORDER_STATUS_LABELS } from '@/lib/orders'
 import { parseLpConfig } from '@/lib/lp/config'
 import { computeHomeKpis, type HomeOrderInput } from '@/lib/home'
+import { onboardingDone, onboardingProgress, onboardingSteps } from '@/lib/onboarding'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { KpiCard } from './home-cards'
 import { HomeRefresh } from './home-refresh'
+import { OnboardingCard } from './onboarding-card'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,21 +69,30 @@ export default async function HomePage() {
 
   const restaurantId = member.restaurant_id
 
-  const [{ data: restaurant }, { data: ordersRaw }, { data: admin }] = await Promise.all([
-    supabase
-      .from('restaurants')
-      .select('name, wheel_enabled, lp_config, subscriptions(plan), whapi_channels(status)')
-      .eq('id', restaurantId)
-      .single(),
-    supabase
-      .from('orders')
-      .select('id, order_number, status, total, created_at, customers(name)')
-      .gte('created_at', new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString())
-      .order('created_at', { ascending: false }),
-    user
-      ? supabase.from('platform_admins').select('user_id').eq('user_id', user.id).maybeSingle()
-      : Promise.resolve({ data: null }),
-  ])
+  const [{ data: restaurant }, { data: ordersRaw }, { data: admin }, { count: menuItemsCount }, { count: ordersCount }] =
+    await Promise.all([
+      supabase
+        .from('restaurants')
+        .select('name, wheel_enabled, lp_config, subscriptions(plan), whapi_channels(status)')
+        .eq('id', restaurantId)
+        .single(),
+      supabase
+        .from('orders')
+        .select('id, order_number, status, total, created_at, customers(name)')
+        .gte('created_at', new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString())
+        .order('created_at', { ascending: false }),
+      user
+        ? supabase.from('platform_admins').select('user_id').eq('user_id', user.id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabase
+        .from('menu_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('restaurant_id', restaurantId),
+      supabase
+        .from('orders')
+        .select('id', { count: 'exact', head: true })
+        .eq('restaurant_id', restaurantId),
+    ])
 
   const sub = restaurant?.subscriptions as unknown as { plan: string } | null
   const channel = restaurant?.whapi_channels as unknown as { status: string } | null
@@ -125,9 +136,22 @@ export default async function HomePage() {
     todos.push({ key: 'wheel', icon: Gift, label: 'Activer la roue de la fidélité', href: '/app/fidelite' })
   }
 
+  // Démarrage guidé : auto-déduit des données réelles à chaque rendu (aucun état stocké), donc
+  // toujours juste et réapparaît si l'état régresse (ex. le resto vide sa carte).
+  const onboardingState = {
+    channelReady: channel?.status === 'active',
+    menuReady: (menuItemsCount ?? 0) > 0,
+    orderReceived: (ordersCount ?? 0) > 0,
+  }
+  const showOnboarding = !onboardingDone(onboardingState)
+
   return (
     <div className="flex flex-col gap-4">
       <HomeRefresh />
+
+      {showOnboarding && (
+        <OnboardingCard steps={onboardingSteps(onboardingState)} progress={onboardingProgress(onboardingState)} />
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
         {/* Colonne principale */}
