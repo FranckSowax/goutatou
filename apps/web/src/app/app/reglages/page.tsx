@@ -1,13 +1,28 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { qrSvg } from '@/lib/qr'
 import { Card } from '@/components/ui/card'
+import { PageTabs } from '@/components/page-tabs'
 import { PracticalInfoForm } from './practical-info-form'
 import { BotMessagesForm } from './bot-messages-form'
 import { StaffGroupCard } from './staff-group-card'
 
 export const dynamic = 'force-dynamic'
 
-export default async function ReglagesPage() {
+const REGLAGES_TABS = ['pratique', 'messages', 'groupe'] as const
+type ReglagesTab = (typeof REGLAGES_TABS)[number]
+
+function parseTab(raw: string | undefined): ReglagesTab {
+  return (REGLAGES_TABS as readonly string[]).includes(raw ?? '') ? (raw as ReglagesTab) : 'pratique'
+}
+
+export default async function ReglagesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>
+}) {
+  const { tab: tabParam } = await searchParams
+  const tab = parseTab(tabParam)
+
   const supabase = await createSupabaseServer()
   const { data: member } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).maybeSingle()
   if (!member) {
@@ -35,46 +50,92 @@ export default async function ReglagesPage() {
   const staffGroupSvg = restaurant?.staff_group_invite ? await qrSvg(restaurant.staff_group_invite) : null
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <h1 className="font-display text-2xl font-semibold">Réglages</h1>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="font-display text-lg font-semibold">Fiche pratique</h2>
-        <Card className="rounded-2xl p-4">
-          <PracticalInfoForm
-            address={restaurant?.address ?? null}
-            contactPhone={restaurant?.contact_phone ?? null}
-            hoursText={restaurant?.hours_text ?? null}
-            deliveryInfo={restaurant?.delivery_info ?? null}
-            locationLat={restaurant?.location_lat ?? null}
-            locationLng={restaurant?.location_lng ?? null}
-          />
-        </Card>
-      </section>
+      <PageTabs
+        tabs={[
+          { value: 'pratique', label: 'Fiche pratique' },
+          { value: 'messages', label: 'Messages du bot' },
+          { value: 'groupe', label: 'Groupe cuisine' },
+        ]}
+        active={tab}
+      />
 
-      <section className="flex flex-col gap-4">
-        <h2 className="font-display text-lg font-semibold">Messages du bot WhatsApp</h2>
-        <Card className="rounded-2xl p-4">
-          <BotMessagesForm
-            botWelcome={restaurant?.bot_welcome ?? null}
-            botInfoExtra={restaurant?.bot_info_extra ?? null}
-          />
-        </Card>
-      </section>
+      {tab === 'pratique' && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,42rem)_1fr] lg:items-start">
+          <section className="flex flex-col gap-4">
+            <h2 className="font-display text-lg font-semibold">Fiche pratique</h2>
+            <Card className="rounded-2xl p-4">
+              <PracticalInfoForm
+                address={restaurant?.address ?? null}
+                contactPhone={restaurant?.contact_phone ?? null}
+                hoursText={restaurant?.hours_text ?? null}
+                deliveryInfo={restaurant?.delivery_info ?? null}
+                locationLat={restaurant?.location_lat ?? null}
+                locationLng={restaurant?.location_lng ?? null}
+              />
+            </Card>
+          </section>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="font-display text-lg font-semibold">Groupe cuisine</h2>
-        <Card className="rounded-2xl p-4">
-          <StaffGroupCard
-            restaurantName={restaurant?.name ?? ''}
-            channelConnected={!!channel}
-            contactPhone={restaurant?.contact_phone ?? null}
-            staffGroupId={restaurant?.staff_group_id ?? null}
-            invite={restaurant?.staff_group_invite ?? null}
-            svg={staffGroupSvg}
-          />
-        </Card>
-      </section>
+          <aside className="flex flex-col gap-4 lg:sticky lg:top-6">
+            <h2 className="font-display text-lg font-semibold">À quoi ça sert</h2>
+            <Card className="rounded-2xl border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+              <p>
+                Ces informations sont utilisées par le bot WhatsApp pour répondre automatiquement aux
+                clients qui demandent l’adresse, les horaires ou les conditions de livraison.
+              </p>
+              <p className="mt-3">
+                La position GPS permet au bot d’envoyer un lien Google Maps direct vers le restaurant.
+              </p>
+            </Card>
+          </aside>
+        </div>
+      )}
+
+      {tab === 'messages' && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,42rem)_1fr] lg:items-start">
+          <section className="flex flex-col gap-4">
+            <h2 className="font-display text-lg font-semibold">Messages du bot WhatsApp</h2>
+            <Card className="rounded-2xl p-4">
+              <BotMessagesForm
+                botWelcome={restaurant?.bot_welcome ?? null}
+                botInfoExtra={restaurant?.bot_info_extra ?? null}
+              />
+            </Card>
+          </section>
+
+          <aside className="flex flex-col gap-4 lg:sticky lg:top-6">
+            <h2 className="font-display text-lg font-semibold">À quoi ça sert</h2>
+            <Card className="rounded-2xl border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+              <p>
+                Le <strong>message d’accueil</strong> est envoyé dès qu’un client démarre une
+                conversation avec votre bot WhatsApp.
+              </p>
+              <p className="mt-3">
+                Les <strong>infos complémentaires</strong> sont ajoutées à la réponse du bot quand un
+                client demande des informations sur le restaurant.
+              </p>
+            </Card>
+          </aside>
+        </div>
+      )}
+
+      {tab === 'groupe' && (
+        <div className="mx-auto flex w-full max-w-md flex-col gap-4">
+          <h2 className="font-display text-lg font-semibold">Groupe cuisine</h2>
+          <Card className="rounded-2xl p-4">
+            <StaffGroupCard
+              restaurantName={restaurant?.name ?? ''}
+              channelConnected={!!channel}
+              contactPhone={restaurant?.contact_phone ?? null}
+              staffGroupId={restaurant?.staff_group_id ?? null}
+              invite={restaurant?.staff_group_invite ?? null}
+              svg={staffGroupSvg}
+            />
+          </Card>
+        </div>
+      )}
     </div>
   )
 }
