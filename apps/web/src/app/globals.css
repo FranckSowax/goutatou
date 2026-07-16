@@ -169,3 +169,19 @@
     animation: none;
   }
 }
+
+/*
+  ---break---
+*/
+/* POS3 — impression du ticket de commande (`/app/commandes/[id]/ticket`). Le masquage du chrome
+   (sidebar, topbar mobile, header, overlay cuisine) est fait via les utilitaires Tailwind
+   `print:hidden` posés directement sur les éléments concernés (components/app-shell.tsx,
+   app/app/live-alert-overlay.tsx) — colocalisé avec le markup, donc pas de sélecteur global
+   fragile qui devrait deviner/retrouver la structure du DOM du shell. Seule la marge de page
+   n'a pas d'équivalent Tailwind (`@page` n'est pas un utilitaire) : c'est la seule règle CSS
+   brute nécessaire ici. */
+@media print {
+  @page {
+    margin: 6mm;
+  }
+}

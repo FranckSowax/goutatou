@@ -125,7 +125,7 @@ export function LiveAlertOverlay({ restaurantId }: { restaurantId: string }) {
         role="alert"
         aria-live="assertive"
         onClick={closeOrder}
-        className="live-alert-overlay fixed inset-0 z-[100] flex flex-col items-center justify-center gap-4 bg-tint-mint px-6 text-center"
+        className="live-alert-overlay fixed inset-0 z-[100] flex flex-col items-center justify-center gap-4 bg-tint-mint px-6 text-center print:hidden"
       >
         {orderData && (
           <>
@@ -149,7 +149,7 @@ export function LiveAlertOverlay({ restaurantId }: { restaurantId: string }) {
         role="alert"
         aria-live="assertive"
         onClick={closeArrival}
-        className="live-alert-overlay fixed inset-0 z-[100] flex flex-col items-center justify-center gap-4 bg-tint-sky px-6 text-center"
+        className="live-alert-overlay fixed inset-0 z-[100] flex flex-col items-center justify-center gap-4 bg-tint-sky px-6 text-center print:hidden"
       >
         {arrivalData && (
           <>
