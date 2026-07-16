@@ -90,27 +90,42 @@ export function Board({ initial }: { initial: Row[] }) {
         </div>
       </div>
 
-      {/* Grille sur les grands écrans : la largeur sert à montrer plus d'entrées à la
-          fois, pas à étirer chaque carte. */}
-      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {/* Grille de cartes portrait (aperçu 9:16) : plus de colonnes qu'une grille
+          paysage classique, la largeur sert à montrer plus d'entrées à la fois. */}
+      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
         {pageItems.map((s) => (
           <li key={s.id}>
             <Dialog>
-              <Card className="rounded-2xl p-4">
+              <Card className="flex flex-col gap-2 overflow-hidden rounded-2xl p-2">
                 <DialogTrigger asChild>
                   <button type="button" className="flex w-full flex-col text-left">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-display font-semibold">{KIND_LABEL[s.kind]}</span>
-                      <Badge variant={badgeVariantForStatus(s.state)}>{statusStateLabel(s.state)}</Badge>
+                    <div className="relative">
+                      <StatusPreview
+                        className="max-w-none"
+                        data={{
+                          kind: s.kind,
+                          content: s.content,
+                          mediaUrl: s.media_url,
+                          bgColor: s.bg_color ?? '#1F2C34',
+                          captionColor: s.caption_color ?? '#FFFFFF',
+                          fontType: s.font_type ?? 0,
+                        }}
+                      />
+                      <Badge
+                        variant={badgeVariantForStatus(s.state)}
+                        className="absolute top-2 right-2 shadow-sm"
+                      >
+                        {statusStateLabel(s.state)}
+                      </Badge>
                     </div>
-                    <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-muted-foreground">{s.content}</p>
-                    <p className="mt-1 text-xs text-muted-foreground">{audienceLabel(s.audience)}</p>
-                    {s.media_url && s.kind === 'image' && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={s.media_url} alt="" className="mt-2 max-h-40 rounded-lg object-cover" />
-                    )}
+                    <div className="flex items-center justify-between gap-2 px-1 pt-2">
+                      <span className="font-display text-sm font-semibold">{KIND_LABEL[s.kind]}</span>
+                      <span className="text-xs text-muted-foreground">{audienceLabel(s.audience)}</span>
+                    </div>
                     {s.scheduled_at && (
-                      <p className="mt-2 text-sm text-muted-foreground">Programmé : {new Date(s.scheduled_at).toLocaleString('fr-FR')}</p>
+                      <p className="px-1 text-xs text-muted-foreground">
+                        Programmé : {new Date(s.scheduled_at).toLocaleString('fr-FR')}
+                      </p>
                     )}
                   </button>
                 </DialogTrigger>
@@ -121,7 +136,7 @@ export function Board({ initial }: { initial: Row[] }) {
                         type="button"
                         variant="destructive"
                         size="sm"
-                        className="mt-2 self-start"
+                        className="mx-1 mb-1 self-start"
                         onClick={(e) => e.stopPropagation()}
                       >
                         Annuler
@@ -174,7 +189,7 @@ export function Board({ initial }: { initial: Row[] }) {
           </li>
         ))}
         {filtered.length === 0 && (
-          <p className="text-muted-foreground sm:col-span-2 xl:col-span-3">
+          <p className="col-span-2 text-muted-foreground sm:col-span-3 lg:col-span-4 2xl:col-span-6">
             {initial.length === 0
               ? 'Aucun statut pour l’instant — créez-en un depuis l’onglet « Nouveau statut ».'
               : 'Aucun statut pour ce filtre.'}
