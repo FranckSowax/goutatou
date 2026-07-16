@@ -2,12 +2,20 @@ import { createSupabaseServer } from '@/lib/supabase/server'
 import { isPro } from '@/lib/premium'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { PageTabs } from '@/components/page-tabs'
 import type { BadgeTone } from '@/lib/status-badge'
 import { Composer } from './composer'
 import { PollResults } from './results'
 import { POLL_SURFACES, SURFACE_LABELS, type PollSurface } from './shared'
 
 export const dynamic = 'force-dynamic'
+
+const SONDAGES_TABS = ['nouveau', 'historique'] as const
+type SondagesTab = (typeof SONDAGES_TABS)[number]
+
+function parseTab(raw: string | undefined): SondagesTab {
+  return (SONDAGES_TABS as readonly string[]).includes(raw ?? '') ? (raw as SondagesTab) : 'nouveau'
+}
 
 type PollStatus = 'queued' | 'sending' | 'sent' | 'failed'
 type PollTarget = 'channel' | 'optin'
@@ -72,7 +80,14 @@ function surfaceSendLabel(status: string | undefined): string {
   return status ? (SURFACE_SEND_LABELS[status] ?? status) : 'En attente'
 }
 
-export default async function SondagesPage() {
+export default async function SondagesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>
+}) {
+  const { tab: tabParam } = await searchParams
+  const tab = parseTab(tabParam)
+
   const supabase = await createSupabaseServer()
   const { data: member } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).maybeSingle()
   if (!member) {
@@ -117,13 +132,27 @@ export default async function SondagesPage() {
   const rows = (polls ?? []) as PollRow[]
 
   return (
-    <div className="mx-auto max-w-3xl p-6">
-      <h1 className="mb-6 font-display text-2xl font-semibold">Sondages</h1>
-      <div className="flex flex-col gap-6">
-        <Composer restaurantId={restaurantId} hasChannel={!!resto?.wa_channel_id} />
+    <div className="flex flex-col gap-6 p-6">
+      <h1 className="font-display text-2xl font-semibold">Sondages</h1>
+
+      <PageTabs
+        tabs={[
+          { value: 'nouveau', label: 'Nouveau sondage' },
+          { value: 'historique', label: 'Historique' },
+        ]}
+        active={tab}
+        variant="pills"
+      />
+
+      {tab === 'nouveau' && (
+        <div className="max-w-2xl">
+          <Composer restaurantId={restaurantId} hasChannel={!!resto?.wa_channel_id} />
+        </div>
+      )}
+
+      {tab === 'historique' && (
         <div>
-          <h2 className="mb-3 font-display text-lg font-semibold">Historique</h2>
-          <ul className="flex flex-col gap-3">
+          <ul className="grid gap-3 lg:grid-cols-2">
             {rows.map((p) => {
               const badge = statusBadge(p.status, p.sent_count)
               const surfaces = resolveSurfaces(p)
@@ -158,7 +187,7 @@ export default async function SondagesPage() {
             {rows.length === 0 && <p className="text-muted-foreground">Aucun sondage pour l’instant.</p>}
           </ul>
         </div>
-      </div>
+      )}
     </div>
   )
 }
