@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Check, Copy } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { updatePlan, updateRestaurantProfile } from './actions'
+import { resendInvitation, sendInvitationWhatsapp, updatePlan, updateRestaurantProfile } from './actions'
 
 export type GeneralTabRestaurant = {
   id: string
@@ -41,13 +42,59 @@ function errorMessage(_e: unknown, fallback: string): string {
 export function GeneralTab({
   restaurant,
   subscription,
+  channelStatus,
 }: {
   restaurant: GeneralTabRestaurant
   subscription: GeneralTabSubscription
+  channelStatus: string | null
 }) {
   const [profileError, setProfileError] = useState<string | null>(null)
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileSaved, setProfileSaved] = useState(false)
+
+  const [inviteLink, setInviteLink] = useState<string | null>(null)
+  const [inviteError, setInviteError] = useState<string | null>(null)
+  const [inviteLoading, setInviteLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [waSending, setWaSending] = useState(false)
+  const [waResult, setWaResult] = useState<string | null>(null)
+
+  const canSendWhatsapp = !!restaurant.contact_phone && channelStatus === 'active'
+
+  async function handleResendInvitation() {
+    setInviteLoading(true)
+    setInviteError(null)
+    setWaResult(null)
+    try {
+      const { inviteLink } = await resendInvitation(restaurant.id)
+      setInviteLink(inviteLink)
+    } catch {
+      setInviteError("Impossible de générer le lien d'invitation.")
+    } finally {
+      setInviteLoading(false)
+    }
+  }
+
+  async function onCopyInvite() {
+    if (!inviteLink) return
+    await navigator.clipboard.writeText(inviteLink)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function onSendWhatsapp() {
+    if (!inviteLink) return
+    setWaSending(true)
+    setWaResult(null)
+    try {
+      await sendInvitationWhatsapp(restaurant.id, inviteLink)
+      setWaResult('Lien envoyé sur le WhatsApp du restaurant.')
+    } catch {
+      setWaResult("Échec de l'envoi WhatsApp — le lien reste copiable ci-dessus.")
+    } finally {
+      setWaSending(false)
+    }
+  }
 
   const gpsDefaultValue =
     restaurant.location_lat != null && restaurant.location_lng != null
@@ -164,6 +211,53 @@ export function GeneralTab({
               )}
             </div>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl p-4">
+        <CardHeader className="px-0 pt-0">
+          <CardTitle className="font-display text-base">Invitation du gérant</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3 px-0">
+          <p className="text-sm text-muted-foreground">
+            Régénère un lien pour que le gérant définisse (ou redéfinisse) son mot de passe.
+          </p>
+          {inviteError && (
+            <div
+              role="alert"
+              className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
+              {inviteError}
+            </div>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            className="w-fit"
+            onClick={handleResendInvitation}
+            disabled={inviteLoading}
+          >
+            {inviteLoading ? 'Génération…' : 'Renvoyer une invitation'}
+          </Button>
+          {inviteLink && (
+            <div className="flex flex-col gap-2 rounded-xl border border-border bg-muted/40 p-3">
+              <p className="w-full truncate text-xs text-muted-foreground" title={inviteLink}>
+                {inviteLink}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={onCopyInvite}>
+                  {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                  {copied ? 'Copié' : 'Copier le lien'}
+                </Button>
+                {canSendWhatsapp && (
+                  <Button type="button" variant="outline" size="sm" onClick={onSendWhatsapp} disabled={waSending}>
+                    {waSending ? 'Envoi…' : 'Envoyer sur WhatsApp'}
+                  </Button>
+                )}
+              </div>
+              {waResult && <p className="text-sm text-muted-foreground">{waResult}</p>}
+            </div>
+          )}
         </CardContent>
       </Card>
 

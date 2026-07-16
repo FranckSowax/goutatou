@@ -106,6 +106,7 @@ export default async function AdminRestaurantDetailPage({ params }: { params: Pr
               location_lng: resto.location_lng,
             }}
             subscription={{ plan: subscription?.plan ?? 'starter', status: subscription?.status ?? 'active' }}
+            channelStatus={channel?.status ?? null}
           />
         </TabsContent>
 

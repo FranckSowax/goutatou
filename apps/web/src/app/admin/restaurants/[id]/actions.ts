@@ -4,6 +4,7 @@ import { encryptToken, decryptToken } from '@goutatou/db/crypto'
 import { WhapiClient, WhapiError } from '@goutatou/whapi'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { parseLatLng } from '@/lib/gps'
+import { SITE_BASE_URL } from '@/lib/site'
 import { assertPlatformAdmin } from '../../actions'
 
 function revalidateFiche(id: string) {
@@ -368,4 +369,60 @@ export async function deleteRestaurant(id: string) {
 
   revalidatePath('/admin/restaurants')
   revalidatePath('/admin')
+}
+
+/**
+ * Régénère un lien pour un gérant déjà existant. `type: 'invite'` exige que l'utilisateur
+ * n'existe pas encore (généré/vérifié dans `createRestaurant`, cf. commentaire de ce fichier
+ * dans `../../actions.ts`) — ici le compte owner existe déjà, donc on utilise le repli
+ * documenté par le plan : `type: 'recovery'` (même destination `/login/definir-mot-de-passe`,
+ * le gérant y définit son mot de passe qu'il en soit à sa 1re connexion ou non). Le lien n'est
+ * JAMAIS loggé, seulement retourné à l'appelant.
+ */
+export async function resendInvitation(id: string): Promise<{ inviteLink: string }> {
+  await assertPlatformAdmin()
+  const admin = createAdminClient()
+
+  const { data: member, error: memberErr } = await admin
+    .from('restaurant_members')
+    .select('user_id')
+    .eq('restaurant_id', id)
+    .eq('role', 'owner')
+    .maybeSingle()
+  if (memberErr || !member) throw new Error('Gérant introuvable pour ce restaurant.')
+
+  const { data: userRes, error: userErr } = await admin.auth.admin.getUserById(member.user_id)
+  if (userErr || !userRes.user?.email) throw new Error('Impossible de retrouver l’email du gérant.')
+
+  const { data: link, error: linkErr } = await admin.auth.admin.generateLink({
+    type: 'recovery',
+    email: userRes.user.email,
+    options: { redirectTo: `${SITE_BASE_URL}/login/definir-mot-de-passe` },
+  })
+  if (linkErr || !link.properties) throw new Error(`Génération du lien : ${linkErr?.message}`)
+
+  return { inviteLink: link.properties.action_link }
+}
+
+/**
+ * Envoie un lien (invitation/récupération) sur le WhatsApp du resto — best-effort : n'importe
+ * quel échec (canal introuvable, numéro invalide, Whapi HS) remonte une erreur FR fixe, le lien
+ * reste copiable côté appelant (le bouton n'est de toute façon affiché que si contact_phone est
+ * renseigné ET le canal actif, cf. general-tab.tsx).
+ */
+export async function sendInvitationWhatsapp(id: string, link: string): Promise<void> {
+  await assertPlatformAdmin()
+  const admin = createAdminClient()
+
+  const { data: resto } = await admin.from('restaurants').select('contact_phone').eq('id', id).maybeSingle()
+  const digits = (resto?.contact_phone ?? '').replace(/\D/g, '')
+  if (!digits) throw new Error('Aucun numéro de contact pour ce restaurant.')
+
+  const whapi = await whapiClientForRestaurant(id)
+  const message = `Bonjour ! Voici votre lien pour définir votre mot de passe et accéder à votre espace Goutatou : ${link}`
+  try {
+    await whapi.sendText(`${digits}@s.whatsapp.net`, message)
+  } catch {
+    throw new Error('Échec de l’envoi WhatsApp — le lien reste copiable ci-dessus.')
+  }
 }
