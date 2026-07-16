@@ -35,12 +35,12 @@ describe('decideAlert', () => {
     expect(second).toBeNull()
   })
 
-  it('UPDATE arrived_at null → date → alerte arrival', () => {
+  it('UPDATE arrived_at null → date fraîche (maintenant) → alerte arrival', () => {
     const seen = new Set<string>()
     const evt = decideAlert(
       {
         type: 'UPDATE',
-        row: row({ arrived_at: '2026-07-16T10:00:00Z', arrival_note: 'Toyota blanche' }),
+        row: row({ arrived_at: new Date().toISOString(), arrival_note: 'Toyota blanche' }),
         oldArrivedAt: null,
       },
       seen,
@@ -51,7 +51,7 @@ describe('decideAlert', () => {
 
   it('le même UPDATE d\'arrivée reçu 2x → null la 2e fois', () => {
     const seen = new Set<string>()
-    const evt = { type: 'UPDATE' as const, row: row({ arrived_at: '2026-07-16T10:00:00Z' }), oldArrivedAt: null }
+    const evt = { type: 'UPDATE' as const, row: row({ arrived_at: new Date().toISOString() }), oldArrivedAt: null }
     decideAlert(evt, seen)
     const second = decideAlert(evt, seen)
     expect(second).toBeNull()
@@ -59,11 +59,12 @@ describe('decideAlert', () => {
 
   it('UPDATE sans changement d\'arrived_at (déjà set, même valeur) → null', () => {
     const seen = new Set<string>()
+    const sameTs = new Date().toISOString()
     const evt = decideAlert(
       {
         type: 'UPDATE',
-        row: row({ arrived_at: '2026-07-16T10:00:00Z' }),
-        oldArrivedAt: '2026-07-16T10:00:00Z',
+        row: row({ arrived_at: sameTs }),
+        oldArrivedAt: sameTs,
       },
       seen,
     )
@@ -83,24 +84,66 @@ describe('decideAlert', () => {
     const seen = new Set<string>()
     const orderEvt = decideAlert({ type: 'INSERT', row: row() }, seen)
     const arrivalEvt = decideAlert(
-      { type: 'UPDATE', row: row({ arrived_at: '2026-07-16T10:00:00Z' }), oldArrivedAt: null },
+      { type: 'UPDATE', row: row({ arrived_at: new Date().toISOString() }), oldArrivedAt: null },
       seen,
     )
     expect(orderEvt?.kind).toBe('order')
     expect(arrivalEvt?.kind).toBe('arrival')
   })
 
-  it('oldArrivedAt undefined (payload.old indisponible) + arrived_at non-null → arrival la 1re fois seulement', () => {
+  it('oldArrivedAt undefined (payload.old indisponible) + arrived_at non-null (frais) → arrival la 1re fois seulement', () => {
     const seen = new Set<string>()
+    const freshTs = new Date().toISOString()
     const first = decideAlert(
-      { type: 'UPDATE', row: row({ arrived_at: '2026-07-16T10:00:00Z' }) },
+      { type: 'UPDATE', row: row({ arrived_at: freshTs }) },
       seen,
     )
     const second = decideAlert(
-      { type: 'UPDATE', row: row({ arrived_at: '2026-07-16T10:00:00Z' }) },
+      { type: 'UPDATE', row: row({ arrived_at: freshTs }) },
       seen,
     )
     expect(first).toEqual({ kind: 'arrival', id: 'order-1', code: '42', note: null })
     expect(second).toBeNull()
+  })
+
+  // IMPORTANT 1 (revue finale) : garde de fraîcheur — un onglet fraîchement ouvert démarre avec un
+  // `Set` vide, donc sans cette garde une arrivée déjà ancienne (ex. 10 min avant l'ouverture de
+  // l'onglet) déclencherait à tort l'overlay plein écran + carillon dès le premier UPDATE reçu.
+  describe('garde de fraîcheur (arrivée périmée)', () => {
+    it('arrived_at = maintenant → alerte', () => {
+      const seen = new Set<string>()
+      const evt = decideAlert(
+        { type: 'UPDATE', row: row({ arrived_at: new Date().toISOString() }), oldArrivedAt: null },
+        seen,
+      )
+      expect(evt?.kind).toBe('arrival')
+    })
+
+    it('arrived_at = il y a 5 minutes → null (arrivée périmée, pas de fausse alerte)', () => {
+      const seen = new Set<string>()
+      const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString()
+      const evt = decideAlert(
+        { type: 'UPDATE', row: row({ arrived_at: fiveMinAgo }), oldArrivedAt: null },
+        seen,
+      )
+      expect(evt).toBeNull()
+      // Pas d'écriture dans `seen` non plus : une arrivée périmée ne doit pas non plus bloquer
+      // une future redélivrance légitime (aucune garantie requise ici, mais aucune régression).
+    })
+
+    it('arrived_at invalide/non parsable → null, jamais de crash', () => {
+      const seen = new Set<string>()
+      expect(() =>
+        decideAlert(
+          { type: 'UPDATE', row: row({ arrived_at: 'pas-une-date' }), oldArrivedAt: null },
+          seen,
+        ),
+      ).not.toThrow()
+      const evt = decideAlert(
+        { type: 'UPDATE', row: row({ arrived_at: 'pas-une-date' }), oldArrivedAt: null },
+        seen,
+      )
+      expect(evt).toBeNull()
+    })
   })
 })

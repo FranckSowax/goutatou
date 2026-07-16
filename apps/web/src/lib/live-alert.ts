@@ -40,6 +40,18 @@ export function decideAlert(
   const isArrived = row.arrived_at != null
   if (!isArrived || wasArrived) return null
 
+  // Garde de fraîcheur — INDÉPENDANTE de la disponibilité de `payload.old` : un onglet fraîchement
+  // ouvert démarre avec un `Set` vide (aucun historique de session), donc n'importe quelle
+  // commande déjà arrivée AVANT l'ouverture de l'onglet ressemble à une arrivée neuve dès le
+  // premier UPDATE qu'il reçoit sur cette ligne (ex. gérant qui passe la commande en "Récupérée"
+  // minutes après l'arrivée réelle). Sans cette garde : overlay plein écran + carillon pour une
+  // arrivée vieille de plusieurs minutes. `arrived_at` invalide/non parsable → `Date.parse` renvoie
+  // `NaN` → traité comme périmé (`Number.isNaN` explicite, on ne compte pas sur `NaN > 60_000`
+  // qui vaut toujours `false` et laisserait passer une date illisible) : jamais de crash, jamais
+  // d'alerte sur une donnée qu'on ne sait pas dater.
+  const arrivedAtMs = Date.parse(row.arrived_at as string)
+  if (Number.isNaN(arrivedAtMs) || Date.now() - arrivedAtMs > 60_000) return null
+
   const key = `arr:${row.id}`
   if (seen.has(key)) return null
   seen.add(key)
