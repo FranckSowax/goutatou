@@ -12,7 +12,7 @@ export function History({ entries }: { entries: ChannelHistoryEntry[] }) {
         {entries.length === 0 ? (
           <p className="text-sm text-muted-foreground">Aucun post pour le moment.</p>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className="grid gap-2 lg:grid-cols-2">
             {entries.map((entry) => (
               <li key={entry.id} className="rounded-lg border border-border px-3 py-2 text-sm">
                 <p className="text-foreground">{entry.preview}</p>

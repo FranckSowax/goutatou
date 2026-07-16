@@ -40,7 +40,7 @@ export function ScheduledList({ posts }: { posts: ScheduledListPost[] }) {
       {posts.length === 0 ? (
         <p className="text-sm text-muted-foreground">Aucun post programmé pour le moment.</p>
       ) : (
-        <ul className="flex flex-col gap-3">
+        <ul className="grid gap-3 lg:grid-cols-2">
           {posts.map((post) => (
             <li
               key={post.id}
