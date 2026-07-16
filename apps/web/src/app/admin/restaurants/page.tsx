@@ -1,11 +1,9 @@
 import Link from 'next/link'
 import { decryptToken } from '@goutatou/db/crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Table,
   TableBody,
@@ -14,9 +12,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { configureWebhook, createRestaurant } from '../actions'
+import { configureWebhook } from '../actions'
 import { RestaurantRow } from './restaurant-row'
 import { ActionsCell } from './actions-cell'
+import { NewRestaurantForm } from './new-restaurant-form'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,44 +48,7 @@ export default async function AdminRestaurantsPage() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8">
-      <Card className="rounded-2xl p-4">
-        <CardHeader className="px-0 pt-0">
-          <CardTitle className="font-display text-lg">Nouveau restaurant</CardTitle>
-        </CardHeader>
-        <CardContent className="px-0">
-          <form action={createRestaurant} className="grid gap-3 sm:grid-cols-2">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="new-resto-name">Nom du restaurant</Label>
-              <Input id="new-resto-name" name="name" required placeholder="Nom du restaurant" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="new-resto-slug">Slug</Label>
-              <Input
-                id="new-resto-slug"
-                name="slug"
-                required
-                placeholder="slug (ex. chez-mama)"
-                pattern="[a-z0-9-]{2,40}"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="new-resto-owner-email">Email du gérant</Label>
-              <Input id="new-resto-owner-email" name="owner_email" required type="email" placeholder="Email du gérant" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="new-resto-owner-password">Mot de passe initial</Label>
-              <Input id="new-resto-owner-password" name="owner_password" required placeholder="Mot de passe initial" />
-            </div>
-            <div className="flex flex-col gap-1.5 sm:col-span-2">
-              <Label htmlFor="new-resto-whapi-token">Token du canal Whapi</Label>
-              <Input id="new-resto-whapi-token" name="whapi_token" required placeholder="Token du canal Whapi" />
-            </div>
-            <Button type="submit" className="sm:col-span-2">
-              Créer le restaurant
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+      <NewRestaurantForm />
 
       <section className="flex flex-col gap-3">
         <h2 className="font-display text-lg font-semibold">Restaurants ({restos?.length ?? 0})</h2>
