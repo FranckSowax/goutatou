@@ -1,6 +1,8 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { isPro, isPremium } from '@/lib/premium'
 import { Card } from '@/components/ui/card'
+import { PageTabs } from '@/components/page-tabs'
+import { Composer } from './composer'
 import { Board } from './board'
 import { AutoStatusCard, type AutoStatusDish } from './auto-status-card'
 import { isAutoStatusValidationMode } from './shared'
@@ -8,6 +10,13 @@ import { isAutoStatusValidationMode } from './shared'
 export const dynamic = 'force-dynamic'
 
 type SupabaseServer = Awaited<ReturnType<typeof createSupabaseServer>>
+
+const STATUTS_TABS = ['composer', 'auto', 'historique'] as const
+type StatutsTab = (typeof STATUTS_TABS)[number]
+
+function parseTab(raw: string | undefined): StatutsTab {
+  return (STATUTS_TABS as readonly string[]).includes(raw ?? '') ? (raw as StatutsTab) : 'composer'
+}
 
 interface MenuCategoryRow {
   position: number
@@ -52,7 +61,14 @@ async function loadNextAutoStatusDishes(
   return Array.from({ length: n }, (_, i) => dishes[(start + i) % dishes.length])
 }
 
-export default async function StatutsPage() {
+export default async function StatutsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>
+}) {
+  const { tab: tabParam } = await searchParams
+  const tab = parseTab(tabParam)
+
   const supabase = await createSupabaseServer()
   const { data: member } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).single()
   const pro = member ? await isPro(supabase, member.restaurant_id) : false
@@ -86,9 +102,24 @@ export default async function StatutsPage() {
     : []
 
   return (
-    <>
-      <Board initial={statuses ?? []} restaurantId={restaurantId} isPremium={premium} />
-      <div className="mx-auto max-w-3xl px-6 pb-8">
+    <div className="flex flex-col gap-6 p-6">
+      <h1 className="font-display text-2xl font-semibold">Statuts WhatsApp</h1>
+
+      {/* Sous-onglets de la page (pills), distincts de la nav de section
+          `MarketingTabs` (soulignée) affichée juste au-dessus par le layout. */}
+      <PageTabs
+        tabs={[
+          { value: 'composer', label: 'Nouveau statut' },
+          { value: 'auto', label: 'Auto 👑' },
+          { value: 'historique', label: 'Historique' },
+        ]}
+        active={tab}
+        variant="pills"
+      />
+
+      {tab === 'composer' && <Composer restaurantId={restaurantId} isPremium={premium} />}
+
+      {tab === 'auto' && (
         <AutoStatusCard
           isPremium={premium}
           enabled={restaurant?.auto_status_enabled ?? false}
@@ -106,7 +137,9 @@ export default async function StatutsPage() {
           staffGroupId={restaurant?.staff_group_id ?? null}
           echoChannel={restaurant?.auto_status_echo_channel ?? false}
         />
-      </div>
-    </>
+      )}
+
+      {tab === 'historique' && <Board initial={statuses ?? []} />}
+    </div>
   )
 }

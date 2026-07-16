@@ -20,7 +20,6 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { badgeVariantForStatus } from '@/lib/status-badge'
 import { cancelStatus } from './actions'
-import { Composer } from './composer'
 import { StatusPreview } from './status-preview'
 import { fontStyleFor, filterStatusesByState, paginate, STATUS_FILTER_OPTIONS } from './shared'
 import type { StatusCardKind, StatusAudience, StatusFilterState } from './shared'
@@ -45,15 +44,7 @@ function audienceLabel(a: StatusAudience): string {
   return a === 'optin' ? 'Clients opt-in 👑' : 'Tous les clients'
 }
 
-export function Board({
-  initial,
-  restaurantId,
-  isPremium,
-}: {
-  initial: Row[]
-  restaurantId: string
-  isPremium: boolean
-}) {
+export function Board({ initial }: { initial: Row[] }) {
   const router = useRouter()
   const [filter, setFilter] = useState<StatusFilterState>('all')
   const [page, setPage] = useState(1)
@@ -77,11 +68,8 @@ export function Board({
   }
 
   return (
-    <div className="mx-auto max-w-3xl p-6">
-      <h1 className="mb-6 font-display text-2xl font-semibold">Statuts WhatsApp</h1>
-      <Composer restaurantId={restaurantId} isPremium={isPremium} />
-
-      <div className="mb-3 flex items-center justify-between gap-2">
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-2">
         <h2 className="font-display text-lg font-semibold">Historique</h2>
         <div className="flex flex-col gap-1.5">
           <label htmlFor="statut-filter" className="sr-only">
@@ -102,7 +90,9 @@ export function Board({
         </div>
       </div>
 
-      <ul className="flex flex-col gap-3">
+      {/* Grille sur les grands écrans : la largeur sert à montrer plus d'entrées à la
+          fois, pas à étirer chaque carte. */}
+      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {pageItems.map((s) => (
           <li key={s.id}>
             <Dialog>
@@ -184,8 +174,10 @@ export function Board({
           </li>
         ))}
         {filtered.length === 0 && (
-          <p className="text-muted-foreground">
-            {initial.length === 0 ? 'Aucun statut pour l’instant.' : 'Aucun statut pour ce filtre.'}
+          <p className="text-muted-foreground sm:col-span-2 xl:col-span-3">
+            {initial.length === 0
+              ? 'Aucun statut pour l’instant — créez-en un depuis l’onglet « Nouveau statut ».'
+              : 'Aucun statut pour ce filtre.'}
           </p>
         )}
       </ul>
