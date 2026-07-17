@@ -3,10 +3,11 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 
+// Onglet « Campagnes » masqué en attendant son redesign complet (page conservée dans
+// campagnes/ mais inaccessible : campagnes/page.tsx redirige vers Statuts).
 const TABS = [
   { href: '/app/marketing/statuts', label: 'Statuts WhatsApp' },
   { href: '/app/marketing/chaine', label: 'Chaîne WhatsApp' },
-  { href: '/app/marketing/campagnes', label: 'Campagnes' },
   { href: '/app/marketing/sondages', label: 'Sondages' },
   { href: '/app/marketing/qr', label: 'QR opt-in' },
 ] as const

@@ -1,14 +1,9 @@
-import { notFound } from 'next/navigation'
-import { createSupabaseServer } from '@/lib/supabase/server'
-import { CampaignDetail } from './detail'
+import { redirect } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
 
-export default async function CampagneDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const supabase = await createSupabaseServer()
-  const { data: c } = await supabase.from('campaigns')
-    .select('id, name, body, status, total_recipients, sent_count, failed_count, scheduled_at').eq('id', id).maybeSingle()
-  if (!c) notFound()
-  return <CampaignDetail c={c} />
+// Zone Campagnes masquée en attendant son redesign (cf. campagnes/page.tsx). Le détail reste
+// dans `detail.tsx` pour le futur redesign ; l'accès direct est renvoyé vers Statuts.
+export default async function CampagneDetailPage() {
+  redirect('/app/marketing/statuts')
 }
