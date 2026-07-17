@@ -21,7 +21,7 @@ export function MarketingFrame({
   children: ReactNode
 }) {
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 pb-10 sm:px-6">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3">
         <Link
           href={backHref}

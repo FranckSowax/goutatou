@@ -49,7 +49,7 @@ function ToolCard({
 export function MarketingHub({ kpis }: { kpis: MarketingKpis }) {
   const subscribers = kpis.subscribers === null ? '—' : String(kpis.subscribers)
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 pb-10 sm:px-6">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="font-display text-2xl font-semibold">Marketing</h1>
         <p className="mt-1 text-sm text-muted-foreground">
