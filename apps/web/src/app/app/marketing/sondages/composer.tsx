@@ -179,9 +179,9 @@ export function Composer({ restaurantId, hasChannel }: { restaurantId: string; h
   }
 
   return (
-    <Card className="rounded-2xl p-4">
+    <Card className="rounded-2xl p-5 sm:p-6">
       <CardHeader className="px-0 pt-0">
-        <CardTitle className="font-display text-base">Nouveau sondage</CardTitle>
+        <CardTitle className="font-display text-lg">Nouveau sondage</CardTitle>
       </CardHeader>
       <CardContent className="px-0">
         {error && (
@@ -192,7 +192,7 @@ export function Composer({ restaurantId, hasChannel }: { restaurantId: string; h
             {error}
           </div>
         )}
-        <form action={onSubmit} className="flex flex-col gap-4">
+        <form action={onSubmit} className="flex flex-col gap-5">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="poll-question">Question</Label>
             <Input
@@ -204,6 +204,8 @@ export function Composer({ restaurantId, hasChannel }: { restaurantId: string; h
             />
           </div>
 
+          <div className="grid gap-5 lg:grid-cols-2">
+            <div className="flex flex-col gap-5">
           <div className="flex flex-col gap-1.5">
             <Label>Options</Label>
             <div className="flex flex-col gap-2">
@@ -264,10 +266,12 @@ export function Composer({ restaurantId, hasChannel }: { restaurantId: string; h
             />
             Quiz (avec bonne réponse)
           </label>
+            </div>
 
+            <div className="flex flex-col gap-5">
           <div className="flex flex-col gap-2">
             <Label>Surfaces</Label>
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex min-h-11 items-center gap-2.5 rounded-xl border border-border bg-background px-3 py-2.5 text-sm transition-colors hover:bg-muted/40 has-[:checked]:border-primary/40 has-[:checked]:bg-accent has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
               <input
                 type="checkbox"
                 name="surfaces"
@@ -280,9 +284,9 @@ export function Composer({ restaurantId, hasChannel }: { restaurantId: string; h
               {channelLocked ? 'Le vote a lieu sur la chaîne' : 'Chaîne WhatsApp'}
             </label>
             {channelLocked && <input type="hidden" name="surfaces" value="channel" />}
-            {!hasChannel && <p className="ml-6 text-xs text-muted-foreground">Créez d’abord votre chaîne.</p>}
+            {!hasChannel && <p className="ml-1 text-xs text-muted-foreground">Créez d’abord votre chaîne.</p>}
 
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex min-h-11 items-center gap-2.5 rounded-xl border border-border bg-background px-3 py-2.5 text-sm transition-colors hover:bg-muted/40 has-[:checked]:border-primary/40 has-[:checked]:bg-accent">
               <input
                 type="checkbox"
                 name="surfaces"
@@ -294,7 +298,7 @@ export function Composer({ restaurantId, hasChannel }: { restaurantId: string; h
               Groupe staff
             </label>
 
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex min-h-11 items-center gap-2.5 rounded-xl border border-border bg-background px-3 py-2.5 text-sm transition-colors hover:bg-muted/40 has-[:checked]:border-primary/40 has-[:checked]:bg-accent has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60">
               <input
                 type="checkbox"
                 name="surfaces"
@@ -320,8 +324,10 @@ export function Composer({ restaurantId, hasChannel }: { restaurantId: string; h
               <input type="hidden" name="teaser_image_path" value={teaserImagePath} />
             </div>
           )}
+            </div>
+          </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
             <Button type="submit" disabled={sending}>
               {sending ? 'Envoi…' : 'Envoyer le sondage'}
             </Button>

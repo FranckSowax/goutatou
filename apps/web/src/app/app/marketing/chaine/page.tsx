@@ -1,3 +1,4 @@
+import { Radio, Users } from 'lucide-react'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { isPremium, isPro } from '@/lib/premium'
 import { qrSvg } from '@/lib/qr'
@@ -38,7 +39,7 @@ export default async function ChaineWhatsAppPage({
   if (!member) {
     return (
       <MarketingFrame title="Chaîne WhatsApp">
-        <div className="rounded-2xl border border-border p-6 text-center text-muted-foreground">
+        <div className="mx-auto max-w-xl rounded-2xl border border-border bg-card p-6 text-center text-muted-foreground">
           Aucun restaurant associé à votre compte pour le moment.
         </div>
       </MarketingFrame>
@@ -50,7 +51,7 @@ export default async function ChaineWhatsAppPage({
   if (!pro) {
     return (
       <MarketingFrame title="Chaîne WhatsApp">
-        <div className="rounded-2xl border border-primary/30 bg-accent p-6 text-center">
+        <div className="mx-auto max-w-xl rounded-2xl border border-primary/30 bg-accent p-8 text-center">
           <p className="font-display text-lg font-semibold text-accent-foreground">Fonctionnalité Pro</p>
           <p className="mt-2 text-sm text-muted-foreground">
             Fonctionnalité de l’offre <strong>Pro</strong>. Contactez Goutatou pour l’activer.
@@ -74,7 +75,7 @@ export default async function ChaineWhatsAppPage({
   if (!resto) {
     return (
       <MarketingFrame title="Chaîne WhatsApp">
-        <div className="rounded-2xl border border-border p-6 text-center text-muted-foreground">
+        <div className="mx-auto max-w-xl rounded-2xl border border-border bg-card p-6 text-center text-muted-foreground">
           Restaurant introuvable.
         </div>
       </MarketingFrame>
@@ -84,7 +85,7 @@ export default async function ChaineWhatsAppPage({
   if (!channel) {
     return (
       <MarketingFrame title="Chaîne WhatsApp">
-        <div className="rounded-2xl border border-border p-6 text-center text-muted-foreground">
+        <div className="mx-auto max-w-xl rounded-2xl border border-border bg-card p-6 text-center text-muted-foreground">
           Connectez d’abord votre canal WhatsApp.
         </div>
       </MarketingFrame>
@@ -94,7 +95,7 @@ export default async function ChaineWhatsAppPage({
   if (!resto.wa_channel_id) {
     return (
       <MarketingFrame title="Chaîne WhatsApp">
-        <div className="max-w-xl">
+        <div className="mx-auto max-w-xl">
           <CreateChannelCard restaurantName={resto.name} />
         </div>
       </MarketingFrame>
@@ -134,13 +135,54 @@ export default async function ChaineWhatsAppPage({
       />
 
       {tab === 'publier' && (
-        <div className="max-w-2xl">
-          <Composer restaurantId={restaurantId} contactPhone={resto.contact_phone ?? null} />
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <Composer restaurantId={restaurantId} contactPhone={resto.contact_phone ?? null} />
+          </div>
+          <aside className="flex flex-col gap-4 lg:col-span-1 lg:sticky lg:top-4 lg:self-start">
+            <div className="rounded-2xl border border-border bg-card p-5">
+              <div className="flex items-center gap-3">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Users className="size-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-display text-2xl font-semibold leading-none">
+                    {subscribers ?? '—'}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Abonné{subscribers !== null && subscribers > 1 ? 's' : ''}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <InviteCard invite={resto.wa_channel_invite} svg={svg} />
+
+            <div className="rounded-2xl border border-border bg-card p-5">
+              <div className="flex items-center gap-2">
+                <Radio className="size-4 text-muted-foreground" />
+                <p className="text-sm font-medium">Canal</p>
+              </div>
+              <dl className="mt-3 flex flex-col gap-2 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-muted-foreground">Nom</dt>
+                  <dd className="min-w-0 truncate font-medium">{resto.name}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="text-muted-foreground">État</dt>
+                  <dd className="inline-flex items-center gap-1.5 font-medium text-primary">
+                    <span className="size-2 rounded-full bg-primary" aria-hidden />
+                    Connecté
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </aside>
         </div>
       )}
 
       {tab === 'auto' && (
-        <div className="max-w-2xl">
+        <>
           {premium && autoChannelSettings ? (
             <AutoChannelCard
               enabled={autoChannelSettings.enabled}
@@ -149,7 +191,7 @@ export default async function ChaineWhatsAppPage({
               validationMode={autoChannelSettings.validationMode}
             />
           ) : (
-            <div className="rounded-2xl border border-primary/30 bg-accent p-6 text-center">
+            <div className="mx-auto max-w-xl rounded-2xl border border-primary/30 bg-accent p-8 text-center">
               <p className="font-display text-lg font-semibold text-accent-foreground">Fonctionnalité Premium</p>
               <p className="mt-2 text-sm text-muted-foreground">
                 La publication automatique sur la chaîne est réservée au plan <strong>Premium</strong>. Contactez
@@ -157,7 +199,7 @@ export default async function ChaineWhatsAppPage({
               </p>
             </div>
           )}
-        </div>
+        </>
       )}
 
       {tab === 'programmes' && <ScheduledList posts={scheduledPosts} />}
@@ -165,7 +207,7 @@ export default async function ChaineWhatsAppPage({
       {tab === 'historique' && <History entries={history} />}
 
       {tab === 'invitation' && (
-        <div className="max-w-sm">
+        <div className="mx-auto max-w-sm">
           <InviteCard invite={resto.wa_channel_invite} svg={svg} />
         </div>
       )}

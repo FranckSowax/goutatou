@@ -231,17 +231,17 @@ export function Composer({ restaurantId, isPremium }: { restaurantId: string; is
   }
 
   return (
-    <Card className="mb-8 rounded-2xl p-6">
-      <h2 className="mb-4 font-display text-lg font-semibold">Nouveau statut</h2>
-      {error && (
-        <div
-          role="alert"
-          className="mb-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-        >
-          {error}
-        </div>
-      )}
-      <div className="grid gap-6 lg:grid-cols-2">
+    <div className="mb-8 grid gap-6 lg:grid-cols-3">
+      <Card className="rounded-2xl p-6 lg:col-span-2">
+        <h2 className="mb-4 font-display text-lg font-semibold">Nouveau statut</h2>
+        {error && (
+          <div
+            role="alert"
+            className="mb-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            {error}
+          </div>
+        )}
         <div className="flex flex-col gap-4">
           {cards.map((card, index) => (
             <div
@@ -510,22 +510,26 @@ export function Composer({ restaurantId, isPremium }: { restaurantId: string; is
             {sent && !sending && <span className="text-sm text-muted-foreground">Statuts enregistrés.</span>}
           </div>
         </div>
+      </Card>
 
-        <div className="flex w-full flex-col items-center gap-2">
-          <span className="text-xs font-medium text-muted-foreground">Aperçu</span>
-          <StatusPreview
-            className="max-w-sm"
-            data={{
-              kind: active.kind,
-              content: active.content,
-              mediaUrl: active.mediaUrl,
-              bgColor: active.bgColor,
-              captionColor: active.captionColor,
-              fontType: active.fontType,
-            }}
-          />
-        </div>
-      </div>
-    </Card>
+      <aside className="lg:col-span-1">
+        <Card className="rounded-2xl p-6 lg:sticky lg:top-4">
+          <div className="flex flex-col items-center gap-3">
+            <span className="text-xs font-medium text-muted-foreground">Aperçu en direct</span>
+            <StatusPreview
+              className="max-w-xs"
+              data={{
+                kind: active.kind,
+                content: active.content,
+                mediaUrl: active.mediaUrl,
+                bgColor: active.bgColor,
+                captionColor: active.captionColor,
+                fontType: active.fontType,
+              }}
+            />
+          </div>
+        </Card>
+      </aside>
+    </div>
   )
 }

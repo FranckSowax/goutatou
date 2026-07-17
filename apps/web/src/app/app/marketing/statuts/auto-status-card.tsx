@@ -108,96 +108,106 @@ export function AutoStatusCard({
   const previewDish = nextDishes[0] ?? null
 
   return (
-    <Card className="rounded-2xl p-6">
-      <h2 className="mb-4 font-display text-lg font-semibold">Statuts Auto 👑</h2>
-      <form action={handleSubmit} className="grid gap-6 lg:grid-cols-[1fr_auto]">
-        <div className="flex flex-col gap-4">
-          <label className="flex items-center gap-2 text-sm">
+    <div className="grid gap-6 lg:grid-cols-3">
+      <Card className="rounded-2xl p-6 lg:col-span-2">
+        <h2 className="mb-4 font-display text-lg font-semibold">Statuts Auto 👑</h2>
+        <form action={handleSubmit} className="flex flex-col gap-6">
+          <label className="flex items-center gap-3 rounded-xl border border-border p-4 text-sm font-medium">
             <input
               type="checkbox"
               name="enabled"
               checked={isEnabled}
               onChange={(e) => setIsEnabled(e.target.checked)}
-              className="accent-primary"
+              className="size-4 accent-primary"
             />
-            Activé
+            Publication automatique activée
           </label>
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="auto-time-1">Créneau 1</Label>
-            <Input
-              id="auto-time-1"
-              name="time_1"
-              type="time"
-              value={time1}
-              onChange={(e) => setTime1(e.target.value)}
-              required
-              className="w-32"
-            />
-          </div>
-
-          {hasSecondSlot ? (
+          <div className="grid gap-6 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="auto-time-2">Créneau 2</Label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setHasSecondSlot(false)
-                    setTime2('')
-                  }}
-                >
-                  Retirer
-                </Button>
-              </div>
+              <Label htmlFor="auto-time-1">Créneau 1</Label>
               <Input
-                id="auto-time-2"
-                name="time_2"
+                id="auto-time-1"
+                name="time_1"
                 type="time"
-                value={time2}
-                onChange={(e) => setTime2(e.target.value)}
+                value={time1}
+                onChange={(e) => setTime1(e.target.value)}
                 required
-                className="w-32"
+                className="w-full"
               />
             </div>
-          ) : (
-            <Button type="button" variant="outline" size="sm" className="self-start" onClick={() => setHasSecondSlot(true)}>
-              Ajouter un second créneau
-            </Button>
-          )}
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="auto-count">Statuts par créneau</Label>
-            <select
-              id="auto-count"
-              name="count"
-              value={countValue}
-              onChange={(e) => setCountValue(Number(e.target.value))}
-              className="h-9 w-20 rounded-lg border border-input bg-transparent px-2 text-sm"
-            >
-              {COUNT_OPTIONS.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </div>
+            {hasSecondSlot ? (
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="auto-time-2">Créneau 2</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setHasSecondSlot(false)
+                      setTime2('')
+                    }}
+                  >
+                    Retirer
+                  </Button>
+                </div>
+                <Input
+                  id="auto-time-2"
+                  name="time_2"
+                  type="time"
+                  value={time2}
+                  onChange={(e) => setTime2(e.target.value)}
+                  required
+                  className="w-full"
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                <Label>Créneau 2</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setHasSecondSlot(true)}
+                >
+                  Ajouter un second créneau
+                </Button>
+              </div>
+            )}
 
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="auto-validation">Validation avant publication</Label>
-            <select
-              id="auto-validation"
-              name="validation"
-              value={validationMode}
-              onChange={(e) => setValidationMode(e.target.value as AutoStatusValidationMode)}
-              className="h-9 w-48 rounded-lg border border-input bg-transparent px-2 text-sm"
-            >
-              <option value="none">Aucune</option>
-              <option value="manager">Gérant</option>
-              <option value="group">Groupe staff</option>
-            </select>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="auto-count">Statuts par créneau</Label>
+              <select
+                id="auto-count"
+                name="count"
+                value={countValue}
+                onChange={(e) => setCountValue(Number(e.target.value))}
+                className="h-11 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+              >
+                {COUNT_OPTIONS.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="auto-validation">Validation avant publication</Label>
+              <select
+                id="auto-validation"
+                name="validation"
+                value={validationMode}
+                onChange={(e) => setValidationMode(e.target.value as AutoStatusValidationMode)}
+                className="h-11 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+              >
+                <option value="none">Aucune</option>
+                <option value="manager">Gérant</option>
+                <option value="group">Groupe staff</option>
+              </select>
+            </div>
           </div>
 
           {validationMode === 'manager' && (
@@ -209,7 +219,7 @@ export function AutoStatusCard({
                 type="tel"
                 defaultValue={managerPhone ?? ''}
                 placeholder={contactPhone ?? '241…'}
-                className="w-48"
+                className="w-full sm:max-w-xs"
               />
             </div>
           )}
@@ -223,47 +233,52 @@ export function AutoStatusCard({
             </div>
           )}
 
-          <label className="flex items-center gap-2 text-sm">
+          <label className="flex items-center gap-3 rounded-xl border border-border p-4 text-sm font-medium">
             <input
               type="checkbox"
               name="echo_channel"
               checked={echoChannelEnabled}
               onChange={(e) => setEchoChannelEnabled(e.target.checked)}
-              className="accent-primary"
+              className="size-4 accent-primary"
             />
             Écho chaîne par défaut
           </label>
 
           <p className="text-sm text-muted-foreground">Dernier créneau exécuté : {formatLastSlot(lastSlot)}</p>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 border-t border-border pt-4">
             <Button type="submit" disabled={pending} className="w-fit">
               {pending ? 'Enregistrement…' : 'Enregistrer'}
             </Button>
             {result && <Badge variant={result.ok ? 'success' : 'destructive'}>{result.message}</Badge>}
           </div>
-        </div>
+        </form>
+      </Card>
 
-        <div className="flex flex-col items-center gap-2">
-          <span className="text-xs font-medium text-muted-foreground">Aperçu du prochain statut</span>
-          {previewDish ? (
-            <StatusPreview
-              data={{
-                kind: 'image',
-                content: buildStatusCaptionPreview(previewDish, 0),
-                mediaUrl: previewDish.photoUrl,
-                bgColor: '#1F2C34',
-                captionColor: '#FFFFFF',
-                fontType: 0,
-              }}
-            />
-          ) : (
-            <p className="max-w-56 text-center text-sm text-muted-foreground">
-              Aucun plat disponible avec photo pour le moment — ajoutez une photo à un plat du menu.
-            </p>
-          )}
-        </div>
-      </form>
-    </Card>
+      <aside className="lg:col-span-1">
+        <Card className="rounded-2xl p-6 lg:sticky lg:top-4">
+          <div className="flex flex-col items-center gap-3">
+            <span className="text-xs font-medium text-muted-foreground">Aperçu du prochain statut</span>
+            {previewDish ? (
+              <StatusPreview
+                className="max-w-xs"
+                data={{
+                  kind: 'image',
+                  content: buildStatusCaptionPreview(previewDish, 0),
+                  mediaUrl: previewDish.photoUrl,
+                  bgColor: '#1F2C34',
+                  captionColor: '#FFFFFF',
+                  fontType: 0,
+                }}
+              />
+            ) : (
+              <p className="max-w-56 text-center text-sm text-muted-foreground">
+                Aucun plat disponible avec photo pour le moment — ajoutez une photo à un plat du menu.
+              </p>
+            )}
+          </div>
+        </Card>
+      </aside>
+    </div>
   )
 }

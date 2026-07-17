@@ -90,9 +90,8 @@ export function Board({ initial }: { initial: Row[] }) {
         </div>
       </div>
 
-      {/* Grille de cartes portrait (aperçu 9:16) : plus de colonnes qu'une grille
-          paysage classique, la largeur sert à montrer plus d'entrées à la fois. */}
-      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
+      {/* Grille pleine largeur de cartes de statut homogènes (aperçu 9:16). */}
+      <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {pageItems.map((s) => (
           <li key={s.id}>
             <Dialog>
@@ -189,7 +188,7 @@ export function Board({ initial }: { initial: Row[] }) {
           </li>
         ))}
         {filtered.length === 0 && (
-          <p className="col-span-2 text-muted-foreground sm:col-span-3 lg:col-span-4 2xl:col-span-6">
+          <p className="col-span-full text-muted-foreground">
             {initial.length === 0
               ? 'Aucun statut pour l’instant — créez-en un depuis l’onglet « Nouveau statut ».'
               : 'Aucun statut pour ce filtre.'}

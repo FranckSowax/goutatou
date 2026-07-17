@@ -313,11 +313,11 @@ export function Composer({
   }
 
   return (
-    <Card className="rounded-2xl p-4">
+    <Card className="rounded-2xl border border-border bg-card p-5 sm:p-6">
       <CardHeader className="px-0 pt-0">
-        <CardTitle className="font-display text-base">Publier sur la chaîne</CardTitle>
+        <CardTitle className="font-display text-lg">Publier sur la chaîne</CardTitle>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4 px-0">
+      <CardContent className="flex flex-col gap-5 px-0">
         {error && (
           <div
             role="alert"

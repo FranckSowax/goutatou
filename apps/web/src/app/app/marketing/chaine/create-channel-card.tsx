@@ -27,7 +27,7 @@ export function CreateChannelCard({ restaurantName }: { restaurantName: string }
   }
 
   return (
-    <Card className="rounded-2xl p-6 text-center">
+    <Card className="rounded-2xl border border-border bg-card p-6 text-center">
       <CardHeader className="px-0 pt-0">
         <CardTitle className="font-display text-lg">Créer votre chaîne WhatsApp</CardTitle>
       </CardHeader>

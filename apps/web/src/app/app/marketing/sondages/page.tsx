@@ -1,3 +1,4 @@
+import { Megaphone, Users, Image as ImageIcon, Lightbulb } from 'lucide-react'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { isPro } from '@/lib/premium'
 import { Badge } from '@/components/ui/badge'
@@ -149,8 +150,68 @@ export default async function SondagesPage({
       />
 
       {tab === 'nouveau' && (
-        <div className="max-w-2xl">
-          <Composer restaurantId={restaurantId} hasChannel={!!resto?.wa_channel_id} />
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <Composer restaurantId={restaurantId} hasChannel={!!resto?.wa_channel_id} />
+          </div>
+          <aside className="lg:col-span-1">
+            <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 lg:sticky lg:top-4">
+              <div>
+                <h2 className="font-display text-base font-semibold">Comment ça marche</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Choisissez où diffuser votre sondage — vous pouvez combiner plusieurs surfaces.
+                </p>
+              </div>
+
+              <ul className="flex flex-col gap-3">
+                <li className="flex gap-3">
+                  <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                    <Megaphone className="size-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{SURFACE_LABELS.channel}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Publie le sondage sur votre chaîne — les abonnés votent directement.
+                    </p>
+                  </div>
+                </li>
+                <li className="flex gap-3">
+                  <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                    <Users className="size-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{SURFACE_LABELS.group}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Envoie le sondage dans votre groupe interne pour consulter l’équipe.
+                    </p>
+                  </div>
+                </li>
+                <li className="flex gap-3">
+                  <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+                    <ImageIcon className="size-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">{SURFACE_LABELS.status_teaser}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Une annonce en statut qui renvoie vers le vote sur la chaîne.
+                    </p>
+                  </div>
+                </li>
+              </ul>
+
+              <div className="rounded-xl border border-border bg-muted/40 p-3">
+                <p className="flex items-center gap-1.5 text-sm font-medium">
+                  <Lightbulb className="size-4 text-primary" />
+                  Bonnes pratiques
+                </p>
+                <ul className="mt-2 flex list-disc flex-col gap-1 pl-5 text-xs text-muted-foreground">
+                  <li>Une question courte et claire.</li>
+                  <li>Entre 2 et 4 options pour un vote lisible.</li>
+                  <li>Activez le quiz pour révéler la bonne réponse.</li>
+                </ul>
+              </div>
+            </div>
+          </aside>
         </div>
       )}
 
@@ -160,14 +221,14 @@ export default async function SondagesPage({
             Aucun sondage pour l’instant.
           </div>
         ) : (
-          <ul className="grid gap-4 lg:grid-cols-2">
+          <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {rows.map((p) => {
               const badge = statusBadge(p.status, p.sent_count)
               const surfaces = resolveSurfaces(p)
               const surfaceStatus = p.surface_status ?? {}
               return (
-                <li key={p.id}>
-                  <div className="rounded-2xl border border-border bg-card p-5">
+                <li key={p.id} className="h-full">
+                  <div className="flex h-full flex-col rounded-2xl border border-border bg-card p-5 transition-shadow hover:shadow-sm">
                     <div className="flex items-center justify-between gap-2">
                       <span className="line-clamp-1 font-display font-semibold">{p.question}</span>
                       <Badge variant={badge.variant}>{badge.label}</Badge>
@@ -187,7 +248,9 @@ export default async function SondagesPage({
                     {p.status === 'failed' && p.error && (
                       <p className="mt-2 text-sm text-destructive">{p.error}</p>
                     )}
-                    <PollResults pollId={p.id} surfaces={surfaces} />
+                    <div className="mt-auto pt-2">
+                      <PollResults pollId={p.id} surfaces={surfaces} />
+                    </div>
                   </div>
                 </li>
               )

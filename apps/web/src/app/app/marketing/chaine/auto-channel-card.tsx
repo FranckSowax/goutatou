@@ -67,70 +67,73 @@ export function AutoChannelCard({ enabled, times, count, validationMode }: AutoC
   }
 
   return (
-    <Card className="rounded-2xl p-6">
-      <h2 className="mb-4 font-display text-lg font-semibold">Chaîne Auto 👑</h2>
-      <form action={handleSubmit} className="flex flex-col gap-4">
-        <label className="flex items-center gap-2 text-sm">
+    <Card className="rounded-2xl border border-border bg-card p-6 sm:p-8">
+      <h2 className="mb-6 font-display text-lg font-semibold">Chaîne Auto 👑</h2>
+      <form action={handleSubmit} className="flex flex-col gap-6">
+        <label className="flex items-center gap-2.5 rounded-xl border border-border bg-background/40 px-4 py-3 text-sm">
           <input
             type="checkbox"
             name="enabled"
             checked={isEnabled}
             onChange={(e) => setIsEnabled(e.target.checked)}
-            className="accent-primary"
+            className="size-4 accent-primary"
           />
-          Activé
+          Publication automatique activée
         </label>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="auto-channel-time-1">Créneau 1</Label>
-          <Input
-            id="auto-channel-time-1"
-            name="time_1"
-            type="time"
-            value={time1}
-            onChange={(e) => setTime1(e.target.value)}
-            required
-            className="w-32"
-          />
-        </div>
-
-        {hasSecondSlot ? (
+        <div className="grid gap-4 lg:grid-cols-2">
           <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <Label htmlFor="auto-channel-time-2">Créneau 2</Label>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setHasSecondSlot(false)
-                  setTime2('')
-                }}
-              >
-                Retirer
-              </Button>
-            </div>
+            <Label htmlFor="auto-channel-time-1">Créneau 1</Label>
             <Input
-              id="auto-channel-time-2"
-              name="time_2"
+              id="auto-channel-time-1"
+              name="time_1"
               type="time"
-              value={time2}
-              onChange={(e) => setTime2(e.target.value)}
+              value={time1}
+              onChange={(e) => setTime1(e.target.value)}
               required
-              className="w-32"
+              className="w-full"
             />
           </div>
-        ) : (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="self-start"
-            onClick={() => setHasSecondSlot(true)}
-          >
-            Ajouter un second créneau
-          </Button>
-        )}
+
+          {hasSecondSlot ? (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="auto-channel-time-2">Créneau 2</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setHasSecondSlot(false)
+                    setTime2('')
+                  }}
+                >
+                  Retirer
+                </Button>
+              </div>
+              <Input
+                id="auto-channel-time-2"
+                name="time_2"
+                type="time"
+                value={time2}
+                onChange={(e) => setTime2(e.target.value)}
+                required
+                className="w-full"
+              />
+            </div>
+          ) : (
+            <div className="flex items-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 w-full border-dashed"
+                onClick={() => setHasSecondSlot(true)}
+              >
+                Ajouter un second créneau
+              </Button>
+            </div>
+          )}
+        </div>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="auto-channel-count">Posts par créneau</Label>
@@ -139,7 +142,7 @@ export function AutoChannelCard({ enabled, times, count, validationMode }: AutoC
             name="count"
             value={countValue}
             onChange={(e) => setCountValue(Number(e.target.value))}
-            className="h-9 w-20 rounded-lg border border-input bg-transparent px-2 text-sm"
+            className="h-11 w-full rounded-lg border border-input bg-transparent px-3 text-sm sm:w-40"
           >
             {COUNT_OPTIONS.map((n) => (
               <option key={n} value={n}>
@@ -149,12 +152,12 @@ export function AutoChannelCard({ enabled, times, count, validationMode }: AutoC
           </select>
         </div>
 
-        <p className="text-sm text-muted-foreground">
+        <p className="rounded-xl border border-border bg-background/40 px-4 py-3 text-sm text-muted-foreground">
           Validation : {VALIDATION_LABELS[validationMode]} — réglable dans Statuts.
         </p>
 
-        <div className="flex items-center gap-3">
-          <Button type="submit" disabled={pending} className="w-fit">
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="submit" disabled={pending} className="h-11 w-fit">
             {pending ? 'Enregistrement…' : 'Enregistrer'}
           </Button>
           {result && <Badge variant={result.ok ? 'success' : 'destructive'}>{result.message}</Badge>}

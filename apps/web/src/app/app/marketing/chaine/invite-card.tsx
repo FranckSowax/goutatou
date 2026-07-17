@@ -16,7 +16,7 @@ export function InviteCard({ invite, svg }: { invite: string | null; svg: string
 
   if (!invite) {
     return (
-      <Card className="rounded-2xl p-4">
+      <Card className="rounded-2xl border border-border bg-card p-5">
         <CardHeader className="px-0 pt-0">
           <CardTitle className="font-display text-base">Lien d&apos;invitation</CardTitle>
         </CardHeader>
@@ -30,7 +30,7 @@ export function InviteCard({ invite, svg }: { invite: string | null; svg: string
   }
 
   return (
-    <Card className="rounded-2xl p-4">
+    <Card className="rounded-2xl border border-border bg-card p-5">
       <CardHeader className="px-0 pt-0">
         <CardTitle className="font-display text-base">Lien d&apos;invitation</CardTitle>
       </CardHeader>

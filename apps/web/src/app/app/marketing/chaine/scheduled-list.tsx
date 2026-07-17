@@ -35,16 +35,16 @@ function preview(content: string): string {
  */
 export function ScheduledList({ posts }: { posts: ScheduledListPost[] }) {
   return (
-    <Card className="rounded-2xl p-4">
-      <h2 className="mb-3 font-display text-base font-semibold">Posts programmés</h2>
+    <Card className="rounded-2xl border border-border bg-card p-5 sm:p-6">
+      <h2 className="mb-4 font-display text-base font-semibold">Posts programmés</h2>
       {posts.length === 0 ? (
         <p className="text-sm text-muted-foreground">Aucun post programmé pour le moment.</p>
       ) : (
-        <ul className="grid gap-3 lg:grid-cols-2">
+        <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {posts.map((post) => (
             <li
               key={post.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-border p-3"
+              className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background/40 p-3"
             >
               <div className="min-w-0">
                 <p className="text-sm font-medium">
