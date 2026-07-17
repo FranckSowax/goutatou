@@ -5,6 +5,7 @@ import { WhapiClient } from '@goutatou/whapi'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { parseLatLng } from '@/lib/gps'
+import { normalizeGabonPhone } from '@/lib/lp/wa'
 
 async function myRestaurantId(): Promise<string> {
   const supabase = await createSupabaseServer()
@@ -140,6 +141,48 @@ export async function createStaffGroup() {
   }
 
   revalidatePath('/app/reglages')
+}
+
+/**
+ * Livreurs — liste gérée par resto (table `livreurs`, RLS `is_member`). Le client Supabase
+ * authentifié suffit (contrairement à `restaurants` qui n'a pas de policy UPDATE tenant). Le
+ * numéro sert à envoyer la commande + l'itinéraire au livreur par WhatsApp depuis /app/livraison.
+ */
+export async function addLivreur(formData: FormData) {
+  const restaurantId = await myRestaurantId()
+  const name = String(formData.get('name') ?? '').trim()
+  if (!name) throw new Error('Nom du livreur requis.')
+  const phone = normalizeGabonPhone(String(formData.get('phone') ?? ''))
+  if (!phone) throw new Error('Numéro invalide — format 077000000 ou 24177000000.')
+
+  const supabase = await createSupabaseServer()
+  const { error } = await supabase.from('livreurs').insert({ restaurant_id: restaurantId, name, phone })
+  if (error) throw new Error('Ajout impossible.')
+  revalidatePath('/app/reglages')
+  revalidatePath('/app/livraison')
+}
+
+export async function updateLivreur(id: string, formData: FormData) {
+  await myRestaurantId() // gate membre ; la RLS restreint la ligne au resto du membre
+  const name = String(formData.get('name') ?? '').trim()
+  if (!name) throw new Error('Nom du livreur requis.')
+  const phone = normalizeGabonPhone(String(formData.get('phone') ?? ''))
+  if (!phone) throw new Error('Numéro invalide — format 077000000 ou 24177000000.')
+
+  const supabase = await createSupabaseServer()
+  const { error } = await supabase.from('livreurs').update({ name, phone }).eq('id', id)
+  if (error) throw new Error('Modification impossible.')
+  revalidatePath('/app/reglages')
+  revalidatePath('/app/livraison')
+}
+
+export async function toggleLivreurActive(id: string, active: boolean) {
+  await myRestaurantId()
+  const supabase = await createSupabaseServer()
+  const { error } = await supabase.from('livreurs').update({ active }).eq('id', id)
+  if (error) throw new Error('Mise à jour impossible.')
+  revalidatePath('/app/reglages')
+  revalidatePath('/app/livraison')
 }
 
 export async function updateMyBotMessages(formData: FormData) {

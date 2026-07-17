@@ -10,9 +10,10 @@ import { LiveAlertOverlay } from './live-alert-overlay'
 const NAV = [
   { href: '/app', label: 'Accueil', icon: 'Home' },
   { href: '/app/commandes', label: 'Commandes', icon: 'ClipboardList' },
+  { href: '/app/menu', label: 'Menu', icon: 'UtensilsCrossed' },
+  { href: '/app/livraison', label: 'Livraison', icon: 'Bike' },
   { href: '/app/conversations', label: 'Conversations', icon: 'MessagesSquare' },
   { href: '/app/stats', label: 'Statistiques', icon: 'ChartColumn' },
-  { href: '/app/menu', label: 'Menu', icon: 'UtensilsCrossed' },
   { href: '/app/marketing/statuts', label: 'Marketing', icon: 'Megaphone', match: '/app/marketing' },
   { href: '/app/fidelite', label: 'Fidélité', icon: 'Gift' },
   { href: '/app/reglages', label: 'Réglages', icon: 'Settings' },

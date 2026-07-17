@@ -2,9 +2,9 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { ClipboardList, UtensilsCrossed, Megaphone, Gift, Camera, Store, LayoutTemplate, Home, ChartColumn, MessagesSquare, Settings, type LucideIcon } from 'lucide-react'
+import { ClipboardList, UtensilsCrossed, Megaphone, Gift, Camera, Store, LayoutTemplate, Home, ChartColumn, MessagesSquare, Settings, Bike, type LucideIcon } from 'lucide-react'
 
-const ICONS = { ClipboardList, UtensilsCrossed, Megaphone, Gift, Camera, Store, LayoutTemplate, Home, ChartColumn, MessagesSquare, Settings } satisfies Record<string, LucideIcon>
+const ICONS = { ClipboardList, UtensilsCrossed, Megaphone, Gift, Camera, Store, LayoutTemplate, Home, ChartColumn, MessagesSquare, Settings, Bike } satisfies Record<string, LucideIcon>
 // `match` : préfixe utilisé pour l'état actif quand il diffère de `href` (ex. un lien qui
 // pointe vers un sous-onglet précis mais doit rester actif sur toute la section).
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; match?: string }

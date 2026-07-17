@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
-import { Globe, MessageCircle, Printer, Search } from 'lucide-react'
+import { Check, Globe, MessageCircle, Phone, Printer, Search } from 'lucide-react'
 import { formatFcfa } from '@goutatou/db/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -19,7 +19,7 @@ import {
   ADVANCE_LABELS, driveBadge, groupByStatus, nextStatus, orderItemsSummary, ORDER_STATUS_LABELS,
   type OrderCard,
 } from '@/lib/orders'
-import { cancelOrder, updateOrderStatus } from './actions'
+import { cancelOrder, updateOrderStatus, verifyOrder } from './actions'
 
 type Filter = 'all' | OrderCard['status']
 
@@ -138,6 +138,14 @@ export function Board({ initialOrders, initialQuery = '' }: { initialOrders: Ord
     })
   }
 
+  /** Vérification humaine (appel/WhatsApp client) — bascule verified_at, garde le modal ouvert. */
+  function verify(o: OrderCard, verified: boolean) {
+    startTransition(async () => {
+      await verifyOrder(o.id, verified)
+      setSelected((cur) => (cur && cur.id === o.id ? { ...cur, verified_at: verified ? new Date().toISOString() : null } : cur))
+    })
+  }
+
   /** Dropdown de statut (colonne Action) : route n'importe quel statut via updateOrderStatus,
    *  avec confirmation FR avant d'annuler (cancelOrder = même appel, zéro effet de bord). */
   function changeStatus(o: OrderCard, status: OrderCard['status']) {
@@ -241,7 +249,12 @@ export function Board({ initialOrders, initialQuery = '' }: { initialOrders: Ord
 
               {/* Client */}
               <div className="min-w-0">
-                <p className="truncate font-medium">{o.customer_name ?? 'Client'}</p>
+                <p className="flex items-center gap-1.5 truncate font-medium">
+                  <span className="truncate">{o.customer_name ?? 'Client'}</span>
+                  {o.verified_at && (
+                    <Badge className="shrink-0 bg-tint-mint px-1.5 py-0 text-[10px] text-foreground" title="Commande validée">✓</Badge>
+                  )}
+                </p>
                 <p className="truncate font-mono text-xs text-muted-foreground">{o.customer_phone}</p>
                 {details && (
                   <p className="truncate text-xs text-muted-foreground md:hidden" title={details}>{details}</p>
@@ -355,6 +368,45 @@ export function Board({ initialOrders, initialQuery = '' }: { initialOrders: Ord
                 <div className="flex items-baseline justify-between border-t border-border pt-3">
                   <span className="text-muted-foreground">Total à encaisser</span>
                   <span className="font-display text-2xl font-semibold text-primary">{formatFcfa(selected.total)}</span>
+                </div>
+              </div>
+
+              {/* Vérification : contacter le client + confirmer que la commande est réelle */}
+              <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium">Vérifier la commande</span>
+                  {selected.verified_at && (
+                    <Badge className="bg-tint-mint text-foreground">✓ Validée</Badge>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {selected.customer_phone && (
+                    <>
+                      <Button asChild variant="outline" size="sm">
+                        <a href={`tel:${selected.customer_phone}`}>
+                          <Phone className="size-4" /> Appeler
+                        </a>
+                      </Button>
+                      <Button asChild variant="outline" size="sm">
+                        <a
+                          href={`https://wa.me/${selected.customer_phone.replace(/\D/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <MessageCircle className="size-4" /> WhatsApp
+                        </a>
+                      </Button>
+                    </>
+                  )}
+                  {selected.verified_at ? (
+                    <Button variant="ghost" size="sm" disabled={pending} onClick={() => verify(selected, false)}>
+                      Annuler validation
+                    </Button>
+                  ) : (
+                    <Button size="sm" disabled={pending} onClick={() => verify(selected, true)}>
+                      <Check className="size-4" /> Marquer validée
+                    </Button>
+                  )}
                 </div>
               </div>
 

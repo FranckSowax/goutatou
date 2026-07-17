@@ -13,7 +13,7 @@ export default async function CommandesPage({ searchParams }: { searchParams: Pr
   const { data } = await supabase
     .from('orders')
     .select(`id, order_number, status, mode, source, total, created_at, delivery_address,
-             arrived_at, arrival_note,
+             arrived_at, arrival_note, verified_at,
              customers(name, phone), drive_slots(label), order_items(name, qty, unit_price)`)
     .gte('created_at', new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString())
     .order('created_at', { ascending: false })
@@ -27,7 +27,7 @@ export default async function CommandesPage({ searchParams }: { searchParams: Pr
       source: o.source, total: o.total, created_at: o.created_at, delivery_address: o.delivery_address,
       customer_name: customer?.name ?? null, customer_phone: customer?.phone ?? '',
       drive_slot_label: slot?.label ?? null,
-      arrived_at: o.arrived_at, arrival_note: o.arrival_note,
+      arrived_at: o.arrived_at, arrival_note: o.arrival_note, verified_at: o.verified_at,
       items: (o.order_items as { name: string; qty: number; unit_price: number }[]) ?? [],
     }
   })
