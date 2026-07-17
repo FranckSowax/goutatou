@@ -14,8 +14,10 @@ const TABS = [
 
 export function MarketingTabs() {
   const pathname = usePathname()
+  // Sur le hub lui-même (/app/marketing), pas d'onglets : le hub a ses propres cartes d'entrée.
+  if (pathname === '/app/marketing') return null
   return (
-    <nav className="mb-6 flex gap-1 overflow-x-auto border-b border-border">
+    <nav className="mb-6 flex gap-1.5 overflow-x-auto pb-1">
       {TABS.map((tab) => {
         const active = pathname.startsWith(tab.href)
         return (
@@ -23,10 +25,10 @@ export function MarketingTabs() {
             key={tab.href}
             href={tab.href}
             className={cn(
-              'whitespace-nowrap border-b-2 px-3.5 py-2.5 text-sm font-semibold transition-colors',
+              'whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-colors',
               active
-                ? 'border-primary text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
+                ? 'bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
             )}
           >
             {tab.label}
