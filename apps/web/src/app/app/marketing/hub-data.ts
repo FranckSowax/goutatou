@@ -34,6 +34,7 @@ export async function getMarketingKpis(
     supabase
       .from('statuses')
       .select('id', { count: 'exact', head: true })
+      .eq('restaurant_id', restaurantId)
       .gte('created_at', startOfMonth)
       .neq('state', 'canceled'),
     supabase
