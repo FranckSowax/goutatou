@@ -39,7 +39,7 @@ export function QrCard({
   }
 
   return (
-    <Card className="rounded-2xl p-4">
+    <Card className="rounded-2xl border border-border bg-card p-4">
       <CardHeader className="px-0 pt-0">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="font-display text-base">{keyword}</CardTitle>
@@ -55,12 +55,12 @@ export function QrCard({
         />
         <p className="w-full truncate text-xs text-muted-foreground" title={link}>{link}</p>
         <div className="flex w-full flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={onCopy} className="flex-1">
-            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+          <Button type="button" variant="outline" onClick={onCopy} className="h-11 flex-1">
+            {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
             {copied ? 'Copié' : 'Copier le lien'}
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={onDownload} className="flex-1">
-            <Download className="size-3.5" />
+          <Button type="button" variant="outline" onClick={onDownload} className="h-11 flex-1">
+            <Download className="size-4" />
             Télécharger
           </Button>
         </div>

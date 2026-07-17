@@ -1,7 +1,7 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { isPro, isPremium } from '@/lib/premium'
-import { Card } from '@/components/ui/card'
 import { PageTabs } from '@/components/page-tabs'
+import { MarketingFrame } from '../_components/marketing-frame'
 import { Composer } from './composer'
 import { Board } from './board'
 import { AutoStatusCard, type AutoStatusDish } from './auto-status-card'
@@ -74,15 +74,14 @@ export default async function StatutsPage({
   const pro = member ? await isPro(supabase, member.restaurant_id) : false
   if (!member || !pro) {
     return (
-      <div className="mx-auto max-w-xl p-8 text-center">
-        <h1 className="mb-6 font-display text-2xl font-semibold">Statuts WhatsApp</h1>
-        <Card className="rounded-2xl border-primary/30 bg-accent p-6 text-center">
+      <MarketingFrame title="Statuts WhatsApp">
+        <div className="rounded-2xl border border-primary/30 bg-accent p-6 text-center">
           <p className="font-display text-xl font-semibold text-accent-foreground">Fonctionnalité Pro</p>
           <p className="mt-2 text-sm text-muted-foreground">
             Fonctionnalité de l’offre <strong>Pro</strong>. Contactez Goutatou pour l’activer.
           </p>
-        </Card>
-      </div>
+        </div>
+      </MarketingFrame>
     )
   }
   const restaurantId = member.restaurant_id as string
@@ -102,9 +101,10 @@ export default async function StatutsPage({
     : []
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <h1 className="font-display text-2xl font-semibold">Statuts WhatsApp</h1>
-
+    <MarketingFrame
+      title="Statuts WhatsApp"
+      description="Publiez vos statuts WhatsApp et automatisez leur diffusion."
+    >
       {/* Sous-onglets de la page (pills), distincts de la nav de section
           `MarketingTabs` (soulignée) affichée juste au-dessus par le layout. */}
       <PageTabs
@@ -140,6 +140,6 @@ export default async function StatutsPage({
       )}
 
       {tab === 'historique' && <Board initial={statuses ?? []} />}
-    </div>
+    </MarketingFrame>
   )
 }

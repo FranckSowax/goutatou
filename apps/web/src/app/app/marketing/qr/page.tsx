@@ -1,7 +1,7 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { buildWaLink } from '@/lib/lp/wa'
 import { qrSvg } from '@/lib/qr'
-import { Card } from '@/components/ui/card'
+import { MarketingFrame } from '../_components/marketing-frame'
 import { QrCard } from './qr-card'
 
 export const dynamic = 'force-dynamic'
@@ -30,9 +30,11 @@ export default async function QrOptInPage() {
   const { data: member } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).maybeSingle()
   if (!member) {
     return (
-      <div className="mx-auto max-w-xl p-8 text-center text-muted-foreground">
-        Aucun restaurant associé à votre compte pour le moment.
-      </div>
+      <MarketingFrame title="QR opt-in">
+        <div className="rounded-2xl border border-border p-6 text-center text-muted-foreground">
+          Aucun restaurant associé à votre compte pour le moment.
+        </div>
+      </MarketingFrame>
     )
   }
   const restaurantId = member.restaurant_id
@@ -41,14 +43,11 @@ export default async function QrOptInPage() {
 
   if (!channel?.phone) {
     return (
-      <div className="mx-auto max-w-3xl p-6">
-        <h1 className="mb-6 font-display text-2xl font-semibold">QR opt-in</h1>
-        <Card className="rounded-2xl p-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            Connectez d’abord votre canal WhatsApp pour générer vos QR codes.
-          </p>
-        </Card>
-      </div>
+      <MarketingFrame title="QR opt-in">
+        <div className="rounded-2xl border border-border p-6 text-center text-muted-foreground">
+          Connectez d’abord votre canal WhatsApp pour générer vos QR codes.
+        </div>
+      </MarketingFrame>
     )
   }
 
@@ -71,16 +70,15 @@ export default async function QrOptInPage() {
   )
 
   return (
-    <div className="p-6">
-      <h1 className="mb-1 font-display text-2xl font-semibold">QR opt-in</h1>
-      <p className="mb-6 max-w-2xl text-sm text-muted-foreground">
-        Un QR par mot-clé : le client scanne, WhatsApp s’ouvre avec le message pré-rempli, il l’envoie et le bot répond aussitôt.
-      </p>
+    <MarketingFrame
+      title="QR opt-in"
+      description="Un QR par mot-clé : le client scanne, WhatsApp s’ouvre avec le message pré-rempli, il l’envoie et le bot répond aussitôt."
+    >
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
         {cards.map((c) => (
           <QrCard key={c.keyword} keyword={c.keyword} description={c.description} link={c.link} svg={c.svg} count={c.count} />
         ))}
       </div>
-    </div>
+    </MarketingFrame>
   )
 }

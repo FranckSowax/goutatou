@@ -1,9 +1,9 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { isPro } from '@/lib/premium'
-import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { PageTabs } from '@/components/page-tabs'
 import type { BadgeTone } from '@/lib/status-badge'
+import { MarketingFrame } from '../_components/marketing-frame'
 import { Composer } from './composer'
 import { PollResults } from './results'
 import { POLL_SURFACES, SURFACE_LABELS, type PollSurface } from './shared'
@@ -92,9 +92,11 @@ export default async function SondagesPage({
   const { data: member } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).maybeSingle()
   if (!member) {
     return (
-      <div className="mx-auto max-w-xl p-8 text-center text-muted-foreground">
-        Aucun restaurant associé à votre compte pour le moment.
-      </div>
+      <MarketingFrame title="Sondages">
+        <div className="rounded-2xl border border-border bg-card p-6 text-center text-muted-foreground">
+          Aucun restaurant associé à votre compte pour le moment.
+        </div>
+      </MarketingFrame>
     )
   }
   const restaurantId = member.restaurant_id
@@ -102,15 +104,14 @@ export default async function SondagesPage({
   const pro = await isPro(supabase, restaurantId)
   if (!pro) {
     return (
-      <div className="mx-auto max-w-xl p-8 text-center">
-        <h1 className="mb-6 font-display text-2xl font-semibold">Sondages</h1>
-        <Card className="rounded-2xl border-primary/30 bg-accent p-6 text-center">
+      <MarketingFrame title="Sondages">
+        <div className="rounded-2xl border border-primary/30 bg-accent p-6 text-center">
           <p className="font-display text-xl font-semibold text-accent-foreground">Fonctionnalité Pro</p>
           <p className="mt-2 text-sm text-muted-foreground">
             Fonctionnalité de l’offre <strong>Pro</strong>. Contactez Goutatou pour l’activer.
           </p>
-        </Card>
-      </div>
+        </div>
+      </MarketingFrame>
     )
   }
 
@@ -132,9 +133,12 @@ export default async function SondagesPage({
   const rows = (polls ?? []) as PollRow[]
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <h1 className="font-display text-2xl font-semibold">Sondages</h1>
-
+    <MarketingFrame
+      title="Sondages"
+      description="Créez des sondages WhatsApp et suivez leurs résultats."
+    >
+      {/* Sous-onglets de la page (pills), distincts de la nav de section
+          `MarketingTabs` (soulignée) affichée juste au-dessus par le layout. */}
       <PageTabs
         tabs={[
           { value: 'nouveau', label: 'Nouveau sondage' },
@@ -150,16 +154,20 @@ export default async function SondagesPage({
         </div>
       )}
 
-      {tab === 'historique' && (
-        <div>
-          <ul className="grid gap-3 lg:grid-cols-2">
+      {tab === 'historique' &&
+        (rows.length === 0 ? (
+          <div className="rounded-2xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
+            Aucun sondage pour l’instant.
+          </div>
+        ) : (
+          <ul className="grid gap-4 lg:grid-cols-2">
             {rows.map((p) => {
               const badge = statusBadge(p.status, p.sent_count)
               const surfaces = resolveSurfaces(p)
               const surfaceStatus = p.surface_status ?? {}
               return (
                 <li key={p.id}>
-                  <Card className="rounded-2xl p-4">
+                  <div className="rounded-2xl border border-border bg-card p-5">
                     <div className="flex items-center justify-between gap-2">
                       <span className="line-clamp-1 font-display font-semibold">{p.question}</span>
                       <Badge variant={badge.variant}>{badge.label}</Badge>
@@ -180,14 +188,12 @@ export default async function SondagesPage({
                       <p className="mt-2 text-sm text-destructive">{p.error}</p>
                     )}
                     <PollResults pollId={p.id} surfaces={surfaces} />
-                  </Card>
+                  </div>
                 </li>
               )
             })}
-            {rows.length === 0 && <p className="text-muted-foreground">Aucun sondage pour l’instant.</p>}
           </ul>
-        </div>
-      )}
-    </div>
+        ))}
+    </MarketingFrame>
   )
 }
