@@ -15,32 +15,48 @@ function Kpi({ label, value }: { label: string; value: string }) {
 function ToolCard({
   href,
   icon: Icon,
-  tint,
+  video,
   title,
   description,
   metric,
 }: {
   href: string
   icon: LucideIcon
-  tint: string
+  video: string
   title: string
   description: string
   metric: string
 }) {
   return (
     <Link href={href} className="group block">
-      <Card className="flex h-full flex-col gap-3 rounded-2xl p-5 transition-colors hover:border-primary/40">
-        <div className="flex items-center gap-3">
-          <span className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${tint}`}>
-            <Icon className="size-5 text-foreground/80" />
+      <Card className="flex h-full flex-col overflow-hidden rounded-2xl p-0 transition-colors hover:border-primary/40">
+        {/* Cover vidéo animée (21:9, muette, en boucle) — icône du service en surimpression */}
+        <div className="relative aspect-[21/9] w-full overflow-hidden bg-muted">
+          <video
+            className="size-full object-cover"
+            src={video}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            aria-hidden="true"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
+          <span className="absolute left-3 top-3 flex size-9 items-center justify-center rounded-lg bg-background/85 backdrop-blur">
+            <Icon className="size-5 text-primary" />
           </span>
-          <span className="font-display text-lg font-semibold">{title}</span>
-          <ArrowRight className="ml-auto size-5 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
         </div>
-        <p className="text-sm text-muted-foreground">{description}</p>
-        <span className="mt-auto w-fit rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-          {metric}
-        </span>
+        <div className="flex flex-1 flex-col gap-2 p-5">
+          <div className="flex items-center gap-2">
+            <span className="font-display text-lg font-semibold">{title}</span>
+            <ArrowRight className="ml-auto size-5 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+          </div>
+          <p className="text-sm text-muted-foreground">{description}</p>
+          <span className="mt-auto w-fit rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+            {metric}
+          </span>
+        </div>
       </Card>
     </Link>
   )
@@ -68,7 +84,7 @@ export function MarketingHub({ kpis }: { kpis: MarketingKpis }) {
         <ToolCard
           href="/app/marketing/statuts"
           icon={ImageIcon}
-          tint="bg-tint-peach"
+          video="/marketing/statuts.mp4"
           title="Statuts WhatsApp"
           description="Publiez des stories de vos plats, en manuel ou en automatique."
           metric={`${kpis.statusesThisMonth} publié${kpis.statusesThisMonth > 1 ? 's' : ''} ce mois`}
@@ -76,7 +92,7 @@ export function MarketingHub({ kpis }: { kpis: MarketingKpis }) {
         <ToolCard
           href="/app/marketing/chaine"
           icon={Megaphone}
-          tint="bg-tint-mint"
+          video="/marketing/chaine.mp4"
           title="Chaîne WhatsApp"
           description="Diffusez vos offres à tous vos abonnés en un seul post."
           metric={kpis.subscribers === null ? 'Canal à connecter' : `${kpis.subscribers} abonné${kpis.subscribers > 1 ? 's' : ''}`}
@@ -84,7 +100,7 @@ export function MarketingHub({ kpis }: { kpis: MarketingKpis }) {
         <ToolCard
           href="/app/marketing/sondages"
           icon={BarChart3}
-          tint="bg-tint-sky"
+          video="/marketing/sondages.mp4"
           title="Sondages"
           description="Posez une question à vos clients, ils votent en un tap."
           metric={`${kpis.activePolls} actif${kpis.activePolls > 1 ? 's' : ''}`}
@@ -92,7 +108,7 @@ export function MarketingHub({ kpis }: { kpis: MarketingKpis }) {
         <ToolCard
           href="/app/marketing/qr"
           icon={QrCode}
-          tint="bg-tint-rose"
+          video="/marketing/qr.mp4"
           title="QR opt-in"
           description="Des QR codes à coller en salle pour collecter des contacts."
           metric={`${kpis.optIns} opt-in${kpis.optIns > 1 ? 's' : ''}`}
