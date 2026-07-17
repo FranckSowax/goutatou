@@ -5,10 +5,11 @@ import { PageTabs } from '@/components/page-tabs'
 import { PracticalInfoForm } from './practical-info-form'
 import { BotMessagesForm } from './bot-messages-form'
 import { StaffGroupCard } from './staff-group-card'
+import { LivreursForm } from './livreurs-form'
 
 export const dynamic = 'force-dynamic'
 
-const REGLAGES_TABS = ['pratique', 'messages', 'groupe'] as const
+const REGLAGES_TABS = ['pratique', 'messages', 'livreurs', 'groupe'] as const
 type ReglagesTab = (typeof REGLAGES_TABS)[number]
 
 function parseTab(raw: string | undefined): ReglagesTab {
@@ -47,6 +48,13 @@ export default async function ReglagesPage({
     .eq('restaurant_id', restaurantId)
     .maybeSingle()
 
+  const { data: livreurs } = await supabase
+    .from('livreurs')
+    .select('id, name, phone, active')
+    .eq('restaurant_id', restaurantId)
+    .order('active', { ascending: false })
+    .order('name')
+
   const staffGroupSvg = restaurant?.staff_group_invite ? await qrSvg(restaurant.staff_group_invite) : null
 
   return (
@@ -57,6 +65,7 @@ export default async function ReglagesPage({
         tabs={[
           { value: 'pratique', label: 'Fiche pratique' },
           { value: 'messages', label: 'Messages du bot' },
+          { value: 'livreurs', label: 'Livreurs' },
           { value: 'groupe', label: 'Groupe cuisine' },
         ]}
         active={tab}
@@ -115,6 +124,28 @@ export default async function ReglagesPage({
               <p className="mt-3">
                 Les <strong>infos complémentaires</strong> sont ajoutées à la réponse du bot quand un
                 client demande des informations sur le restaurant.
+              </p>
+            </Card>
+          </aside>
+        </div>
+      )}
+
+      {tab === 'livreurs' && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,42rem)_1fr] lg:items-start">
+          <section className="flex flex-col gap-4">
+            <h2 className="font-display text-lg font-semibold">Livreurs</h2>
+            <Card className="rounded-2xl p-4">
+              <LivreursForm livreurs={livreurs ?? []} />
+            </Card>
+          </section>
+
+          <aside className="flex flex-col gap-4 lg:sticky lg:top-6">
+            <h2 className="font-display text-lg font-semibold">À quoi ça sert</h2>
+            <Card className="rounded-2xl border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+              <p>
+                Enregistrez vos livreurs (nom + numéro WhatsApp). Depuis la page <strong>Livraison</strong>,
+                vous attribuez chaque commande à un livreur : il reçoit par WhatsApp le détail de la commande
+                et un <strong>itinéraire Google Maps / Waze</strong> vers le client.
               </p>
             </Card>
           </aside>

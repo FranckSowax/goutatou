@@ -15,6 +15,8 @@ export interface OrderCard {
   /** Arrivée Drive (« je suis arrivé », cf. plan CL3) — posé une seule fois par le bot, idempotent. */
   arrived_at: string | null
   arrival_note: string | null
+  /** Vérification humaine (commande confirmée par appel/WhatsApp) — indépendant du statut Kanban. */
+  verified_at: string | null
   items: { name: string; qty: number; unit_price?: number }[]
 }
 

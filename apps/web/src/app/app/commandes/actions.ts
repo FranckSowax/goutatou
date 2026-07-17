@@ -16,3 +16,17 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus) {
 export async function cancelOrder(orderId: string) {
   return updateOrderStatus(orderId, 'annulee')
 }
+
+/**
+ * Vérification humaine d'une commande (le resto a appelé/contacté le client et confirme qu'elle est
+ * réelle). Pose ou retire `verified_at` — indépendant du statut Kanban. Idempotent.
+ */
+export async function verifyOrder(orderId: string, verified: boolean) {
+  const supabase = await createSupabaseServer()
+  const { error } = await supabase
+    .from('orders')
+    .update({ verified_at: verified ? new Date().toISOString() : null })
+    .eq('id', orderId)
+  if (error) throw new Error(`Vérification impossible : ${error.message}`)
+  revalidatePath('/app/commandes')
+}
