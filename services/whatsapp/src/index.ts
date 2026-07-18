@@ -138,6 +138,10 @@ const processWebhook = createProcessor(repo, (token) => new WhapiClient(token), 
   approvalRepo,
   channelApprovalRepo,
   arrivalRepo,
+  // Carte de fidélité : réutilise le secret/base URL de la roue (cf. config) pour émettre le
+  // lien perso /f/<token> sur les mots-clés carte/fidélité/roue quand loyalty_enabled.
+  loyaltySecret: config.wheelSecret,
+  loyaltyBaseUrl: config.wheelBaseUrl,
 })
 
 const app = createApp({ processWebhook })

@@ -1,9 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { decryptToken, formatFcfa, type OrderMode, type OrderStatus } from '@goutatou/db'
 import { signWheelToken } from '@goutatou/db/wheel'
+import { signLoyaltyToken } from '@goutatou/db/loyalty'
 import { shouldOfferSpin } from '@goutatou/db/types'
 import { WhapiClient } from '@goutatou/whapi'
 import { buildWheelLink, wheelMessage, wheelMessageBody } from './loyalty/trigger.js'
+import { buildCardLink, cardMessage, cardMessageBody } from './loyalty/card-trigger.js'
 
 export interface OrderRow {
   id: string
@@ -131,7 +133,33 @@ export async function handleOrderUpdate(
 
     if (newRow.status === 'recuperee' && wheelSecret && wheelBaseUrl) {
       const { data: resto } = await db.from('restaurants')
-        .select('wheel_enabled, wheel_trigger_orders, wheel_qr_public').eq('id', newRow.restaurant_id).single()
+        .select('loyalty_enabled, wheel_enabled, wheel_trigger_orders, wheel_qr_public').eq('id', newRow.restaurant_id).single()
+
+      // Carte de fidélité : quand elle est activée, elle REMPLACE la roue post-commande (la roue
+      // reste inerte, wheel_enabled restant false côté resto). Envoi du lien carte à la 1ʳᵉ
+      // commande récupérée du client (count === 1) — le même critère de comptage que la roue.
+      // Pas de jti/anti-rejeu ici : le +1 en caisse est protégé côté SQL (cooldown atomique), et
+      // le lien carte est permanent ; la garde count === 1 suffit à n'envoyer l'invitation qu'une fois.
+      if (resto?.loyalty_enabled) {
+        const { count } = await db.from('orders').select('id', { count: 'exact', head: true })
+          .eq('restaurant_id', newRow.restaurant_id).eq('customer_id', newRow.customer_id).eq('status', 'recuperee')
+        if (count === 1) {
+          const token = signLoyaltyToken(
+            { rid: newRow.restaurant_id, cid: newRow.customer_id }, wheelSecret, Math.floor(Date.now() / 1000))
+          const link = buildCardLink(wheelBaseUrl, token)
+          try {
+            try {
+              await whapiClient.sendInteractiveUrl(customer.chat_id, cardMessageBody(), '💳 Ma carte de fidélité', link)
+            } catch {
+              await whapiClient.sendText(customer.chat_id, cardMessage(link))
+            }
+          } catch (err) {
+            console.error('[notifier] envoi carte fidélité échoué', err)
+          }
+        }
+        return
+      }
+
       // wheel_qr_public actif → la roue QR publique remplace le trigger post-commandes (cf. UI
       // admin « Remplacé par la roue QR ») : ne pas émettre ce jeton v2 (jti sans préfixe `qr:`),
       // il échapperait à la garde atomique de spin_wheel et bloquerait le client 30 j sur la roue QR.

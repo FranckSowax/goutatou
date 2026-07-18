@@ -59,6 +59,12 @@ export interface BotRepo {
    */
   getWheelInfo(restaurantId: string, customerId: string): Promise<{ enabled: boolean; triggerOrders: number; orderCount: number }>
   /**
+   * `restaurants.loyalty_enabled` pour CE resto — lu uniquement sur les mots-clés carte/fidélité/roue
+   * (jamais sur chaque message), pour décider si le bot répond la carte de fidélité (et si la roue
+   * est remplacée). La génération du jeton/lien carte se fait côté processor (secret + cid).
+   */
+  getLoyaltyEnabled(restaurantId: string): Promise<boolean>
+  /**
    * Le catalogue est considéré "synchronisé" dès qu'AU MOINS un plat porte un wa_product_id —
    * count head, appelé uniquement sur la commande *menu* quand catalog_enabled est vrai (cf.
    * spec catalogue § Conversation), jamais chargé sur chaque message.
@@ -179,6 +185,11 @@ export function createRepo(db: SupabaseClient, tokenKey: string): BotRepo {
         triggerOrders: resto?.wheel_trigger_orders ?? 1,
         orderCount: count ?? 0,
       }
+    },
+
+    async getLoyaltyEnabled(restaurantId) {
+      const { data } = await db.from('restaurants').select('loyalty_enabled').eq('id', restaurantId).single()
+      return data?.loyalty_enabled ?? false
     },
 
     async hasWaProducts(restaurantId) {

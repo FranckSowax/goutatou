@@ -8,7 +8,8 @@
     "./types": "./src/types.ts",
     "./crypto": "./src/crypto.ts",
     "./client": "./src/client.ts",
-    "./wheel": "./src/wheel-token.ts"
+    "./wheel": "./src/wheel-token.ts",
+    "./loyalty": "./src/loyalty-token.ts"
   },
   "scripts": { "test": "vitest run", "typecheck": "tsc --noEmit" },
   "dependencies": { "@supabase/supabase-js": "^2.47.0" },

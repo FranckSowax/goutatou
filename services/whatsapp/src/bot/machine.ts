@@ -24,6 +24,12 @@ export interface BotContext {
    * pas celui en cours de traitement — cf. shouldOfferSpin/loyalty pour la sémantique du seuil.
    */
   wheel?: { enabled: boolean; triggerOrders: number; orderCount: number }
+  /**
+   * Carte de fidélité pour CE client, injectée par le processor (repo + génération du jeton) sur
+   * les seuls mots-clés carte/fidélité/roue. `enabled` reflète `restaurants.loyalty_enabled` ;
+   * `cardLink` est le lien perso `/f/<token>`. Absente si aucun de ces mots-clés n'est traité.
+   */
+  loyalty?: { enabled: boolean; cardLink: string }
 }
 
 export interface TransitionResult {
@@ -178,7 +184,16 @@ export function transition(state: BotState, cart: Cart, input: string, ctx: BotC
   if (text === 'annuler') return result('ACCUEIL', EMPTY_CART, [copy.canceled])
   if (text === 'humain') return result('HUMAIN', cart, [copy.human])
   if (text === 'infos') return result(state, cart, [copy.infos(ctx.profile)])
-  if (text === 'roue') return result(state, cart, [copy.roue(ctx.wheel)])
+  // Mots-clés carte de fidélité : renvoient le lien perso de la carte (ctx.loyalty injecté par le
+  // processor). « roue » est conservé mais, quand la fidélité est activée, il renvoie la carte —
+  // la roue est remplacée par la carte de fidélité (cf. spec Lot 3).
+  if (text === 'fidélité' || text === 'fidelite' || text === 'carte') {
+    return result(state, cart, [copy.loyaltyCard(ctx.loyalty)])
+  }
+  if (text === 'roue') {
+    if (ctx.loyalty?.enabled) return result(state, cart, [copy.loyaltyCard(ctx.loyalty)])
+    return result(state, cart, [copy.roue(ctx.wheel)])
+  }
   if (text === 'promos') return result(state, cart, [copy.promos])
   if (text === 'panier') {
     return result(state === 'ACCUEIL' ? 'MENU' : state, cart,
