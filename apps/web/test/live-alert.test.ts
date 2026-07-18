@@ -8,6 +8,8 @@ function row(overrides: Partial<{
   mode: string
   arrived_at: string | null
   arrival_note: string | null
+  payment_status: string
+  paid_at: string | null
 }> = {}) {
   return {
     id: 'order-1',
@@ -16,6 +18,8 @@ function row(overrides: Partial<{
     mode: 'drive',
     arrived_at: null,
     arrival_note: null,
+    payment_status: 'na',
+    paid_at: null,
     ...overrides,
   }
 }
@@ -141,6 +145,63 @@ describe('decideAlert', () => {
       ).not.toThrow()
       const evt = decideAlert(
         { type: 'UPDATE', row: row({ arrived_at: 'pas-une-date' }), oldArrivedAt: null },
+        seen,
+      )
+      expect(evt).toBeNull()
+    })
+  })
+
+  // Paiement à la commande (Airtel manuel) : l'INSERT `a_verifier` est silencieux, c'est la
+  // validation « Paiement reçu ✓ » (UPDATE → 'paye') qui déclenche l'alerte — une seule fois.
+  describe('paiement Airtel', () => {
+    it('INSERT payment_status=a_verifier → null (pas d\'alerte tant que non payé)', () => {
+      const seen = new Set<string>()
+      const evt = decideAlert({ type: 'INSERT', row: row({ payment_status: 'a_verifier' }) }, seen)
+      expect(evt).toBeNull()
+    })
+
+    it('INSERT payment_status=na (cash / historique) → alerte order (comportement actuel)', () => {
+      const seen = new Set<string>()
+      const evt = decideAlert({ type: 'INSERT', row: row({ payment_status: 'na' }) }, seen)
+      expect(evt).toEqual({ kind: 'order', id: 'order-1', code: '42', amount: 5000 })
+    })
+
+    it('UPDATE a_verifier → paye (frais) → alerte order, une seule fois', () => {
+      const seen = new Set<string>()
+      const paid = row({ payment_status: 'paye', paid_at: new Date().toISOString() })
+      const first = decideAlert(
+        { type: 'UPDATE', row: paid, oldPaymentStatus: 'a_verifier' },
+        seen,
+      )
+      const second = decideAlert(
+        { type: 'UPDATE', row: paid, oldPaymentStatus: 'a_verifier' },
+        seen,
+      )
+      expect(first).toEqual({ kind: 'order', id: 'order-1', code: '42', amount: 5000 })
+      expect(second).toBeNull()
+    })
+
+    it('UPDATE déjà payé (old=paye) → null (pas de re-sonnerie sur un autre changement)', () => {
+      const seen = new Set<string>()
+      const evt = decideAlert(
+        {
+          type: 'UPDATE',
+          row: row({ payment_status: 'paye', paid_at: new Date().toISOString() }),
+          oldPaymentStatus: 'paye',
+        },
+        seen,
+      )
+      expect(evt).toBeNull()
+    })
+
+    it('UPDATE vers paye mais paid_at périmé (onglet fraîchement ouvert) → null', () => {
+      const seen = new Set<string>()
+      const evt = decideAlert(
+        {
+          type: 'UPDATE',
+          row: row({ payment_status: 'paye', paid_at: new Date(Date.now() - 5 * 60_000).toISOString() }),
+          oldPaymentStatus: 'a_verifier',
+        },
         seen,
       )
       expect(evt).toBeNull()

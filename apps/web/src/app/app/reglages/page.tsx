@@ -8,10 +8,11 @@ import { MetaPixelForm } from './meta-pixel-form'
 import { BotMessagesForm } from './bot-messages-form'
 import { StaffGroupCard } from './staff-group-card'
 import { LivreursForm } from './livreurs-form'
+import { PaymentForm } from './payment-form'
 
 export const dynamic = 'force-dynamic'
 
-const REGLAGES_TABS = ['pratique', 'messages', 'livreurs', 'groupe'] as const
+const REGLAGES_TABS = ['pratique', 'messages', 'paiement', 'livreurs', 'groupe'] as const
 type ReglagesTab = (typeof REGLAGES_TABS)[number]
 
 function parseTab(raw: string | undefined): ReglagesTab {
@@ -40,7 +41,7 @@ export default async function ReglagesPage({
 
   const { data: restaurant } = await supabase.from('restaurants')
     .select(
-      'name, address, contact_phone, hours_text, delivery_info, bot_welcome, bot_info_extra, location_lat, location_lng, staff_group_id, staff_group_invite, meta_pixel_id'
+      'name, address, contact_phone, hours_text, delivery_info, bot_welcome, bot_info_extra, location_lat, location_lng, staff_group_id, staff_group_invite, meta_pixel_id, payment_cash_enabled, payment_airtel_enabled, payment_airtel_number, payment_airtel_name'
     )
     .eq('id', restaurantId)
     .single()
@@ -68,6 +69,7 @@ export default async function ReglagesPage({
         tabs={[
           { value: 'pratique', label: 'Fiche pratique' },
           { value: 'messages', label: 'Messages du bot' },
+          { value: 'paiement', label: 'Paiement' },
           { value: 'livreurs', label: 'Livreurs' },
           { value: 'groupe', label: 'Groupe cuisine' },
         ]}
@@ -136,6 +138,42 @@ export default async function ReglagesPage({
               <p className="mt-3">
                 Les <strong>infos complémentaires</strong> sont ajoutées à la réponse du bot quand un
                 client demande des informations sur le restaurant.
+              </p>
+            </Card>
+          </aside>
+        </div>
+      )}
+
+      {tab === 'paiement' && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,42rem)_1fr] lg:items-start">
+          <section className="flex flex-col gap-4">
+            <h2 className="font-display text-lg font-semibold">Modes de paiement</h2>
+            <Card className="rounded-2xl p-4">
+              <PaymentForm
+                cashEnabled={restaurant?.payment_cash_enabled ?? true}
+                airtelEnabled={restaurant?.payment_airtel_enabled ?? false}
+                airtelNumber={restaurant?.payment_airtel_number ?? null}
+                airtelName={restaurant?.payment_airtel_name ?? null}
+              />
+            </Card>
+          </section>
+
+          <aside className="flex flex-col gap-4 lg:sticky lg:top-6">
+            <h2 className="font-display text-lg font-semibold">À quoi ça sert</h2>
+            <Card className="rounded-2xl border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+              <p>
+                Avec <strong>Airtel Money</strong> activé, le bot WhatsApp propose au client de payer
+                sa commande par transfert : il reçoit votre numéro et le montant, puis répond avec sa
+                référence de paiement.
+              </p>
+              <p className="mt-3">
+                La commande arrive alors « à vérifier » : contrôlez la réception du transfert, puis
+                cliquez <strong>Paiement reçu ✓</strong> sur la commande — la cuisine est prévenue à
+                ce moment-là seulement.
+              </p>
+              <p className="mt-3">
+                Si Airtel est désactivé, rien ne change : le client règle à la récupération ou à la
+                livraison, comme aujourd’hui.
               </p>
             </Card>
           </aside>

@@ -15,11 +15,12 @@ import {
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { badgeVariantForOrder } from '@/lib/status-badge'
+import { paymentBadge, type PaymentBadgeInfo } from '@/lib/payment'
 import {
   ADVANCE_LABELS, driveBadge, groupByStatus, nextStatus, orderItemsSummary, ORDER_STATUS_LABELS,
   type OrderCard,
 } from '@/lib/orders'
-import { cancelOrder, updateOrderStatus, verifyOrder } from './actions'
+import { cancelOrder, confirmPayment, updateOrderStatus, verifyOrder } from './actions'
 
 type Filter = 'all' | OrderCard['status']
 
@@ -74,6 +75,21 @@ function DriveKanbanBadge({ order }: { order: OrderCard }) {
       {badge.label}
     </Badge>
   )
+}
+
+// Variante de Badge par tonalité paiement (cf. lib/payment.ts) — tokens thème uniquement :
+// warning = ambre (à vérifier), success = vert (Airtel confirmé), secondary = discret (cash).
+const PAYMENT_BADGE_VARIANT: Record<PaymentBadgeInfo['tone'], 'warning' | 'success' | 'secondary'> = {
+  pending: 'warning',
+  paid: 'success',
+  cash: 'secondary',
+}
+
+/** Badge paiement d'une carte — rien pour les commandes sans `payment_method` (historique). */
+function PaymentKanbanBadge({ order }: { order: OrderCard }) {
+  const badge = paymentBadge(order.payment_method, order.payment_status)
+  if (!badge) return null
+  return <Badge variant={PAYMENT_BADGE_VARIANT[badge.tone]}>{badge.label}</Badge>
 }
 
 export function Board({ initialOrders, initialQuery = '', isTodayView = true }: { initialOrders: OrderCard[]; initialQuery?: string; isTodayView?: boolean }) {
@@ -139,6 +155,16 @@ export function Board({ initialOrders, initialQuery = '', isTodayView = true }: 
     startTransition(async () => {
       await verifyOrder(o.id, verified)
       setSelected((cur) => (cur && cur.id === o.id ? { ...cur, verified_at: verified ? new Date().toISOString() : null } : cur))
+    })
+  }
+
+  /** « Paiement reçu ✓ » — confirme un paiement Airtel `a_verifier`. L'action est idempotente
+   *  côté serveur ; le badge de la ligne suit via Realtime (router.refresh), le modal est mis à
+   *  jour localement comme pour verify(). */
+  function confirmPay(o: OrderCard) {
+    startTransition(async () => {
+      await confirmPayment(o.id)
+      setSelected((cur) => (cur && cur.id === o.id ? { ...cur, payment_status: 'paye' } : cur))
     })
   }
 
@@ -255,6 +281,25 @@ export function Board({ initialOrders, initialQuery = '', isTodayView = true }: 
                 {details && (
                   <p className="truncate text-xs text-muted-foreground md:hidden" title={details}>{details}</p>
                 )}
+                {paymentBadge(o.payment_method, o.payment_status) && (
+                  <div
+                    className="mt-1 flex flex-wrap items-center gap-2"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    <PaymentKanbanBadge order={o} />
+                    {o.payment_method === 'airtel' && o.payment_status === 'a_verifier' && (
+                      <Button
+                        size="sm"
+                        className="min-h-11"
+                        disabled={pending}
+                        onClick={() => confirmPay(o)}
+                      >
+                        Paiement reçu ✓
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Détails (desktop) */}
@@ -366,6 +411,21 @@ export function Board({ initialOrders, initialQuery = '', isTodayView = true }: 
                   <span className="font-display text-2xl font-semibold text-primary">{formatFcfa(selected.total)}</span>
                 </div>
               </div>
+
+              {/* Paiement : état Airtel/cash + validation manuelle du transfert Airtel Money */}
+              {paymentBadge(selected.payment_method, selected.payment_status) && (
+                <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium">Paiement</span>
+                    <PaymentKanbanBadge order={selected} />
+                  </div>
+                  {selected.payment_method === 'airtel' && selected.payment_status === 'a_verifier' && (
+                    <Button className="min-h-11 w-fit" disabled={pending} onClick={() => confirmPay(selected)}>
+                      Paiement reçu ✓
+                    </Button>
+                  )}
+                </div>
+              )}
 
               {/* Vérification : contacter le client + confirmer que la commande est réelle */}
               <div className="flex flex-col gap-2 rounded-lg border border-border p-3">

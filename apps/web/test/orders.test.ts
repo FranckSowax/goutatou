@@ -5,6 +5,7 @@ const order = (id: string, status: OrderCard['status'], overrides: Partial<Order
   id, order_number: 1, status, mode: 'drive', total: 1000, created_at: '2026-07-07T12:00:00Z',
   customer_name: null, customer_phone: '24177', drive_slot_label: null, delivery_address: null, items: [],
   arrived_at: null, arrival_note: null, verified_at: null,
+  payment_method: null, payment_status: 'na',
   ...overrides,
 })
 

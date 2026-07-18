@@ -208,6 +208,34 @@ export async function updateMetaPixelId(formData: FormData) {
   revalidatePath('/app/reglages')
 }
 
+/**
+ * Modes de paiement du restaurant (cash à la remise / Airtel Money manuel). Le numéro et le nom
+ * du titulaire Airtel sont montrés au client WhatsApp au moment de payer. Garde owner héritée de
+ * `myRestaurantId` ; écriture via client admin (même contrainte RLS que updateMyRestaurantProfile).
+ */
+export async function updatePaymentSettings(formData: FormData) {
+  const restaurantId = await myRestaurantId()
+  const cashEnabled = formData.get('payment_cash_enabled') === 'on'
+  const airtelEnabled = formData.get('payment_airtel_enabled') === 'on'
+  // On ne garde que les chiffres : le patron colle son numéro comme il veut (espaces, +241…).
+  const digits = String(formData.get('payment_airtel_number') ?? '').replace(/\D/g, '')
+  if (airtelEnabled && digits.length < 8) {
+    throw new Error('Numéro Airtel Money requis pour activer Airtel — format 077000000 ou 24177000000.')
+  }
+  const admin = createAdminClient()
+  const { data, error } = await admin.from('restaurants')
+    .update({
+      payment_cash_enabled: cashEnabled,
+      payment_airtel_enabled: airtelEnabled,
+      payment_airtel_number: digits === '' ? null : digits,
+      payment_airtel_name: trimmedOrNull(formData, 'payment_airtel_name'),
+    })
+    .eq('id', restaurantId)
+    .select('id')
+  if (error || !data || data.length === 0) throw new Error('Enregistrement impossible.')
+  revalidatePath('/app/reglages')
+}
+
 export async function updateMyBotMessages(formData: FormData) {
   const restaurantId = await myRestaurantId()
   // Même contrainte RLS que updateMyRestaurantProfile ci-dessus → client admin

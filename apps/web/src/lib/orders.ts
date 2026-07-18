@@ -17,6 +17,10 @@ export interface OrderCard {
   arrival_note: string | null
   /** Vérification humaine (commande confirmée par appel/WhatsApp) — indépendant du statut Kanban. */
   verified_at: string | null
+  /** Paiement à la commande — 'cash' | 'airtel' | null (commandes historiques). */
+  payment_method: string | null
+  /** 'na' | 'a_verifier' | 'paye' — cf. lib/payment.ts paymentBadge. */
+  payment_status: string
   items: { name: string; qty: number; unit_price?: number }[]
 }
 

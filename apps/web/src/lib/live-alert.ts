@@ -22,17 +22,42 @@ export function decideAlert(
       mode: string
       arrived_at: string | null
       arrival_note: string | null
+      /** 'na' | 'a_verifier' | 'paye' — paiement à la commande (Airtel manuel). */
+      payment_status: string
+      paid_at: string | null
     }
     oldArrivedAt?: string | null
+    oldPaymentStatus?: string
   },
   seen: Set<string>,
 ): LiveEvent | null {
-  const { type, row, oldArrivedAt } = evt
+  const { type, row, oldArrivedAt, oldPaymentStatus } = evt
 
   if (type === 'INSERT') {
+    // Paiement Airtel en attente de vérification : INSERT silencieux — l'alerte cuisine ne part
+    // qu'à la validation « Paiement reçu ✓ » (UPDATE payment_status → 'paye' ci-dessous).
+    if (row.payment_status === 'a_verifier') return null
     if (seen.has(row.id)) return null
     seen.add(row.id)
     return { kind: 'order', id: row.id, code: String(row.order_number), amount: row.total }
+  }
+
+  // UPDATE : paiement confirmé — transition a_verifier → paye (l'ancienne valeur vient du payload
+  // Realtime, REPLICA IDENTITY FULL sur `orders`). Même garde de fraîcheur que l'arrivée Drive
+  // ci-dessous : un onglet fraîchement ouvert (Set vide, `payload.old` éventuellement absent) ne
+  // doit pas sonner pour un paiement confirmé il y a longtemps quand la ligne bouge à nouveau.
+  const wasPaid = oldPaymentStatus === 'paye'
+  const isPaid = row.payment_status === 'paye'
+  if (isPaid && !wasPaid) {
+    const paidAtMs = Date.parse(row.paid_at ?? '')
+    if (!Number.isNaN(paidAtMs) && Date.now() - paidAtMs <= 60_000) {
+      const key = `pay:${row.id}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        return { kind: 'order', id: row.id, code: String(row.order_number), amount: row.total }
+      }
+    }
+    // Périmé ou déjà vu : on laisse la main à la logique d'arrivée (un UPDATE peut porter les deux).
   }
 
   // UPDATE : une arrivée est une transition null/absent → non-null.

@@ -48,6 +48,29 @@ export const copy = {
   chooseSlot: (slots: { label: string }[]) =>
     `🚗 Choisissez votre créneau de retrait :\n${slots.map((s, i) => `${i + 1}. ${s.label}`).join('\n')}`,
   askAddress: `🛵 Indiquez votre adresse de livraison (quartier + repère) :`,
+  /**
+   * Question de l'étape PAIEMENT (spec paiement-commande) : posée uniquement quand le resto a
+   * activé Airtel Money (numéro renseigné). Les entrées machine attendues sont « airtel » et
+   * « cash » (les boutons quick-reply les retraduisent via `in:airtel`/`in:cash`, cf. buttons.ts) —
+   * le texte guide donc les clients qui répondent au clavier. cash désactivé → Airtel imposé,
+   * la ligne cash disparaît.
+   */
+  choosePayment: (cart: Cart, cashEnabled: boolean) => {
+    const cashLine = cashEnabled
+      ? `\n💵 Répondez *cash* pour régler ${cart.mode === 'livraison' ? 'à la livraison' : 'à la récupération'}.`
+      : ''
+    return (
+      `💳 Comment réglez-vous vos ${formatFcfa(cartTotal(cart))} ?\n` +
+      `📱 Répondez *airtel* pour payer par Airtel Money.${cashLine}`
+    )
+  },
+  /** Instructions de transfert Airtel Money : montant formaté, numéro du resto, nom du titulaire. */
+  airtelInstructions: (total: string, number: string, holderName: string) =>
+    `📱 Envoyez *${total}* au *${number}* (${holderName}).\n` +
+    `Puis répondez ici avec la *référence* de la transaction (ou tapez *payé*).`,
+  /** Re-prompt doux de l'état PAIEMENT_REF (référence trop courte/vide). */
+  paymentRefPrompt:
+    `Envoyez la *référence* de votre transaction Airtel Money (ou tapez *payé* une fois le transfert effectué). 🙏`,
   confirm: (cart: Cart, modeLabel: string, detail?: string) =>
     `${copy.cartRecap(cart)}\n\nMode : ${modeLabel}${detail ? `\n${detail}` : ''}\n\n` +
     `1. ✅ Confirmer\n2. ❌ Annuler`,

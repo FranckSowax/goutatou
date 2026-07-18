@@ -23,6 +23,8 @@ type OrderRow = {
   mode: string
   arrived_at: string | null
   arrival_note: string | null
+  payment_status: string
+  paid_at: string | null
 }
 
 type OrderContent = { code: string; amount: number }
@@ -61,7 +63,12 @@ export function LiveAlertOverlay({ restaurantId }: { restaurantId: string }) {
         const row = payload.new as OrderRow
         const oldRow = payload.old as Partial<OrderRow> | undefined
         const evt = decideAlert(
-          { type: payload.eventType, row, oldArrivedAt: oldRow?.arrived_at },
+          {
+            type: payload.eventType,
+            row,
+            oldArrivedAt: oldRow?.arrived_at,
+            oldPaymentStatus: oldRow?.payment_status,
+          },
           seenRef.current,
         )
         if (!evt) return
