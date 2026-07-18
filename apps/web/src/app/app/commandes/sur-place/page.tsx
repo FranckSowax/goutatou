@@ -26,7 +26,7 @@ export default async function SurPlacePage() {
   const { data: cats } = await supabase
     .from('menu_categories')
     .select(
-      'id, name, position, menu_items(id, name, price, available, position, menu_supplements(id, name, price, available, position))',
+      'id, name, position, menu_items(id, name, price, available, position, photo_url, menu_supplements(id, name, price, available, position))',
     )
     .eq('restaurant_id', restaurantId)
     .order('position')
@@ -37,7 +37,7 @@ export default async function SurPlacePage() {
       name: c.name,
       items: (
         (c.menu_items as {
-          id: string; name: string; price: number; available: boolean; position: number
+          id: string; name: string; price: number; available: boolean; position: number; photo_url: string | null
           menu_supplements: { id: string; name: string; price: number; available: boolean; position: number }[] | null
         }[]) ?? []
       )
@@ -47,6 +47,7 @@ export default async function SurPlacePage() {
           id: i.id,
           name: i.name,
           price: i.price,
+          photoUrl: i.photo_url,
           supplements: (i.menu_supplements ?? [])
             .filter((s) => s.available)
             .sort((a, b) => a.position - b.position)

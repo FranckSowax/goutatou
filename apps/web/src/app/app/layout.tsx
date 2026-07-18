@@ -12,7 +12,7 @@ const NAV = [
   { href: '/app/commandes', label: 'Commandes', icon: 'ClipboardList' },
   { href: '/app/menu', label: 'Menu', icon: 'UtensilsCrossed' },
   { href: '/app/livraison', label: 'Livraison', icon: 'Bike' },
-  { href: '/app/conversations', label: 'Conversations', icon: 'MessagesSquare' },
+  { href: '/app/conversations', label: 'Conversations', icon: 'MessagesSquare', separatorAfter: true },
   { href: '/app/stats', label: 'Statistiques', icon: 'ChartColumn' },
   { href: '/app/marketing', label: 'Marketing', icon: 'Megaphone', match: '/app/marketing' },
   { href: '/app/fidelite', label: 'Fidélité', icon: 'Gift' },
