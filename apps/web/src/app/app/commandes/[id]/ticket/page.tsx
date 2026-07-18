@@ -1,5 +1,6 @@
 import { formatFcfa } from '@goutatou/db/types'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { paymentTicketLine } from '@/lib/payment'
 import { cn } from '@/lib/utils'
 import { PrintOnLoad } from './print-on-load'
 
@@ -51,6 +52,7 @@ export default async function TicketPage({
   const { data: order } = await supabase
     .from('orders')
     .select(`order_number, status, mode, total, created_at, delivery_address,
+             payment_method, payment_status, payment_ref,
              customers(name), drive_slots(label), order_items(name, qty, unit_price),
              restaurants(name, contact_phone)`)
     .eq('id', id)
@@ -64,6 +66,7 @@ export default async function TicketPage({
   const slot = order.drive_slots as unknown as { label: string } | null
   const restaurant = order.restaurants as unknown as { name: string; contact_phone: string | null } | null
   const items = (order.order_items as { name: string; qty: number; unit_price: number }[]) ?? []
+  const paiement = paymentTicketLine(order.payment_method, order.payment_status, order.payment_ref)
 
   return (
     <div className="flex flex-col items-center gap-4 print:block">
@@ -117,6 +120,8 @@ export default async function TicketPage({
           <span>TOTAL</span>
           <span className="tabular-nums">{formatFcfa(order.total)}</span>
         </div>
+
+        {paiement && <p className="mt-1 text-center text-xs font-medium">{paiement}</p>}
 
         <p className="mt-4 text-center text-xs">Merci ! 🙏</p>
       </div>

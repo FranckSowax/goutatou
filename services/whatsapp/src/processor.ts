@@ -144,11 +144,20 @@ async function sendMenuPhotos(
 }
 
 function orderConfirmedCopy(orderNumber: number, total: number, cart: {
-  mode?: string; driveSlotLabel?: string; address?: string
+  mode?: string; driveSlotLabel?: string; address?: string; payment?: string
 }): string {
   const detail =
     cart.mode === 'drive' ? `\n🚗 Retrait drive — créneau ${cart.driveSlotLabel}` :
     cart.mode === 'livraison' ? `\n🛵 Livraison — ${cart.address}` : ''
+  // Paiement Airtel Money (spec paiement-commande) : la commande arrive `a_verifier` côté
+  // resto — pas de « Total à régler à la remise », le client a déjà envoyé les sous.
+  if (cart.payment === 'airtel') {
+    return (
+      `✅ Commande *n°${orderNumber}* enregistrée ! 🙏${detail}\n` +
+      `Le restaurant vérifie votre paiement Airtel Money (*${formatFcfa(total)}*) et lance la préparation.\n\n` +
+      `Nous vous préviendrons ici à chaque étape. Merci !`
+    )
+  }
   return (
     `✅ Commande *n°${orderNumber}* confirmée !${detail}\n` +
     `Total à régler à la remise : *${formatFcfa(total)}*\n\n` +

@@ -57,6 +57,23 @@ export function buttonsForState(state: BotState, cart: Cart, ctx: BotContext): B
         { id: 'in:annuler', title: 'Annuler' },
       ]
 
+    // text === 'airtel' / 'cash' (cf. machine.ts, case 'PAIEMENT'). Titres ≤ 20 chars
+    // (QUICK_REPLY_TITLE_MAX) et discriminants dès le premier caractère (📱 vs 💵) : le
+    // round-trip par titre (matchButtonInput) reste sûr même tronqué. Cash désactivé →
+    // Airtel imposé, un seul bouton (spec paiement-commande § Décisions).
+    case 'PAIEMENT': {
+      const pay = ctx.payment
+      if (!pay?.airtelEnabled || !pay.airtelNumber) return null
+      const choices: ButtonChoice[] = [{ id: 'in:airtel', title: '📱 Airtel Money' }]
+      if (pay.cashEnabled) {
+        choices.push({
+          id: 'in:cash',
+          title: cart.mode === 'livraison' ? '💵 À la livraison' : '💵 À la récupération',
+        })
+      }
+      return choices
+    }
+
     default:
       return null
   }

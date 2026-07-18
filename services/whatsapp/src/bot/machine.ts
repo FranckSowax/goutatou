@@ -5,6 +5,7 @@ import {
   type MenuForBot,
   type OrderMode,
   type SupplementLine,
+  cartTotal,
   formatFcfa,
 } from '@goutatou/db'
 import { copy, type BotProfile } from './copy.js'
@@ -30,6 +31,18 @@ export interface BotContext {
    * `cardLink` est le lien perso `/f/<token>`. Absente si aucun de ces mots-clés n'est traité.
    */
   loyalty?: { enabled: boolean; cardLink: string }
+  /**
+   * Réglages paiement du restaurant (migration 0038, spec paiement-commande), chargés par
+   * `getBotContext`. Absent (tests/fixtures historiques) OU `airtelEnabled=false` OU numéro
+   * manquant → l'étape PAIEMENT est SAUTÉE : CONFIRMATION « oui » crée la commande directement,
+   * comportement actuel strictement inchangé (défaut prod : payment_airtel_enabled=false).
+   */
+  payment?: {
+    cashEnabled: boolean
+    airtelEnabled: boolean
+    airtelNumber: string | null
+    airtelName: string | null
+  }
 }
 
 export interface TransitionResult {
@@ -335,12 +348,46 @@ export function transition(state: BotState, cart: Cart, input: string, ctx: BotC
 
     case 'CONFIRMATION': {
       if (text === '1' || text === 'confirmer' || text === 'oui') {
-        // Le processor crée la commande et envoie la confirmation avec le numéro.
+        // Étape PAIEMENT uniquement quand le resto a activé Airtel ET renseigné son numéro
+        // (spec paiement-commande § Décisions) — sinon flux actuel strictement inchangé :
+        // le processor crée la commande et envoie la confirmation avec le numéro.
+        if (ctx.payment?.airtelEnabled && ctx.payment.airtelNumber) {
+          return result('PAIEMENT', cart, [copy.choosePayment(cart, ctx.payment.cashEnabled)])
+        }
         return result('ACCUEIL', cart, [], true)
       }
       if (text === '2' || text === 'non') return result('ACCUEIL', EMPTY_CART, [copy.canceled])
       const modeLabel = MODE_DEFS.find((m) => m.mode === cart.mode)?.label ?? ''
       return result('CONFIRMATION', cart, [copy.confirm(cart, modeLabel)])
+    }
+
+    case 'PAIEMENT': {
+      const pay = ctx.payment
+      // Garde-fou : on ne peut arriver ici que via CONFIRMATION avec Airtel actif — si la
+      // config a disparu entre-temps (réglages modifiés en cours de conversation), on retombe
+      // sur le flux actuel plutôt que de bloquer le client.
+      if (!pay?.airtelEnabled || !pay.airtelNumber) return result('ACCUEIL', cart, [], true)
+      if (text === 'cash' && pay.cashEnabled) {
+        return result('ACCUEIL', { ...cart, payment: 'cash' }, [], true)
+      }
+      if (text === 'airtel') {
+        return result('PAIEMENT_REF', cart, [
+          copy.airtelInstructions(
+            formatFcfa(cartTotal(cart)), pay.airtelNumber, pay.airtelName ?? ctx.restaurantName),
+        ])
+      }
+      // Entrée invalide (dont « cash » quand le cash est désactivé) : on repose la question.
+      return result('PAIEMENT', cart, [copy.choosePayment(cart, pay.cashEnabled)])
+    }
+
+    case 'PAIEMENT_REF': {
+      // Référence de transaction Airtel : tout texte ≥ 3 caractères, ou « payé »/« paye ».
+      // Les mots-clés globaux (annuler, humain…) restent évalués avant ce switch.
+      const ref = input.trim()
+      if (text === 'payé' || text === 'paye' || ref.length >= 3) {
+        return result('ACCUEIL', { ...cart, payment: 'airtel', paymentRef: ref }, [], true)
+      }
+      return result('PAIEMENT_REF', cart, [copy.paymentRefPrompt])
     }
   }
 }

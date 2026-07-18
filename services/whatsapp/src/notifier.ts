@@ -18,6 +18,12 @@ export interface OrderRow {
   // casser les littéraux OrderRow existants (tests handleOrderUpdate) qui ne les fournissent pas.
   total?: number
   delivery_address?: string | null
+  // Paiement (migration 0038, spec paiement-commande) — mêmes règles d'optionnalité que
+  // total/delivery_address ci-dessus : la ligne realtime réelle les porte toujours,
+  // payment_status absent = littéral historique → aucune ligne Paiement ajoutée au ticket.
+  payment_method?: 'cash' | 'airtel' | null
+  payment_status?: 'na' | 'a_verifier' | 'paye'
+  payment_ref?: string | null
 }
 
 export interface OrderItemRow {
@@ -42,14 +48,31 @@ const MODE_LABELS_FR: Record<OrderMode, string> = {
  * (order_items normaux, name préfixé '↳ ', triés par position) sortent naturellement dans
  * l'ordre et s'affichent sans le préfixe qty× — juste le name.
  */
+/**
+ * Ligne « Paiement : … » du ticket cuisine (spec paiement-commande) — null quand la ligne
+ * n'a pas de payment_status (littéraux historiques/tests) : ticket byte-identique à avant.
+ * na/cash → à la remise (flux actuel) ; airtel → à vérifier ou ✓ selon le statut.
+ */
+function paymentTicketLine(row: OrderRow): string | null {
+  if (!row.payment_status) return null
+  if (row.payment_method === 'airtel') {
+    return row.payment_status === 'paye'
+      ? 'Paiement : 📱 Airtel Money ✓'
+      : 'Paiement : 📱 Airtel Money (à vérifier)'
+  }
+  return 'Paiement : 💵 À la remise'
+}
+
 export function buildStaffTicket(newRow: OrderRow, items: OrderItemRow[], customer: OrderCustomer): string {
   const modeLabel = MODE_LABELS_FR[newRow.mode] ?? newRow.mode
   const itemLines = items.map((it) => (it.name.startsWith('↳') ? it.name : `${it.qty}× ${it.name}`))
   const clientLine = `Client : ${customer.name ?? customer.phone}`
+  const paymentLine = paymentTicketLine(newRow)
   const lines = [
     `🧾 *Commande #${newRow.order_number}* — ${modeLabel}`,
     ...itemLines,
     `Total : ${formatFcfa(newRow.total ?? 0)}`,
+    ...(paymentLine ? [paymentLine] : []),
     clientLine,
   ]
   if (newRow.delivery_address) lines.push(newRow.delivery_address)
@@ -84,6 +107,56 @@ type Decrypt = (payload: string, keyHex: string) => string
 /** Id du bouton d'arrivée Drive (cf. processor.ts handleArrivalButton, préfixe `arr:`). */
 export const ARRIVAL_BUTTON_TITLE = '✅ Je suis arrivé'
 
+/**
+ * Paiement Airtel confirmé au dashboard (« Paiement reçu ✓ », spec paiement-commande) :
+ * l'INSERT `a_verifier` a été volontairement silencieux (cf. handleOrderInsert) — c'est ICI
+ * que le ticket cuisine part (avec la ligne « Airtel Money ✓ »), plus un message au client.
+ * Best-effort de bout en bout (mirror handleOrderInsert) : toute erreur est loggée, jamais
+ * propagée. L'idempotence face aux doublons Realtime est garantie par l'appelant (garde sur
+ * l'ANCIENNE valeur : old a_verifier → new paye, replica identity full).
+ */
+async function handlePaymentConfirmed(
+  db: SupabaseClient,
+  tokenKey: string,
+  newRow: OrderRow,
+  makeWhapi: MakeWhapi,
+  decrypt: Decrypt,
+): Promise<void> {
+  try {
+    const { data: channel } = await db
+      .from('whapi_channels').select('token_encrypted, status').eq('restaurant_id', newRow.restaurant_id).single()
+    if (!channel || channel.status !== 'active') return
+    const whapiClient = makeWhapi(decrypt(channel.token_encrypted, tokenKey))
+
+    const { data: restaurant } = await db
+      .from('restaurants').select('staff_group_id').eq('id', newRow.restaurant_id).single()
+    const { data: customer } = await db
+      .from('customers').select('chat_id, name, phone').eq('id', newRow.customer_id).single()
+
+    // Ticket cuisine différé (celui que handleOrderInsert n'a pas envoyé) — silencieux sans
+    // staff_group_id, comme à l'INSERT ; son échec ne bloque pas le message client ci-dessous.
+    if (restaurant?.staff_group_id) {
+      try {
+        const { data: items } = await db
+          .from('order_items').select('name, unit_price, qty').eq('order_id', newRow.id).order('position')
+        const ticket = buildStaffTicket(newRow, items ?? [], customer ?? { name: null, phone: '' })
+        await whapiClient.sendText(restaurant.staff_group_id, ticket)
+      } catch (err) {
+        console.error(`[staff-group] envoi ticket (paiement confirmé) échoué commande ${newRow.id}`, err)
+      }
+    }
+
+    if (customer?.chat_id) {
+      await whapiClient.sendText(
+        customer.chat_id,
+        `✅ Paiement confirmé — votre commande *n°${newRow.order_number}* est en préparation. 👨‍🍳`,
+      )
+    }
+  } catch (err) {
+    console.error(`[notifier] paiement confirmé : envoi échoué commande ${newRow.id}`, err)
+  }
+}
+
 export async function handleOrderUpdate(
   db: SupabaseClient,
   tokenKey: string,
@@ -94,6 +167,15 @@ export async function handleOrderUpdate(
   wheelSecret?: string,
   wheelBaseUrl?: string,
 ): Promise<void> {
+  // Déclencheur paiement (spec paiement-commande) : payment_status passe à 'paye'. Garde
+  // STRICTE sur l'ancienne valeur (a_verifier → paye) : un doublon Realtime rejoue paye →
+  // paye et ne renvoie rien (replica identity full fournit l'ancien enregistrement complet).
+  // Évalué AVANT le retour anticipé « statut inchangé » : l'UPDATE de confirmation ne touche
+  // normalement QUE les colonnes payment_*, status restant identique.
+  if (oldRow.payment_status === 'a_verifier' && newRow.payment_status === 'paye') {
+    await handlePaymentConfirmed(db, tokenKey, newRow, makeWhapi, decrypt)
+  }
+
   if (oldRow.status === newRow.status) return
   const message = statusMessage(newRow.status, newRow.order_number, newRow.mode)
   if (!message) return
@@ -209,6 +291,11 @@ export async function handleOrderInsert(
   decrypt: Decrypt = decryptToken,
 ): Promise<void> {
   try {
+    // Paiement Airtel à vérifier (spec paiement-commande) : ticket cuisine RETENU — il part
+    // à la validation « Paiement reçu ✓ » du resto (cf. handlePaymentConfirmed), jamais deux
+    // fois. Cash/na (et lignes sans colonnes payment) : comportement actuel inchangé.
+    if (newRow.payment_status === 'a_verifier') return
+
     const { data: restaurant } = await db
       .from('restaurants').select('staff_group_id').eq('id', newRow.restaurant_id).single()
     if (!restaurant?.staff_group_id) return

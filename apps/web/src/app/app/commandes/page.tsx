@@ -26,7 +26,7 @@ export default async function CommandesPage({ searchParams }: { searchParams: Pr
   const { data } = await supabase
     .from('orders')
     .select(`id, order_number, status, mode, source, total, created_at, delivery_address,
-             arrived_at, arrival_note, verified_at,
+             arrived_at, arrival_note, verified_at, payment_method, payment_status,
              customers(name, phone), drive_slots(label), order_items(name, qty, unit_price)`)
     .gte('created_at', startUtc)
     .lt('created_at', endUtc)
@@ -42,6 +42,7 @@ export default async function CommandesPage({ searchParams }: { searchParams: Pr
       customer_name: customer?.name ?? null, customer_phone: customer?.phone ?? '',
       drive_slot_label: slot?.label ?? null,
       arrived_at: o.arrived_at, arrival_note: o.arrival_note, verified_at: o.verified_at,
+      payment_method: o.payment_method, payment_status: o.payment_status,
       items: (o.order_items as { name: string; qty: number; unit_price: number }[]) ?? [],
     }
   })

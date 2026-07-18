@@ -12,6 +12,12 @@ interface RestaurantProfileRow {
   bot_info_extra: string | null
   location_lat: number | null
   location_lng: number | null
+  // Réglages paiement (migration 0038, spec paiement-commande) — défauts serveur :
+  // cash true, airtel false. Les `?? défaut` du mapping couvrent une ligne absente.
+  payment_cash_enabled: boolean | null
+  payment_airtel_enabled: boolean | null
+  payment_airtel_number: string | null
+  payment_airtel_name: string | null
 }
 
 /** Fiche pratique (champs null/vides omis) — undefined si la fiche est entièrement vide. */
@@ -109,7 +115,7 @@ export function createRepo(db: SupabaseClient, tokenKey: string): BotRepo {
         db.from('drive_slots').select('id, label, position')
           .eq('restaurant_id', restaurantId).eq('active', true).order('position'),
         db.from('restaurants')
-          .select('address, contact_phone, hours_text, delivery_info, bot_welcome, bot_info_extra, location_lat, location_lng')
+          .select('address, contact_phone, hours_text, delivery_info, bot_welcome, bot_info_extra, location_lat, location_lng, payment_cash_enabled, payment_airtel_enabled, payment_airtel_number, payment_airtel_name')
           .eq('id', restaurantId)
           .maybeSingle(),
       ])
@@ -126,6 +132,12 @@ export function createRepo(db: SupabaseClient, tokenKey: string): BotRepo {
         ...(profile ? { profile } : {}),
         ...(botWelcome ? { botWelcome } : {}),
         ...(gps ? { gps } : {}),
+        payment: {
+          cashEnabled: restoRow?.payment_cash_enabled ?? true,
+          airtelEnabled: restoRow?.payment_airtel_enabled ?? false,
+          airtelNumber: restoRow?.payment_airtel_number ?? null,
+          airtelName: restoRow?.payment_airtel_name ?? null,
+        },
         menu: {
           categories: (cats ?? []).map((c) => ({
             name: c.name,
@@ -235,6 +247,10 @@ export function createRepo(db: SupabaseClient, tokenKey: string): BotRepo {
         })),
         p_drive_slot_id: cart.driveSlotId ?? null,
         p_delivery_address: cart.address ?? null,
+        // create_order v3 (migration 0038) : statut dérivé SERVEUR (airtel → a_verifier,
+        // sinon na) — le bot ne fait que transmettre le choix du client.
+        p_payment_method: cart.payment ?? null,
+        p_payment_ref: cart.paymentRef ?? null,
       })
       if (error || !data?.[0]) throw new Error(`create_order: ${error?.message}`)
       return { orderNumber: Number(data[0].order_number), total: data[0].total }

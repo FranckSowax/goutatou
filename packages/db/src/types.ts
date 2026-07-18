@@ -2,7 +2,7 @@ export type OrderMode = 'drive' | 'livraison' | 'sur_place'
 export type OrderStatus = 'recue' | 'en_preparation' | 'prete' | 'recuperee' | 'annulee'
 export type BotState =
   | 'ACCUEIL' | 'MENU' | 'MODE' | 'CRENEAU' | 'ADRESSE' | 'CONFIRMATION' | 'HUMAIN' | 'SUPPLEMENTS'
-  | 'SUPPLEMENTS_CHECKOUT'
+  | 'SUPPLEMENTS_CHECKOUT' | 'PAIEMENT' | 'PAIEMENT_REF'
 
 export interface SupplementLine {
   id: string
@@ -32,6 +32,14 @@ export interface Cart {
   driveSlotId?: string
   driveSlotLabel?: string
   address?: string
+  /**
+   * Mode de règlement choisi à l'étape PAIEMENT (migration 0038, spec paiement-commande).
+   * Absent = flux actuel sans étape paiement (resto sans Airtel activé) → create_order
+   * dérive payment_status 'na' côté serveur. Cart en jsonb : rétrocompatible sans migration.
+   */
+  payment?: 'cash' | 'airtel'
+  /** Référence de transaction Airtel Money saisie par le client (état PAIEMENT_REF). */
+  paymentRef?: string
 }
 
 export interface MenuForBot {
