@@ -11,7 +11,19 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useCart } from './CartProvider'
+import { track } from '@/lib/lp/pixel'
+import { toCatalogId } from '@/lib/lp/order-url'
 import type { LpMenuItem } from '@/lib/lp/data'
+
+/** AddToCart pixel pour un plat ajouté (content_ids via toCatalogId, valeur = prix du plat en FCFA). */
+function trackAddToCart(item: LpMenuItem) {
+  track('AddToCart', {
+    content_type: 'product',
+    content_ids: [toCatalogId(item.id)],
+    currency: 'XAF',
+    value: item.price,
+  })
+}
 
 const triggerClassName =
   'inline-flex min-h-11 items-center rounded-full px-4 py-2 text-sm font-bold text-white sm:min-h-0 sm:px-3 sm:py-1'
@@ -24,7 +36,10 @@ export function AddToCartButton({ item }: { item: LpMenuItem }) {
   if (item.supplements.length === 0) {
     return (
       <button
-        onClick={() => addItem({ menuItemId: item.id, name: item.name, unitPrice: item.price, supplements: [] })}
+        onClick={() => {
+          addItem({ menuItemId: item.id, name: item.name, unitPrice: item.price, supplements: [] })
+          trackAddToCart(item)
+        }}
         aria-label={`Ajouter ${item.name} au panier`}
         className={triggerClassName}
         style={triggerStyle}
@@ -49,6 +64,7 @@ function AddToCartWithSupplements({ item }: { item: LpMenuItem }) {
   function confirm() {
     const supplements = item.supplements.filter((s) => selectedIds.includes(s.id))
     addItem({ menuItemId: item.id, name: item.name, unitPrice: item.price, supplements })
+    trackAddToCart(item)
     setSelectedIds([])
     setOpen(false)
   }
