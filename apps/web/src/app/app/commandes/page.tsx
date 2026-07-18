@@ -1,21 +1,35 @@
 import Link from 'next/link'
-import { Store } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Store } from 'lucide-react'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { Button } from '@/components/ui/button'
 import type { OrderCard } from '@/lib/orders'
+import { dayBoundsUtc, formatDayLabel, formatYmdLibreville, isValidYmd, shiftDay } from '@/lib/order-day'
 import { Board } from './board'
 
 export const dynamic = 'force-dynamic'
 
-export default async function CommandesPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  const { q } = await searchParams
+function dayHref(date: string, q: string | undefined): string {
+  const params = new URLSearchParams({ date })
+  if (q) params.set('q', q)
+  return `/app/commandes?${params.toString()}`
+}
+
+export default async function CommandesPage({ searchParams }: { searchParams: Promise<{ q?: string; date?: string }> }) {
+  const { q, date } = await searchParams
+  const today = formatYmdLibreville(new Date())
+  // Jour affiché : le paramètre s'il est valide et pas dans le futur, sinon aujourd'hui.
+  const day = isValidYmd(date) && date <= today ? date : today
+  const isTodayView = day === today
+  const { startUtc, endUtc } = dayBoundsUtc(day)
+
   const supabase = await createSupabaseServer()
   const { data } = await supabase
     .from('orders')
     .select(`id, order_number, status, mode, source, total, created_at, delivery_address,
              arrived_at, arrival_note, verified_at,
              customers(name, phone), drive_slots(label), order_items(name, qty, unit_price)`)
-    .gte('created_at', new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString())
+    .gte('created_at', startUtc)
+    .lt('created_at', endUtc)
     .order('created_at', { ascending: false })
     .order('position', { referencedTable: 'order_items', ascending: true })
 
@@ -32,13 +46,13 @@ export default async function CommandesPage({ searchParams }: { searchParams: Pr
     }
   })
 
+  const prevDay = shiftDay(day, -1)
+  const nextDay = shiftDay(day, 1)
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-baseline gap-3">
-          <h1 className="font-display text-2xl font-semibold">Commandes</h1>
-          <span className="text-sm text-muted-foreground">7 derniers jours</span>
-        </div>
+        <h1 className="font-display text-2xl font-semibold">Commandes</h1>
         <Button asChild>
           <Link href="/app/commandes/sur-place">
             <Store className="size-4" />
@@ -46,7 +60,33 @@ export default async function CommandesPage({ searchParams }: { searchParams: Pr
           </Link>
         </Button>
       </div>
-      <Board key={q ?? ''} initialOrders={orders} initialQuery={q ?? ''} />
+
+      {/* Navigation par jour : flèche pour remonter aux jours précédents (toutes les commandes passées) */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button asChild variant="outline" size="icon" aria-label="Jour précédent">
+          <Link href={dayHref(prevDay, q)}><ChevronLeft className="size-4" /></Link>
+        </Button>
+        {isTodayView ? (
+          <Button variant="outline" size="icon" disabled aria-label="Jour suivant">
+            <ChevronRight className="size-4" />
+          </Button>
+        ) : (
+          <Button asChild variant="outline" size="icon" aria-label="Jour suivant">
+            <Link href={dayHref(nextDay, q)}><ChevronRight className="size-4" /></Link>
+          </Button>
+        )}
+        <span className="text-sm font-medium capitalize">
+          {formatDayLabel(day)}
+          {isTodayView && <span className="ml-1 text-muted-foreground">· aujourd’hui</span>}
+        </span>
+        {!isTodayView && (
+          <Button asChild variant="ghost" size="sm" className="ml-1">
+            <Link href={dayHref(today, q)}>Aujourd’hui</Link>
+          </Button>
+        )}
+      </div>
+
+      <Board key={`${day}-${q ?? ''}`} initialOrders={orders} initialQuery={q ?? ''} isTodayView={isTodayView} />
     </div>
   )
 }

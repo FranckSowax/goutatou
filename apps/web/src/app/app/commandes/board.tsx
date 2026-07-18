@@ -48,11 +48,6 @@ function jour(iso: string): string {
   })
 }
 
-function isToday(iso: string): boolean {
-  const d = new Date(iso), n = new Date()
-  return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate()
-}
-
 function modeLabel(o: OrderCard): { label: string; detail: string | null } {
   if (o.mode === 'drive') return { label: '🚗 Drive', detail: o.drive_slot_label }
   if (o.mode === 'livraison') return { label: '🛵 Livraison', detail: o.delivery_address }
@@ -81,7 +76,7 @@ function DriveKanbanBadge({ order }: { order: OrderCard }) {
   )
 }
 
-export function Board({ initialOrders, initialQuery = '' }: { initialOrders: OrderCard[]; initialQuery?: string }) {
+export function Board({ initialOrders, initialQuery = '', isTodayView = true }: { initialOrders: OrderCard[]; initialQuery?: string; isTodayView?: boolean }) {
   const router = useRouter()
   // Pas de useState ici : `initialOrders` change à chaque nouveau rendu du Server Component
   // (déclenché par router.refresh() ci-dessous, sur Realtime) — useState(initialOrders) ignorerait
@@ -118,8 +113,9 @@ export function Board({ initialOrders, initialQuery = '' }: { initialOrders: Ord
     )
   }, [orders, grouped, filter, q])
 
-  const today = orders.filter((o) => isToday(o.created_at) && o.status !== 'annulee')
-  const todayTotal = today.reduce((s, o) => s + o.total, 0)
+  // La page ne charge que le jour affiché : le bandeau agrège tout le lot (hors annulées).
+  const dayOrders = orders.filter((o) => o.status !== 'annulee')
+  const dayTotal = dayOrders.reduce((s, o) => s + o.total, 0)
   const next = selected ? nextStatus(selected.status) : null
 
   function advance(o: OrderCard) {
@@ -161,9 +157,9 @@ export function Board({ initialOrders, initialQuery = '' }: { initialOrders: Ord
       {/* Bandeau du jour : chiffre d'affaires + recherche */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Aujourd&apos;hui :{' '}
-          <span className="font-bold text-primary">{formatFcfa(todayTotal)}</span>
-          {' '}· {today.length} commande{today.length > 1 ? 's' : ''}
+          {isTodayView ? 'Aujourd’hui' : 'Ce jour'} :{' '}
+          <span className="font-bold text-primary">{formatFcfa(dayTotal)}</span>
+          {' '}· {dayOrders.length} commande{dayOrders.length > 1 ? 's' : ''}
         </p>
         <div className="relative w-full sm:w-72">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
