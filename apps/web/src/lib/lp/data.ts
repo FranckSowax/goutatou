@@ -29,6 +29,8 @@ export interface LpData {
   driveEnabled: boolean
   whatsappPhone: string | null
   isPremium: boolean
+  /** Id du pixel Meta du resto (public par nature) — null si non configuré. */
+  metaPixelId: string | null
 }
 
 // Mémoïsé par requête (React cache) : layout, page et generateMetadata appellent
@@ -37,7 +39,7 @@ export const getLpData = cache(async (slug: string): Promise<LpData | null> => {
   const db = createAdminClient()
   const { data: resto } = await db
     .from('restaurants')
-    .select('id, slug, name, lp_config, drive_enabled, whapi_channels(phone), subscriptions(plan, status)')
+    .select('id, slug, name, lp_config, drive_enabled, meta_pixel_id, whapi_channels(phone), subscriptions(plan, status)')
     .eq('slug', slug)
     .maybeSingle()
   if (!resto) return null
@@ -95,5 +97,6 @@ export const getLpData = cache(async (slug: string): Promise<LpData | null> => {
     driveEnabled: resto.drive_enabled,
     whatsappPhone: channel?.phone ?? config.whatsappPhone,
     isPremium,
+    metaPixelId: (resto.meta_pixel_id as string | null) ?? null,
   }
 })

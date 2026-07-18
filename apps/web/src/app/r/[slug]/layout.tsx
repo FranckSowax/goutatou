@@ -4,6 +4,7 @@ import { getLpData } from '@/lib/lp/data'
 import { SmoothScroll } from '@/components/lp/SmoothScroll'
 import { Overlays } from '@/components/lp/Overlays'
 import { CartProvider } from '@/components/lp/CartProvider'
+import { MetaPixel } from '@/components/lp/MetaPixel'
 
 export default async function LpLayout({ children, params }: {
   children: ReactNode; params: Promise<{ slug: string }>
@@ -24,6 +25,7 @@ export default async function LpLayout({ children, params }: {
         color: theme.text,
       }}
     >
+      <MetaPixel pixelId={lp.metaPixelId} />
       <SmoothScroll>
         <CartProvider slug={slug}>{children}</CartProvider>
       </SmoothScroll>

@@ -3,6 +3,7 @@ import { qrSvg } from '@/lib/qr'
 import { Card } from '@/components/ui/card'
 import { PageTabs } from '@/components/page-tabs'
 import { PracticalInfoForm } from './practical-info-form'
+import { MetaPixelForm } from './meta-pixel-form'
 import { BotMessagesForm } from './bot-messages-form'
 import { StaffGroupCard } from './staff-group-card'
 import { LivreursForm } from './livreurs-form'
@@ -37,7 +38,7 @@ export default async function ReglagesPage({
 
   const { data: restaurant } = await supabase.from('restaurants')
     .select(
-      'name, address, contact_phone, hours_text, delivery_info, bot_welcome, bot_info_extra, location_lat, location_lng, staff_group_id, staff_group_invite'
+      'name, address, contact_phone, hours_text, delivery_info, bot_welcome, bot_info_extra, location_lat, location_lng, staff_group_id, staff_group_invite, meta_pixel_id'
     )
     .eq('id', restaurantId)
     .single()
@@ -85,6 +86,11 @@ export default async function ReglagesPage({
                 locationLng={restaurant?.location_lng ?? null}
               />
             </Card>
+
+            <h2 className="font-display text-lg font-semibold">Publicité</h2>
+            <Card className="rounded-2xl p-4">
+              <MetaPixelForm metaPixelId={restaurant?.meta_pixel_id ?? null} />
+            </Card>
           </section>
 
           <aside className="flex flex-col gap-4 lg:sticky lg:top-6">
@@ -96,6 +102,10 @@ export default async function ReglagesPage({
               </p>
               <p className="mt-3">
                 La position GPS permet au bot d’envoyer un lien Google Maps direct vers le restaurant.
+              </p>
+              <p className="mt-3">
+                Le <strong>Meta Pixel</strong> trace les vues, ajouts au panier et achats de votre
+                carte en ligne, pour mesurer et optimiser vos publicités Facebook / Instagram.
               </p>
             </Card>
           </aside>

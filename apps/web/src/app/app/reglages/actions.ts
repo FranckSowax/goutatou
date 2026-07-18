@@ -185,6 +185,26 @@ export async function toggleLivreurActive(id: string, active: boolean) {
   revalidatePath('/app/livraison')
 }
 
+/**
+ * Meta Pixel ID du restaurant (public par nature — il finit dans le HTML de la LP). Garde membre,
+ * validation : vide (efface) OU chiffres uniquement, 6+. Écrit `restaurants.meta_pixel_id` via le
+ * client admin après le gate (même contrainte RLS que updateMyRestaurantProfile).
+ */
+export async function updateMetaPixelId(formData: FormData) {
+  const restaurantId = await myRestaurantId()
+  const raw = String(formData.get('meta_pixel_id') ?? '').trim()
+  if (raw !== '' && !/^\d{6,}$/.test(raw)) {
+    throw new Error('Pixel ID invalide — collez uniquement les chiffres de l’ID (6 chiffres minimum).')
+  }
+  const admin = createAdminClient()
+  const { data, error } = await admin.from('restaurants')
+    .update({ meta_pixel_id: raw === '' ? null : raw })
+    .eq('id', restaurantId)
+    .select('id')
+  if (error || !data || data.length === 0) throw new Error('Enregistrement impossible.')
+  revalidatePath('/app/reglages')
+}
+
 export async function updateMyBotMessages(formData: FormData) {
   const restaurantId = await myRestaurantId()
   // Même contrainte RLS que updateMyRestaurantProfile ci-dessus → client admin
