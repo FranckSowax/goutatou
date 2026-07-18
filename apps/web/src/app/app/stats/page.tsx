@@ -1,5 +1,6 @@
 import { formatFcfa } from '@goutatou/db/types'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { requireOwnerPage } from '@/lib/roles'
 import {
   cancelRate,
   dailySeries,
@@ -53,6 +54,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
   const period = parsePeriod(pParam)
 
   const supabase = await createSupabaseServer()
+  await requireOwnerPage(supabase)
   const { data: member } = await supabase
     .from('restaurant_members')
     .select('restaurant_id')

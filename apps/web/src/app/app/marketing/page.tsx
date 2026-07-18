@@ -1,4 +1,5 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { requireOwnerPage } from '@/lib/roles'
 import { getMarketingKpis } from './hub-data'
 import { MarketingHub } from './hub'
 
@@ -6,6 +7,7 @@ export const dynamic = 'force-dynamic'
 
 export default async function MarketingPage() {
   const supabase = await createSupabaseServer()
+  await requireOwnerPage(supabase)
   const { data: member } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).maybeSingle()
   if (!member) {
     return (

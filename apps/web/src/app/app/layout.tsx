@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { getMember } from '@/lib/member'
 import { planOf } from '@/lib/premium'
 import { AppShell } from '@/components/app-shell'
 import { Badge } from '@/components/ui/badge'
@@ -14,11 +15,12 @@ const NAV = [
   { href: '/app/livraison', label: 'Livraison', icon: 'Bike' },
   { href: '/app/conversations', label: 'Conversations', icon: 'MessagesSquare' },
   { href: '/app/clients', label: 'Clients', icon: 'Users', match: '/app/clients', separatorAfter: true },
-  { href: '/app/stats', label: 'Statistiques', icon: 'ChartColumn' },
-  { href: '/app/analyses', label: 'Analyses', icon: 'Sparkles', match: '/app/analyses' },
-  { href: '/app/marketing', label: 'Marketing', icon: 'Megaphone', match: '/app/marketing' },
+  { href: '/app/stats', label: 'Statistiques', icon: 'ChartColumn', ownerOnly: true },
+  { href: '/app/analyses', label: 'Analyses', icon: 'Sparkles', match: '/app/analyses', ownerOnly: true },
+  { href: '/app/marketing', label: 'Marketing', icon: 'Megaphone', match: '/app/marketing', ownerOnly: true },
   { href: '/app/fidelite', label: 'Fidélité', icon: 'Gift' },
-  { href: '/app/reglages', label: 'Réglages', icon: 'Settings' },
+  { href: '/app/reglages', label: 'Réglages', icon: 'Settings', ownerOnly: true },
+  { href: '/app/equipe', label: 'Équipe', icon: 'UsersRound', match: '/app/equipe', ownerOnly: true },
 ] satisfies NavItem[]
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
@@ -28,16 +30,17 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: member } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).maybeSingle()
-  const sub = member ? await planOf(supabase, member.restaurant_id) : null
+  const member = await getMember(supabase)
+  const sub = member ? await planOf(supabase, member.restaurantId) : null
+  const nav = NAV.filter((i) => !i.ownerOnly || member?.role === 'owner')
 
   return (
     <>
       {/* Alerte cuisine plein écran, quelle que soit la page /app ouverte. Données uniquement
           (restaurantId) depuis ce Server Component — jamais de prop fonction Server→Client. */}
-      {member && <LiveAlertOverlay restaurantId={member.restaurant_id} />}
+      {member && <LiveAlertOverlay restaurantId={member.restaurantId} />}
       <AppShell
-        items={NAV}
+        items={nav}
         title="Goutatou"
         userEmail={user.email}
         footer={sub ? (

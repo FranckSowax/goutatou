@@ -2,14 +2,14 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { ClipboardList, UtensilsCrossed, Megaphone, Gift, Camera, Store, LayoutTemplate, Home, ChartColumn, MessagesSquare, Settings, Bike, Sparkles, Users, type LucideIcon } from 'lucide-react'
+import { ClipboardList, UtensilsCrossed, Megaphone, Gift, Camera, Store, LayoutTemplate, Home, ChartColumn, MessagesSquare, Settings, Bike, Sparkles, Users, UsersRound, type LucideIcon } from 'lucide-react'
 
-const ICONS = { ClipboardList, UtensilsCrossed, Megaphone, Gift, Camera, Store, LayoutTemplate, Home, ChartColumn, MessagesSquare, Settings, Bike, Sparkles, Users } satisfies Record<string, LucideIcon>
+const ICONS = { ClipboardList, UtensilsCrossed, Megaphone, Gift, Camera, Store, LayoutTemplate, Home, ChartColumn, MessagesSquare, Settings, Bike, Sparkles, Users, UsersRound } satisfies Record<string, LucideIcon>
 // `match` : préfixe utilisé pour l'état actif quand il diffère de `href` (ex. un lien qui
 // pointe vers un sous-onglet précis mais doit rester actif sur toute la section).
 // `match` : préfixe utilisé pour l'état actif quand il diffère de `href`.
 // `separatorAfter` : trace un séparateur juste après cet item (regroupement visuel de la nav).
-export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; match?: string; separatorAfter?: boolean }
+export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; match?: string; separatorAfter?: boolean; ownerOnly?: boolean }
 
 export function NavLinks({ items, orientation }: { items: NavItem[]; orientation: 'vertical' | 'horizontal' }) {
   const pathname = usePathname()

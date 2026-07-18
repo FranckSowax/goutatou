@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache'
 import { WhapiClient } from '@goutatou/whapi'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { assertPlan } from '@/lib/premium'
+import { assertOwner } from '@/lib/roles'
 // Import relatif (et non `@/lib/...`) : `validateImagePath` est réutilisé tel quel depuis le
 // composer Chaîne — même garde-fou que l'upload direct chaine/composer.tsx.
 import { validateImagePath } from '../chaine/shared'
@@ -20,6 +21,7 @@ function isPollSurface(value: string): value is PollSurface {
 /** Garde membre + plan Pro (sondages = Pro, comme chaîne/statuts). */
 async function myRestaurant() {
   const supabase = await createSupabaseServer()
+  await assertOwner(supabase)
   const { data, error } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).single()
   if (error || !data) throw new Error('Aucun restaurant associé à ce compte')
   const restaurantId = data.restaurant_id as string

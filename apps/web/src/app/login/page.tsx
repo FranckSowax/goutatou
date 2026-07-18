@@ -1,10 +1,6 @@
-import Link from 'next/link'
 import { UtensilsCrossed } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { login } from './actions'
+import { LoginForm } from './login-form'
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams
@@ -20,22 +16,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </CardHeader>
         <CardContent>
           {error && <p className="mb-3 text-sm text-destructive">Identifiants invalides.</p>}
-          <form action={login} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" required placeholder="email@resto.com" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="password">Mot de passe</Label>
-              <Input id="password" name="password" type="password" required placeholder="Mot de passe" />
-            </div>
-            <Button type="submit" className="w-full">Se connecter</Button>
-          </form>
-          <p className="mt-4 text-center text-sm text-muted-foreground">
-            <Link href="/login/mot-de-passe-oublie" className="underline underline-offset-4">
-              Mot de passe oublié ?
-            </Link>
-          </p>
+          <LoginForm />
         </CardContent>
       </Card>
     </main>

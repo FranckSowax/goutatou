@@ -1,4 +1,5 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { requireOwnerPage } from '@/lib/roles'
 import { isPremium } from '@/lib/premium'
 import { getAnalyses } from './analyses-data'
 import type { AnalysisPeriod } from './analyses-data'
@@ -21,6 +22,7 @@ export default async function AnalysesPage({
   const period = parsePeriod(periodParam)
 
   const supabase = await createSupabaseServer()
+  await requireOwnerPage(supabase)
   const { data: member } = await supabase
     .from('restaurant_members')
     .select('restaurant_id')

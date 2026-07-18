@@ -1,4 +1,5 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { requireOwnerPage } from '@/lib/roles'
 import { qrSvg } from '@/lib/qr'
 import { Card } from '@/components/ui/card'
 import { PageTabs } from '@/components/page-tabs'
@@ -26,6 +27,7 @@ export default async function ReglagesPage({
   const tab = parseTab(tabParam)
 
   const supabase = await createSupabaseServer()
+  await requireOwnerPage(supabase)
   const { data: member } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).maybeSingle()
   if (!member) {
     return (

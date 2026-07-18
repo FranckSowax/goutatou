@@ -1,4 +1,5 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { requireOwnerPage } from '@/lib/roles'
 import { isPro, isPremium } from '@/lib/premium'
 import { PageTabs } from '@/components/page-tabs'
 import { MarketingFrame } from '../_components/marketing-frame'
@@ -70,6 +71,7 @@ export default async function StatutsPage({
   const tab = parseTab(tabParam)
 
   const supabase = await createSupabaseServer()
+  await requireOwnerPage(supabase)
   const { data: member } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).single()
   const pro = member ? await isPro(supabase, member.restaurant_id) : false
   if (!member || !pro) {

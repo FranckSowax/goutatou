@@ -1,5 +1,6 @@
 import { Megaphone, Users, Image as ImageIcon, Lightbulb } from 'lucide-react'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { requireOwnerPage } from '@/lib/roles'
 import { isPro } from '@/lib/premium'
 import { Badge } from '@/components/ui/badge'
 import { PageTabs } from '@/components/page-tabs'
@@ -90,6 +91,7 @@ export default async function SondagesPage({
   const tab = parseTab(tabParam)
 
   const supabase = await createSupabaseServer()
+  await requireOwnerPage(supabase)
   const { data: member } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).maybeSingle()
   if (!member) {
     return (

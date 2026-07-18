@@ -1,5 +1,6 @@
 import { Radio, Users } from 'lucide-react'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { requireOwnerPage } from '@/lib/roles'
 import { isPremium, isPro } from '@/lib/premium'
 import { qrSvg } from '@/lib/qr'
 import { PageTabs } from '@/components/page-tabs'
@@ -35,6 +36,7 @@ export default async function ChaineWhatsAppPage({
   const tab = parseTab(tabParam)
 
   const supabase = await createSupabaseServer()
+  await requireOwnerPage(supabase)
   const { data: member } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).maybeSingle()
   if (!member) {
     return (

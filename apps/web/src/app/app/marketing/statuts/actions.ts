@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertPlan, assertPremium, isPremium } from '@/lib/premium'
+import { assertOwner } from '@/lib/roles'
 import {
   MAX_CARDS,
   computeScheduledAt,
@@ -19,6 +20,7 @@ import {
 
 async function myRestaurantId() {
   const supabase = await createSupabaseServer()
+  await assertOwner(supabase)
   const { data, error } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).single()
   if (error || !data) throw new Error('Aucun restaurant associé à ce compte')
   return { supabase, restaurantId: data.restaurant_id as string }

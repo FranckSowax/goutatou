@@ -4,11 +4,13 @@ import { decryptToken } from '@goutatou/db/crypto'
 import { WhapiClient } from '@goutatou/whapi'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { assertOwner } from '@/lib/roles'
 import { parseLatLng } from '@/lib/gps'
 import { normalizeGabonPhone } from '@/lib/lp/wa'
 
 async function myRestaurantId(): Promise<string> {
   const supabase = await createSupabaseServer()
+  await assertOwner(supabase)
   const { data, error } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).single()
   if (error || !data) throw new Error('Aucun restaurant associé à ce compte')
   return data.restaurant_id
@@ -66,6 +68,7 @@ export async function updateMyRestaurantProfile(formData: FormData) {
  */
 export async function createStaffGroup() {
   const supabase = await createSupabaseServer()
+  await assertOwner(supabase)
   const { data: member, error: memberErr } = await supabase
     .from('restaurant_members')
     .select('restaurant_id')

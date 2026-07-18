@@ -1,4 +1,5 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { requireOwnerPage } from '@/lib/roles'
 import { buildWaLink } from '@/lib/lp/wa'
 import { qrSvg } from '@/lib/qr'
 import { MarketingFrame } from '../_components/marketing-frame'
@@ -27,6 +28,7 @@ const KEYWORDS = [
 
 export default async function QrOptInPage() {
   const supabase = await createSupabaseServer()
+  await requireOwnerPage(supabase)
   const { data: member } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).maybeSingle()
   if (!member) {
     return (
