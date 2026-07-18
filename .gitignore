@@ -8,3 +8,9 @@ dist/
 supabase/.temp/
 .DS_Store
 *.tsbuildinfo
+
+# Playwright (e2e)
+test-results/
+playwright-report/
+playwright/.cache/
+blob-report/
