@@ -1,6 +1,7 @@
 'use server'
 import { revalidatePath } from 'next/cache'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { positionUpdates } from '@/lib/reorder'
 
 async function myRestaurantId(): Promise<string> {
@@ -8,6 +9,25 @@ async function myRestaurantId(): Promise<string> {
   const { data, error } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).single()
   if (error || !data) throw new Error('Aucun restaurant associé à ce compte')
   return data.restaurant_id
+}
+
+/**
+ * Resync automatique du catalogue WhatsApp : toute modification du Menu qui change le contenu du
+ * catalogue (plat créé/modifié/supprimé, photo, disponibilité) pose une demande de sync — le
+ * worker catalog-sync du bot la réclame et republie les produits. Best-effort : un échec ici ne
+ * doit jamais faire échouer la sauvegarde du Menu. Client admin requis (pas de policy UPDATE
+ * tenant sur `restaurants`) ; no-op si le catalogue n'est pas activé pour ce resto.
+ */
+async function requestCatalogSync(restaurantId: string): Promise<void> {
+  try {
+    await createAdminClient()
+      .from('restaurants')
+      .update({ catalog_sync_requested_at: new Date().toISOString() })
+      .eq('id', restaurantId)
+      .eq('catalog_enabled', true)
+  } catch {
+    // silencieux : la resync repassera à la prochaine modification (ou via /admin).
+  }
 }
 
 export async function createCategory(formData: FormData) {
@@ -43,26 +63,31 @@ export async function createItem(formData: FormData) {
     photo_url: photoUrl,
   })
   if (error) throw new Error(error.message)
+  await requestCatalogSync(restaurantId)
   revalidatePath('/app/menu')
 }
 
 export async function toggleItemAvailable(itemId: string, available: boolean) {
   const supabase = await createSupabaseServer()
+  const restaurantId = await myRestaurantId()
   const { error } = await supabase.from('menu_items').update({ available }).eq('id', itemId)
   if (error) throw new Error(error.message)
+  await requestCatalogSync(restaurantId)
   revalidatePath('/app/menu')
 }
 
 export async function deleteItem(itemId: string) {
   const supabase = await createSupabaseServer()
+  const restaurantId = await myRestaurantId()
   const { error } = await supabase.from('menu_items').delete().eq('id', itemId)
   if (error) throw new Error(error.message)
+  await requestCatalogSync(restaurantId)
   revalidatePath('/app/menu')
 }
 
 export async function updateItem(id: string, formData: FormData) {
   const supabase = await createSupabaseServer()
-  await myRestaurantId()
+  const restaurantId = await myRestaurantId()
 
   const { data: current, error: fetchError } = await supabase
     .from('menu_items')
@@ -90,6 +115,7 @@ export async function updateItem(id: string, formData: FormData) {
 
   const { error } = await supabase.from('menu_items').update(updates).eq('id', id)
   if (error) throw new Error(error.message)
+  await requestCatalogSync(restaurantId)
   revalidatePath('/app/menu')
 }
 
@@ -108,6 +134,7 @@ export async function updateItemPhoto(id: string, formData: FormData) {
 
   const { error } = await supabase.from('menu_items').update({ photo_url: photoUrl }).eq('id', id)
   if (error) throw new Error(error.message)
+  await requestCatalogSync(restaurantId)
   revalidatePath('/app/menu')
 }
 
