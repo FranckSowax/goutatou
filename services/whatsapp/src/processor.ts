@@ -1,5 +1,7 @@
 import { EMPTY_CART, formatFcfa, type BotState, type Cart, type CartItem } from '@goutatou/db'
+import { signLoyaltyToken } from '@goutatou/db/loyalty'
 import type { WhapiClient } from '@goutatou/whapi'
+import { buildCardLink } from './loyalty/card-trigger.js'
 import { buttonsForState, matchButtonInput, type ButtonChoice } from './bot/buttons.js'
 import { beginCheckout, flatMenuItems, transition, type BotContext } from './bot/machine.js'
 import { isOptOutKeyword } from './campaigns/optout.js'
@@ -81,6 +83,14 @@ export interface ProcessorDeps {
    * les taps `arr:` plutôt que de planter (cf. handleArrivalButton).
    */
   arrivalRepo?: ArrivalRepo
+  /**
+   * Secret HMAC + base URL de la carte de fidélité (réutilisent WHEEL_JWT_SECRET / WHEEL_BASE_URL,
+   * cf. config). Optionnels (comme les repos ci-dessus) : un déploiement/test qui ne les fournit
+   * pas ne charge jamais l'état fidélité (mot-clé « roue » = comportement roue inchangé), plutôt
+   * que de planter. Fournis en prod par index.ts pour émettre le lien carte sur mot-clé.
+   */
+  loyaltySecret?: string
+  loyaltyBaseUrl?: string
 }
 
 // sendQuickReplies/sendList OPTIONNELS (contrairement aux autres méthodes) : la couche
@@ -800,17 +810,37 @@ export function createProcessor(
 
         // Détection précise des commandes globales (cf. bot/machine.ts, routage global) :
         // mêmes conditions que celles évaluées par la machine.
-        const isMenuCommand = body.trim().toLowerCase() === 'menu'
-        const isRoueCommand = body.trim().toLowerCase() === 'roue'
-        const isPromosCommand = body.trim().toLowerCase() === 'promos'
-        const isInfosCommand = body.trim().toLowerCase() === 'infos'
+        const lowerBody = body.trim().toLowerCase()
+        const isMenuCommand = lowerBody === 'menu'
+        const isRoueCommand = lowerBody === 'roue'
+        const isCardCommand = lowerBody === 'fidélité' || lowerBody === 'fidelite' || lowerBody === 'carte'
+        const isPromosCommand = lowerBody === 'promos'
+        const isInfosCommand = lowerBody === 'infos'
 
-        // Contexte roue chargé UNIQUEMENT sur le mot-clé 'roue', et jamais en état HUMAIN
-        // (où la commande serait de toute façon avalée silencieusement par la machine) :
-        // la machine reste pure, le processor injecte l'effet de lecture repo dans ctx.wheel.
-        const ctx = isRoueCommand && conv.state !== 'HUMAIN'
-          ? { ...baseCtx, wheel: await repo.getWheelInfo(channel.restaurantId, customer.id) }
-          : baseCtx
+        // Contexte fidélité/roue chargé UNIQUEMENT sur les mots-clés carte/fidélité/roue, et jamais
+        // en état HUMAIN (où la commande serait de toute façon avalée par la machine) : la machine
+        // reste pure, le processor injecte l'effet de lecture repo (ctx.loyalty / ctx.wheel).
+        //
+        // Priorité à la carte de fidélité quand loyalty_enabled : le processor génère le jeton perso
+        // (signLoyaltyToken, cid + secret) → lien /f/<token>, injecté dans ctx.loyalty. La roue est
+        // alors remplacée par la carte (cf. machine : « roue » renvoie la carte si loyalty.enabled).
+        // Fidélité désactivée → « roue » garde son comportement historique (ctx.wheel), et un
+        // mot-clé carte renvoie la présentation courte (ctx.loyalty.enabled = false).
+        let ctx = baseCtx
+        if (conv.state !== 'HUMAIN' && (isRoueCommand || isCardCommand)) {
+          const loyaltyEnabled = deps.loyaltySecret && deps.loyaltyBaseUrl
+            ? await repo.getLoyaltyEnabled(channel.restaurantId)
+            : false
+          if (loyaltyEnabled) {
+            const token = signLoyaltyToken(
+              { rid: channel.restaurantId, cid: customer.id }, deps.loyaltySecret!, Math.floor(Date.now() / 1000))
+            ctx = { ...baseCtx, loyalty: { enabled: true, cardLink: buildCardLink(deps.loyaltyBaseUrl!, token) } }
+          } else if (isCardCommand) {
+            ctx = { ...baseCtx, loyalty: { enabled: false, cardLink: '' } }
+          } else {
+            ctx = { ...baseCtx, wheel: await repo.getWheelInfo(channel.restaurantId, customer.id) }
+          }
+        }
 
         // Round-trip de l'id `in:<x>` non garanti par WhatsApp : un tap peut revenir sans id (ou
         // en texte), body ne portant alors que le TITRE du bouton. On le retraduit en entrée

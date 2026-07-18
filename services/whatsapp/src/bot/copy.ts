@@ -1,4 +1,5 @@
 import { type Cart, type SupplementLine, cartTotal, formatFcfa } from '@goutatou/db'
+import { cardMessage } from '../loyalty/card-trigger.js'
 
 function supplementsList(supplements: SupplementLine[]): string {
   return supplements.map((s, i) => `${i + 1}. ${s.name} +${formatFcfa(s.price)}`).join('\n')
@@ -83,6 +84,21 @@ export const copy = {
       `Commandez régulièrement et tentez de gagner un cadeau ! 🎁\n` +
       `Plus que ${remaining} commande${plural} avant votre tour de roue !`
     )
+  },
+  /**
+   * Carte de fidélité (remplace la roue quand loyalty_enabled). `loyalty` est injecté par le
+   * processor (repo + génération du jeton), la machine reste pure. Activée → corps chaleureux +
+   * lien perso vers la carte. Désactivée/absente → présentation courte du programme, sans lien.
+   */
+  loyaltyCard: (loyalty?: { enabled: boolean; cardLink: string }) => {
+    if (!loyalty?.enabled || !loyalty.cardLink) {
+      return (
+        `💳 *Carte de fidélité*\n` +
+        `Commandez régulièrement et cumulez des tampons pour débloquer des cadeaux ! 🎁\n` +
+        `Le programme sera activé prochainement, revenez bientôt.`
+      )
+    }
+    return cardMessage(loyalty.cardLink)
   },
   promos: `✅ C'est noté ! Vous recevrez nos offres et promotions ici. Envoyez STOP à tout moment pour vous désinscrire.`,
 }

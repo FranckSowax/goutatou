@@ -74,6 +74,46 @@ describe('commande globale "roue"', () => {
   })
 })
 
+describe('commande globale "fidélité"/"carte"', () => {
+  const loyaltyCtx: BotContext = { ...baseCtx, loyalty: { enabled: true, cardLink: 'https://x/f/TOK' } }
+
+  it('fidélité activée → corps carte + lien perso, état/panier conservés', () => {
+    const r = transition('ACCUEIL', EMPTY_CART, 'fidélité', loyaltyCtx)
+    expect(r.state).toBe('ACCUEIL')
+    expect(r.cart).toEqual(EMPTY_CART)
+    expect(r.replies[0]).toContain('carte de fidélité')
+    expect(r.replies[0]).toContain('https://x/f/TOK')
+  })
+
+  it('accepte "fidelite" (sans accent) et "carte"', () => {
+    expect(transition('ACCUEIL', EMPTY_CART, 'fidelite', loyaltyCtx).replies[0]).toContain('https://x/f/TOK')
+    expect(transition('MENU', EMPTY_CART, '  CARTE  ', loyaltyCtx).replies[0]).toContain('https://x/f/TOK')
+  })
+
+  it('fidélité désactivée/absente → présentation courte, sans lien', () => {
+    const r = transition('ACCUEIL', EMPTY_CART, 'carte', { ...baseCtx, loyalty: { enabled: false, cardLink: '' } })
+    expect(r.replies[0]).toContain('💳 *Carte de fidélité*')
+    expect(r.replies[0]).not.toContain('http')
+  })
+
+  it('HUMAIN reste silencieux même sur "carte"', () => {
+    const r = transition('HUMAIN', EMPTY_CART, 'carte', loyaltyCtx)
+    expect(r.state).toBe('HUMAIN')
+    expect(r.replies).toHaveLength(0)
+  })
+
+  it('"roue" renvoie la CARTE quand la fidélité est activée (roue remplacée)', () => {
+    const ctx: BotContext = {
+      ...baseCtx,
+      loyalty: { enabled: true, cardLink: 'https://x/f/TOK' },
+      wheel: { enabled: true, triggerOrders: 5, orderCount: 1 },
+    }
+    const r = transition('ACCUEIL', EMPTY_CART, 'roue', ctx)
+    expect(r.replies[0]).toContain('https://x/f/TOK')
+    expect(r.replies[0]).not.toContain('Roue de la fortune')
+  })
+})
+
 describe('commande globale "promos"', () => {
   it('répond la confirmation opt-in fixe, état et panier conservés', () => {
     const r = transition('ACCUEIL', EMPTY_CART, 'promos', baseCtx)

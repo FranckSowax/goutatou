@@ -129,6 +129,93 @@ describe('handleOrderUpdate', () => {
     expect(sendInteractiveUrl).not.toHaveBeenCalled()
   })
 
+  function fakeDbLoyalty(chatId: string, loyaltyEnabled: boolean, recupCount: number) {
+    return {
+      from: vi.fn((table: string) => {
+        if (table === 'customers') {
+          return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: { chat_id: chatId } }) }) }) }
+        }
+        if (table === 'whapi_channels') {
+          return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: { token_encrypted: 'enc', status: 'active' } }) }) }) }
+        }
+        if (table === 'restaurants') {
+          return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: { loyalty_enabled: loyaltyEnabled, wheel_enabled: false, wheel_trigger_orders: 3, wheel_qr_public: false } }) }) }) }
+        }
+        if (table === 'orders') {
+          const builder: PromiseLike<{ count: number }> & { eq: () => typeof builder } = {
+            eq: () => builder,
+            then: (resolve) => Promise.resolve({ count: recupCount }).then(resolve),
+          }
+          return { select: () => builder }
+        }
+        throw new Error(`table inattendue : ${table}`)
+      }),
+    }
+  }
+
+  it('recuperee + fidélité activée + 1ʳᵉ commande récupérée : envoie le lien carte via bouton interactif', async () => {
+    const sendText = vi.fn().mockResolvedValue({ id: 'x' })
+    const sendInteractiveUrl = vi.fn().mockResolvedValue({ id: 'i1' })
+    const decrypt = vi.fn().mockReturnValue('tok')
+    const db = fakeDbLoyalty('24177@s.whatsapp.net', true, 1)
+    await handleOrderUpdate(db as never, 'k'.repeat(64), oldRow,
+      { ...oldRow, status: 'recuperee' }, () => ({ sendText, sendInteractiveUrl }), decrypt, 's'.repeat(32), 'https://x.test')
+    expect(sendText).toHaveBeenCalledTimes(1) // message de statut uniquement
+    expect(sendInteractiveUrl).toHaveBeenCalledTimes(1)
+    const [chatId, body, buttonText, url] = sendInteractiveUrl.mock.calls[0]
+    expect(chatId).toBe('24177@s.whatsapp.net')
+    expect(buttonText).toBe('💳 Ma carte de fidélité')
+    expect(body).not.toContain('/f/')
+    expect(url).toContain('https://x.test/f/')
+  })
+
+  it('recuperee + fidélité activée : bouton interactif échoue → fallback sendText avec le lien carte', async () => {
+    const sendText = vi.fn().mockResolvedValue({ id: 'x' })
+    const sendInteractiveUrl = vi.fn().mockRejectedValue(new Error('whapi 400'))
+    const decrypt = vi.fn().mockReturnValue('tok')
+    const db = fakeDbLoyalty('24177@s.whatsapp.net', true, 1)
+    await handleOrderUpdate(db as never, 'k'.repeat(64), oldRow,
+      { ...oldRow, status: 'recuperee' }, () => ({ sendText, sendInteractiveUrl }), decrypt, 's'.repeat(32), 'https://x.test')
+    expect(sendInteractiveUrl).toHaveBeenCalledTimes(1)
+    expect(sendText).toHaveBeenCalledTimes(2)
+    expect(sendText).toHaveBeenNthCalledWith(2, '24177@s.whatsapp.net', expect.stringContaining('https://x.test/f/'))
+  })
+
+  it('recuperee + fidélité activée mais PAS la 1ʳᵉ commande (count 2) : pas de lien carte', async () => {
+    const sendText = vi.fn().mockResolvedValue({ id: 'x' })
+    const sendInteractiveUrl = vi.fn().mockResolvedValue({ id: 'i1' })
+    const decrypt = vi.fn().mockReturnValue('tok')
+    const db = fakeDbLoyalty('24177@s.whatsapp.net', true, 2)
+    await handleOrderUpdate(db as never, 'k'.repeat(64), oldRow,
+      { ...oldRow, status: 'recuperee' }, () => ({ sendText, sendInteractiveUrl }), decrypt, 's'.repeat(32), 'https://x.test')
+    expect(sendText).toHaveBeenCalledTimes(1)
+    expect(sendInteractiveUrl).not.toHaveBeenCalled()
+  })
+
+  it('recuperee + fidélité activée ET roue activée : la carte remplace la roue (aucune offre de roue)', async () => {
+    const sendText = vi.fn().mockResolvedValue({ id: 'x' })
+    const sendInteractiveUrl = vi.fn().mockResolvedValue({ id: 'i1' })
+    const decrypt = vi.fn().mockReturnValue('tok')
+    // restaurants renvoie loyalty_enabled ET wheel_enabled true : la garde loyalty prime + return.
+    const db = {
+      from: vi.fn((table: string) => {
+        if (table === 'customers') return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: { chat_id: '24177@s.whatsapp.net' } }) }) }) }
+        if (table === 'whapi_channels') return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: { token_encrypted: 'enc', status: 'active' } }) }) }) }
+        if (table === 'restaurants') return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: { loyalty_enabled: true, wheel_enabled: true, wheel_trigger_orders: 1, wheel_qr_public: false } }) }) }) }
+        if (table === 'orders') {
+          const builder: PromiseLike<{ count: number }> & { eq: () => typeof builder } = { eq: () => builder, then: (r) => Promise.resolve({ count: 1 }).then(r) }
+          return { select: () => builder }
+        }
+        if (table === 'prizes') throw new Error('prizes ne doit pas être interrogé quand loyalty_enabled')
+        throw new Error(`table inattendue : ${table}`)
+      }),
+    }
+    await handleOrderUpdate(db as never, 'k'.repeat(64), oldRow,
+      { ...oldRow, status: 'recuperee' }, () => ({ sendText, sendInteractiveUrl }), decrypt, 's'.repeat(32), 'https://x.test')
+    expect(sendInteractiveUrl).toHaveBeenCalledTimes(1)
+    expect(sendInteractiveUrl.mock.calls[0][3]).toContain('/f/') // carte, pas /roue?t=
+  })
+
   describe('bouton "je suis arrivé" (Drive, commande prête)', () => {
     it('prete + mode drive : envoie le bouton EN PLUS du message de statut (jamais à sa place)', async () => {
       const sendText = vi.fn().mockResolvedValue({ id: 'x' })

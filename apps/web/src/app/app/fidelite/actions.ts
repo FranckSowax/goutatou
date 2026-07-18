@@ -1,8 +1,10 @@
 'use server'
+import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertPlan } from '@/lib/premium'
+import { normalizeGabonPhone } from '@/lib/lp/wa'
 
 async function myRestaurantId() {
   const supabase = await createSupabaseServer()
@@ -160,6 +162,232 @@ export async function updatePrizeImage(prizeId: string, formData: FormData) {
   const imageUrl = supabase.storage.from('prize-media').getPublicUrl(path).data.publicUrl
 
   const { error } = await supabase.from('prizes').update({ image_url: imageUrl }).eq('id', prizeId)
+  if (error) throw new Error(error.message)
+  revalidatePath('/app/fidelite')
+}
+
+// ─── Carte de fidélité à tampons (remplace la roue) ──────────────────────────
+
+// Réglages de la carte : activation + cooldown anti-abus du QR de caisse. Même contrainte RLS
+// que updateWheelSettings ci-dessus (pas de policy UPDATE tenant sur restaurants) → client admin
+// après le gate myRestaurantId + assertPlan.
+export async function updateLoyaltySettings(formData: FormData) {
+  const { supabase, restaurantId } = await myRestaurantId()
+  await assertPlan(supabase, restaurantId, ['pro', 'premium'])
+  const enabled = formData.get('loyalty_enabled') === 'on'
+  const cooldownHours = Math.max(0, Math.trunc(Number(formData.get('loyalty_cooldown_hours') ?? 4)))
+  const admin = createAdminClient()
+  const { data, error } = await admin.from('restaurants')
+    .update({ loyalty_enabled: enabled, loyalty_cooldown_hours: cooldownHours })
+    .eq('id', restaurantId)
+    .select('id')
+  if (error || !data || data.length === 0) throw new Error('Enregistrement impossible.')
+  revalidatePath('/app/fidelite')
+}
+
+const MAX_LOYALTY_IMAGE_BYTES = 4 * 1024 * 1024
+
+// Logo / cover de la carte de fidélité : pattern EXACT de updatePrizeImage (bucket prize-media,
+// policies scopées tenant, chemin déterministe pour écraser au lieu d'accumuler des orphelins).
+export async function uploadLoyaltyImage(kind: 'logo' | 'cover', formData: FormData) {
+  const { supabase, restaurantId } = await myRestaurantId()
+  await assertPlan(supabase, restaurantId, ['pro', 'premium'])
+
+  const image = formData.get('image') as File | null
+  if (!image || image.size === 0) return
+  if (image.size > MAX_LOYALTY_IMAGE_BYTES) throw new Error('Image trop lourde (max 4 Mo).')
+
+  const ext = (image.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
+  const path = `${restaurantId}/loyalty/${kind}.${ext}`
+  const { error: upErr } = await supabase.storage
+    .from('prize-media')
+    .upload(path, image, { upsert: true, contentType: image.type || undefined })
+  if (upErr) throw new Error(upErr.message)
+  const publicUrl = supabase.storage.from('prize-media').getPublicUrl(path).data.publicUrl
+
+  // Cache-buster : le chemin est déterministe (écrasé à chaque upload), donc l'URL publique
+  // ne change pas → on force le rafraîchissement avec un suffixe de version.
+  const url = `${publicUrl}?v=${Date.now()}`
+  const column = kind === 'logo' ? 'loyalty_logo_url' : 'loyalty_cover_url'
+  const admin = createAdminClient()
+  const { data, error } = await admin.from('restaurants')
+    .update({ [column]: url })
+    .eq('id', restaurantId)
+    .select('id')
+  if (error || !data || data.length === 0) throw new Error('Enregistrement impossible.')
+  revalidatePath('/app/fidelite')
+}
+
+// Régénère le code du QR de caisse : invalide l'ancien QR imprimé. Même contrainte RLS → admin.
+export async function regenerateStampCode() {
+  const { supabase, restaurantId } = await myRestaurantId()
+  await assertPlan(supabase, restaurantId, ['pro', 'premium'])
+  const code = randomUUID().replace(/-/g, '')
+  const admin = createAdminClient()
+  const { data, error } = await admin.from('restaurants')
+    .update({ loyalty_stamp_code: code })
+    .eq('id', restaurantId)
+    .select('id')
+  if (error || !data || data.length === 0) throw new Error('Régénération impossible.')
+  revalidatePath('/app/fidelite')
+}
+
+// ─── Paliers (loyalty_rewards) — modèle des prizes, sans poids/stock/image ────
+// Écritures loyalty_rewards via le client RLS authentifié (policy tenant_all_loyalty_rewards).
+
+export async function createReward(formData: FormData) {
+  const { supabase, restaurantId } = await myRestaurantId()
+  await assertPlan(supabase, restaurantId, ['pro', 'premium'])
+  const threshold = Math.max(1, Math.trunc(Number(formData.get('threshold') ?? 1)))
+  const label = String(formData.get('label') ?? '').trim()
+  if (!label) throw new Error('Libellé requis.')
+  const { error } = await supabase.from('loyalty_rewards').insert({
+    restaurant_id: restaurantId,
+    threshold,
+    label,
+    active: true,
+  })
+  if (error) throw new Error(error.message)
+  revalidatePath('/app/fidelite')
+}
+
+export async function updateReward(id: string, formData: FormData) {
+  const { supabase, restaurantId } = await myRestaurantId()
+  await assertPlan(supabase, restaurantId, ['pro', 'premium'])
+  const threshold = Math.max(1, Math.trunc(Number(formData.get('threshold') ?? 1)))
+  const label = String(formData.get('label') ?? '').trim()
+  if (!label) throw new Error('Libellé requis.')
+  const { error } = await supabase.from('loyalty_rewards')
+    .update({ threshold, label })
+    .eq('id', id)
+    .eq('restaurant_id', restaurantId)
+  if (error) throw new Error(error.message)
+  revalidatePath('/app/fidelite')
+}
+
+export async function toggleReward(id: string, active: boolean) {
+  const { supabase, restaurantId } = await myRestaurantId()
+  await assertPlan(supabase, restaurantId, ['pro', 'premium'])
+  const { error } = await supabase.from('loyalty_rewards')
+    .update({ active })
+    .eq('id', id)
+    .eq('restaurant_id', restaurantId)
+  if (error) throw new Error(error.message)
+  revalidatePath('/app/fidelite')
+}
+
+export async function deleteReward(id: string) {
+  const { supabase, restaurantId } = await myRestaurantId()
+  await assertPlan(supabase, restaurantId, ['pro', 'premium'])
+  const { error } = await supabase.from('loyalty_rewards')
+    .delete()
+    .eq('id', id)
+    .eq('restaurant_id', restaurantId)
+  if (error) throw new Error(error.message)
+  revalidatePath('/app/fidelite')
+}
+
+// Réordonner : monte/descend un palier en échangeant sa position avec son voisin.
+export async function reorderRewards(id: string, direction: 'up' | 'down') {
+  const { supabase, restaurantId } = await myRestaurantId()
+  await assertPlan(supabase, restaurantId, ['pro', 'premium'])
+  const { data: rows, error } = await supabase.from('loyalty_rewards')
+    .select('id, position')
+    .eq('restaurant_id', restaurantId)
+    .order('position', { ascending: true })
+    .order('threshold', { ascending: true })
+  if (error) throw new Error(error.message)
+  const list = rows ?? []
+  const idx = list.findIndex((r) => r.id === id)
+  if (idx === -1) return
+  const swapIdx = direction === 'up' ? idx - 1 : idx + 1
+  if (swapIdx < 0 || swapIdx >= list.length) return
+  const a = list[idx]
+  const b = list[swapIdx]
+  // Positions normalisées sur l'index pour éviter les collisions (positions par défaut à 0).
+  await supabase.from('loyalty_rewards').update({ position: swapIdx }).eq('id', a.id).eq('restaurant_id', restaurantId)
+  await supabase.from('loyalty_rewards').update({ position: idx }).eq('id', b.id).eq('restaurant_id', restaurantId)
+  revalidatePath('/app/fidelite')
+}
+
+// ─── Valider un lot (loyalty_redemptions) ────────────────────────────────────
+
+export interface RedeemableTiers {
+  found: boolean
+  customerId: string | null
+  customerName: string | null
+  stamps: number
+  tiers: { threshold: number; label: string; redeemed: boolean }[]
+}
+
+export async function findRedeemableTiers(phone: string): Promise<RedeemableTiers> {
+  const { supabase, restaurantId } = await myRestaurantId()
+  await assertPlan(supabase, restaurantId, ['pro', 'premium'])
+  const empty: RedeemableTiers = { found: false, customerId: null, customerName: null, stamps: 0, tiers: [] }
+
+  const normalized = normalizeGabonPhone(phone)
+  if (!normalized) return empty
+
+  const { data: customer } = await supabase.from('customers')
+    .select('id, name, loyalty_stamps')
+    .eq('restaurant_id', restaurantId)
+    .eq('phone', normalized)
+    .maybeSingle()
+  if (!customer) return empty
+
+  const [{ data: rewards }, { data: redemptions }] = await Promise.all([
+    supabase.from('loyalty_rewards')
+      .select('threshold, label')
+      .eq('restaurant_id', restaurantId)
+      .eq('active', true)
+      .order('threshold', { ascending: true }),
+    supabase.from('loyalty_redemptions')
+      .select('threshold')
+      .eq('restaurant_id', restaurantId)
+      .eq('customer_id', customer.id),
+  ])
+
+  const redeemed = new Set((redemptions ?? []).map((r) => r.threshold))
+  const tiers = (rewards ?? []).map((r) => ({
+    threshold: r.threshold,
+    label: r.label,
+    redeemed: redeemed.has(r.threshold),
+  }))
+
+  return {
+    found: true,
+    customerId: customer.id,
+    customerName: customer.name ?? null,
+    stamps: customer.loyalty_stamps ?? 0,
+    tiers,
+  }
+}
+
+// Marque un palier remis : résout le reward_id par (resto, threshold), insère la redemption avec
+// redeemed_by = auth uid, en ignorant les doublons (unique(resto,customer,threshold)).
+export async function redeemTier(customerId: string, threshold: number) {
+  const { supabase, restaurantId } = await myRestaurantId()
+  await assertPlan(supabase, restaurantId, ['pro', 'premium'])
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Non authentifié')
+
+  const { data: reward } = await supabase.from('loyalty_rewards')
+    .select('id')
+    .eq('restaurant_id', restaurantId)
+    .eq('threshold', threshold)
+    .maybeSingle()
+
+  const { error } = await supabase.from('loyalty_redemptions')
+    .upsert(
+      {
+        restaurant_id: restaurantId,
+        customer_id: customerId,
+        reward_id: reward?.id ?? null,
+        threshold,
+        redeemed_by: user.id,
+      },
+      { onConflict: 'restaurant_id,customer_id,threshold', ignoreDuplicates: true },
+    )
   if (error) throw new Error(error.message)
   revalidatePath('/app/fidelite')
 }
