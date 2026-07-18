@@ -15,28 +15,44 @@ if (existsSync(envFile)) {
 }
 
 const hasOwnerCreds = !!(process.env.E2E_OWNER_EMAIL && process.env.E2E_OWNER_PASSWORD)
+const hasStaffCreds = !!(process.env.E2E_STAFF_PHONE && process.env.E2E_STAFF_PASSWORD)
+
+const OWNER_ONLY = /(app-pages|flows)\.spec\.ts/ // specs du projet patron authentifié
+const STAFF_ONLY = /staff-view\.spec\.ts/ // specs du projet employé authentifié
 
 // Projet non authentifié : pages publiques + gardes (ignore les specs connectées).
 const baseProjects: Project[] = [
   {
     name: 'chromium',
     use: { ...devices['Desktop Chrome'] },
-    testIgnore: /app-pages\.spec\.ts/,
+    testIgnore: [OWNER_ONLY, STAFF_ONLY],
   },
 ]
 
-// N'ajoute la connexion + le projet authentifié que si les identifiants sont fournis.
-const authProjects: Project[] = hasOwnerCreds
-  ? [
-      { name: 'setup', testMatch: /auth\.setup\.ts/ },
-      {
-        name: 'authenticated',
-        testMatch: /app-pages\.spec\.ts/,
-        use: { ...devices['Desktop Chrome'], storageState: path.join(__dirname, 'e2e', '.auth', 'owner.json') },
-        dependencies: ['setup'],
-      },
-    ]
-  : []
+// N'ajoute connexion + projets authentifiés que si les identifiants correspondants sont fournis.
+const authProjects: Project[] = []
+if (hasOwnerCreds) {
+  authProjects.push(
+    { name: 'setup-owner', testMatch: /auth\.setup\.ts/ },
+    {
+      name: 'authenticated',
+      testMatch: OWNER_ONLY,
+      use: { ...devices['Desktop Chrome'], storageState: path.join(__dirname, 'e2e', '.auth', 'owner.json') },
+      dependencies: ['setup-owner'],
+    },
+  )
+}
+if (hasStaffCreds) {
+  authProjects.push(
+    { name: 'setup-staff', testMatch: /auth-staff\.setup\.ts/ },
+    {
+      name: 'staff',
+      testMatch: STAFF_ONLY,
+      use: { ...devices['Desktop Chrome'], storageState: path.join(__dirname, 'e2e', '.auth', 'staff.json') },
+      dependencies: ['setup-staff'],
+    },
+  )
+}
 
 export default defineConfig({
   testDir: './e2e',
