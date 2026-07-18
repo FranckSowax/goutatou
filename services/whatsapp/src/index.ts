@@ -30,6 +30,8 @@ import { createChannelDecisionRepo } from './autochannel/decision-repo.js'
 import { startChannelDecisionWorker } from './autochannel/decision-worker.js'
 import { createChannelApprovalRepo } from './autochannel/approval-repo.js'
 import { createArrivalRepo } from './drive/arrival-repo.js'
+import { createAnalysisRepo } from './analysis/repo.js'
+import { startAnalysisWorker } from './analysis/worker.js'
 
 const config = loadConfig()
 const db = createServiceClient(config.supabaseUrl, config.serviceRoleKey)
@@ -123,6 +125,10 @@ startChannelDecisionWorker({
   pollMs: config.autoChannelPollMs,
 })
 const channelApprovalRepo = createChannelApprovalRepo(db)
+// Analyses IA (page Analyses) : génération planifiée des rapports quotidien/hebdo/mensuel via
+// Mistral. Désactivé proprement si MISTRAL_API_KEY est absente (fonctionnalité additive).
+const analysisRepo = createAnalysisRepo(db)
+startAnalysisWorker({ repo: analysisRepo, apiKey: config.mistralApiKey, pollMs: config.analysisPollMs })
 const arrivalRepo = createArrivalRepo(db)
 const processWebhook = createProcessor(repo, (token) => new WhapiClient(token), {
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
