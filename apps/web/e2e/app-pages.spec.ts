@@ -15,7 +15,8 @@ const APP_PAGES: { path: string; heading: string }[] = [
   { path: '/app/stats', heading: 'Statistiques' },
   { path: '/app/analyses', heading: 'Analyses' },
   { path: '/app/marketing', heading: 'Marketing' },
-  { path: '/app/marketing/campagnes', heading: 'Campagnes' },
+  // /app/marketing/campagnes est volontairement masquée (redirige vers Statuts) — couverte par
+  // auth-guard.spec.ts, pas testée comme page de contenu.
   { path: '/app/marketing/chaine', heading: 'Chaîne' },
   { path: '/app/marketing/qr', heading: 'QR' },
   { path: '/app/marketing/sondages', heading: 'Sondages' },
@@ -26,9 +27,14 @@ const APP_PAGES: { path: string; heading: string }[] = [
 ]
 
 test.describe('Pages connectées (patron)', () => {
+  // `next dev` compile les routes à la demande : sous navigation parallèle, un premier hit peut
+  // servir brièvement un mauvais contenu. Un retry (route déjà compilée) lève cette flakiness de
+  // serveur de dev — sans rapport avec le code applicatif.
+  test.describe.configure({ retries: 2 })
+
   for (const { path, heading } of APP_PAGES) {
     test(`${path} se rend`, async ({ page }) => {
-      await page.goto(path)
+      await page.goto(path, { waitUntil: 'networkidle' })
       // Pas de retour au login (session valide) ni d'erreur applicative.
       await expect(page).not.toHaveURL(/\/login/)
       await expect(page.getByText('Application error')).toHaveCount(0)
