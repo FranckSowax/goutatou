@@ -206,8 +206,9 @@ export async function getAnalyses(
       .select('period_start, period_end, ai_insights, headline, generated_at')
       .eq('restaurant_id', restaurantId)
       .eq('period_type', period)
-      .order('period_start', { ascending: false })
-      .limit(1)
+      // Rapport de la période EXACTE affichée (mêmes bornes que les KPIs), pas juste le dernier —
+      // sinon le récit IA pourrait décrire une autre fenêtre que les chiffres.
+      .eq('period_start', bounds.startYmd)
       .maybeSingle(),
   ])
 

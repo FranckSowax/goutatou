@@ -154,7 +154,7 @@ function AiBlock({ ai, period }: { ai: AiInsights; period: AnalysisPeriod }) {
         <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5 shadow-xs">
           <h3 className="font-display text-base font-semibold">Sentiment & frictions</h3>
           <div className="flex items-baseline gap-2">
-            <span className="font-display text-3xl font-bold text-primary">{ai.sentiment.note}/5</span>
+            <span className="font-display text-3xl font-bold text-primary">{ai.sentiment.note}/10</span>
             <span className="text-sm text-muted-foreground">note de satisfaction</span>
           </div>
           {ai.sentiment.resume.trim() && (

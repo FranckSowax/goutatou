@@ -30,13 +30,16 @@ export function createAnalysisRepo(db: SupabaseClient): AnalysisRepo {
     },
 
     async reportExists(restaurantId, periodType, periodStart) {
-      const { data } = await db
+      const { data, error } = await db
         .from('analysis_reports')
         .select('id')
         .eq('restaurant_id', restaurantId)
         .eq('period_type', periodType)
         .eq('period_start', periodStart)
         .maybeSingle()
+      // Sur erreur de lecture, on JETTE (le worker saute ce resto/période ce tick) plutôt que de
+      // renvoyer `false` — sinon un souci DB déclencherait une génération Mistral facturée pour rien.
+      if (error) throw new Error(`reportExists: ${error.message}`)
       return !!data
     },
 
@@ -65,7 +68,7 @@ export function createAnalysisRepo(db: SupabaseClient): AnalysisRepo {
     },
 
     async saveReport({ restaurantId, period, headline, insights, model }) {
-      await db.from('analysis_reports').upsert(
+      const { error } = await db.from('analysis_reports').upsert(
         {
           restaurant_id: restaurantId,
           period_type: period.type,
@@ -78,6 +81,9 @@ export function createAnalysisRepo(db: SupabaseClient): AnalysisRepo {
         },
         { onConflict: 'restaurant_id,period_type,period_start', ignoreDuplicates: true },
       )
+      // Remonter l'échec : l'appelant marque ce (resto, période) comme échoué pour NE PAS rappeler
+      // Mistral (déjà facturé) à chaque tick tant que l'écriture ne passe pas.
+      if (error) throw new Error(`saveReport: ${error.message}`)
     },
   }
 }

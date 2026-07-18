@@ -25,51 +25,51 @@ describe('conversionRate', () => {
   })
 })
 
-describe('periodBounds — jour', () => {
-  it('borne le jour civil courant et la veille (Libreville UTC+1)', () => {
-    // 2026-07-17 13:00 Libreville
+describe('periodBounds — jour (dernière période complète = veille)', () => {
+  it('borne la veille et l’avant-veille (Libreville UTC+1)', () => {
+    // 2026-07-17 13:00 Libreville → veille = 2026-07-16
     const now = new Date('2026-07-17T12:00:00Z')
     const b = periodBounds('day', now)
-    expect(b.startYmd).toBe('2026-07-17')
-    expect(b.endYmd).toBe('2026-07-17')
-    expect(b.current.startUtc).toBe('2026-07-16T23:00:00.000Z')
-    expect(b.current.endUtc).toBe('2026-07-17T23:00:00.000Z')
-    // veille immédiatement contiguë
+    expect(b.startYmd).toBe('2026-07-16')
+    expect(b.endYmd).toBe('2026-07-16')
+    expect(b.current.startUtc).toBe('2026-07-15T23:00:00.000Z')
+    expect(b.current.endUtc).toBe('2026-07-16T23:00:00.000Z')
     expect(b.previous.endUtc).toBe(b.current.startUtc)
-    expect(b.previous.startUtc).toBe('2026-07-15T23:00:00.000Z')
+    expect(b.previous.startUtc).toBe('2026-07-14T23:00:00.000Z')
   })
 })
 
-describe('periodBounds — semaine', () => {
-  it('semaine lundi→dimanche contenant le jour courant, précédente contiguë', () => {
-    // 2026-07-17 est un vendredi → lundi de la semaine = 2026-07-13
+describe('periodBounds — semaine (dernière semaine complète)', () => {
+  it('semaine lundi→dimanche précédente, et celle d’avant contiguë', () => {
+    // 2026-07-17 vendredi → lundi courant = 2026-07-13 → semaine complète préc. = 06→12 juillet
     const now = new Date('2026-07-17T12:00:00Z')
     const b = periodBounds('week', now)
-    expect(b.startYmd).toBe('2026-07-13')
-    expect(b.endYmd).toBe('2026-07-19')
-    expect(b.current.startUtc).toBe('2026-07-12T23:00:00.000Z') // lundi 13, minuit Libreville
-    expect(b.current.endUtc).toBe('2026-07-19T23:00:00.000Z') // lundi 20, minuit Libreville
-    expect(b.previous.startUtc).toBe('2026-07-05T23:00:00.000Z') // lundi 06
+    expect(b.startYmd).toBe('2026-07-06')
+    expect(b.endYmd).toBe('2026-07-12')
+    expect(b.current.startUtc).toBe('2026-07-05T23:00:00.000Z') // lundi 06, minuit Libreville
+    expect(b.current.endUtc).toBe('2026-07-12T23:00:00.000Z') // lundi 13, minuit Libreville
+    expect(b.previous.startUtc).toBe('2026-06-28T23:00:00.000Z') // lundi 29 juin
     expect(b.previous.endUtc).toBe(b.current.startUtc)
   })
 })
 
-describe('periodBounds — mois', () => {
-  it('mois civil courant et mois précédent contigus', () => {
+describe('periodBounds — mois (dernier mois complet)', () => {
+  it('mois précédent et celui d’avant contigus', () => {
     const now = new Date('2026-07-17T12:00:00Z')
     const b = periodBounds('month', now)
-    expect(b.startYmd).toBe('2026-07-01')
-    expect(b.endYmd).toBe('2026-07-31')
-    expect(b.current.startUtc).toBe('2026-06-30T23:00:00.000Z') // 1er juillet minuit Libreville
-    expect(b.current.endUtc).toBe('2026-07-31T23:00:00.000Z') // 1er août minuit Libreville
-    expect(b.previous.startUtc).toBe('2026-05-31T23:00:00.000Z') // 1er juin minuit Libreville
+    expect(b.startYmd).toBe('2026-06-01')
+    expect(b.endYmd).toBe('2026-06-30')
+    expect(b.current.startUtc).toBe('2026-05-31T23:00:00.000Z') // 1er juin minuit Libreville
+    expect(b.current.endUtc).toBe('2026-06-30T23:00:00.000Z') // 1er juillet minuit Libreville
+    expect(b.previous.startUtc).toBe('2026-04-30T23:00:00.000Z') // 1er mai minuit Libreville
     expect(b.previous.endUtc).toBe(b.current.startUtc)
   })
 
   it('gère le passage d’année (janvier → décembre précédent)', () => {
     const now = new Date('2026-01-10T12:00:00Z')
     const b = periodBounds('month', now)
-    expect(b.startYmd).toBe('2026-01-01')
-    expect(b.previous.startUtc).toBe('2025-11-30T23:00:00.000Z') // 1er décembre 2025 minuit Libreville
+    expect(b.startYmd).toBe('2025-12-01')
+    expect(b.current.startUtc).toBe('2025-11-30T23:00:00.000Z') // 1er décembre 2025 minuit Libreville
+    expect(b.previous.startUtc).toBe('2025-10-31T23:00:00.000Z') // 1er novembre 2025 minuit Libreville
   })
 })

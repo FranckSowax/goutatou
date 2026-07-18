@@ -18,12 +18,12 @@ export const MAX_CHARS = 24000
  */
 export function anonymizeText(input: string): string {
   return input
-    // jid WhatsApp complet : 24177000001@s.whatsapp.net
-    .replace(/[\w.-]+@s\.whatsapp\.net/gi, '[numéro]')
+    // jid WhatsApp complets : ...@s.whatsapp.net / @lid / @c.us / @g.us / @newsletter
+    .replace(/[\w.-]+@(?:s\.whatsapp\.net|lid|c\.us|g\.us|newsletter)/gi, '[numéro]')
     // uuid
     .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '[id]')
-    // numéros de téléphone : 8 chiffres ou plus, avec séparateurs éventuels (+ ( ) . - espace)
-    .replace(/\+?\d[\d\s().-]{6,}\d/g, '[numéro]')
+    // numéros de téléphone : 8 chiffres ou plus, avec séparateurs éventuels (+ ( ) . - / espace)
+    .replace(/\+?\d[\d\s()./-]{6,}\d/g, '[numéro]')
     .trim()
 }
 

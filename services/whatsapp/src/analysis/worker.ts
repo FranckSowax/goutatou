@@ -22,7 +22,12 @@ async function generateOne(
   apiKey: string,
   restaurantId: string,
   period: ReturnType<typeof duePeriods>[number],
+  failedKeys: Set<string>,
 ): Promise<boolean> {
+  const key = `${restaurantId}:${period.type}:${period.start}`
+  // Déjà échoué dans ce process (Mistral facturé mais écriture KO, ou lecture KO) → on ne réessaie
+  // pas avant un redémarrage, pour borner le coût. Idempotence normale via reportExists sinon.
+  if (failedKeys.has(key)) return false
   if (await repo.reportExists(restaurantId, period.type, period.start)) return false
 
   const { startUtc, endUtc } = periodBoundsUtc(period.start, period.end)
@@ -34,7 +39,12 @@ async function generateOne(
   const { messages, truncated } = anonymizeMessages(rawMessages)
   const prompt = buildAnalysisPrompt(periodLabel(period), messages, headline, truncated)
   const insights = await callMistral(apiKey, prompt)
-  await repo.saveReport({ restaurantId, period, headline, insights, model: MISTRAL_MODEL })
+  try {
+    await repo.saveReport({ restaurantId, period, headline, insights, model: MISTRAL_MODEL })
+  } catch (err) {
+    failedKeys.add(key)
+    throw err
+  }
   return true
 }
 
@@ -45,6 +55,9 @@ export function startAnalysisWorker(deps: AnalysisWorkerDeps): void {
   }
   const apiKey = deps.apiKey
   const callDelayMs = deps.callDelayMs ?? 2000
+  // Persiste sur toute la vie du process : (resto, période) dont l'écriture a échoué après un appel
+  // Mistral facturé — on ne les rappelle plus jusqu'au redémarrage (garde-fou anti-boucle de coût).
+  const failedKeys = new Set<string>()
 
   const tick = async () => {
     try {
@@ -53,7 +66,7 @@ export function startAnalysisWorker(deps: AnalysisWorkerDeps): void {
       for (const restaurantId of restaurants) {
         for (const period of periods) {
           try {
-            const generated = await generateOne(deps.repo, apiKey, restaurantId, period)
+            const generated = await generateOne(deps.repo, apiKey, restaurantId, period, failedKeys)
             if (generated) await new Promise((r) => setTimeout(r, callDelayMs))
           } catch (err) {
             console.error(`[analysis] échec ${restaurantId} ${period.type} ${period.start}`, err)

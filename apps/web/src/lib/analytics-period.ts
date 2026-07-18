@@ -39,55 +39,53 @@ function firstOfMonthYmd(year: number, month: number): string {
 }
 
 /**
- * Calcule les bornes UTC de la période courante et de la période précédente à partir de
- * l'instant `now`, au fuseau Libreville :
- * - `day`   = jour civil en cours ; précédent = la veille.
- * - `week`  = semaine ISO en cours (lundi→dimanche) ; précédent = semaine d'avant.
- * - `month` = mois civil en cours ; précédent = mois d'avant.
+ * Bornes UTC de la DERNIÈRE période COMPLÈTE (révolue) et de celle d'avant, au fuseau Libreville.
+ * On s'aligne exactement sur ce que génère le worker bot (`analysis/periods.ts` `duePeriods`) pour
+ * que les KPIs affichés et le rapport IA portent sur la MÊME fenêtre :
+ * - `day`   = la veille ; précédent = l'avant-veille.
+ * - `week`  = la semaine ISO précédente (lundi→dimanche) ; précédent = celle d'avant.
+ * - `month` = le mois précédent ; précédent = celui d'avant.
+ * `startYmd`/`endYmd` = jours civils (Libreville) de la période complète — servent à retrouver le
+ * rapport IA exact (`analysis_reports.period_start = startYmd`).
  */
 export function periodBounds(period: AnalysisPeriod, now: Date): PeriodBounds {
   const todayYmd = formatYmdLibreville(now)
 
   if (period === 'day') {
-    const current = dayBoundsUtc(todayYmd)
-    const prevYmd = shiftDay(todayYmd, -1)
+    const yesterday = shiftDay(todayYmd, -1)
     return {
-      current,
-      previous: dayBoundsUtc(prevYmd),
-      startYmd: todayYmd,
-      endYmd: todayYmd,
+      current: dayBoundsUtc(yesterday),
+      previous: dayBoundsUtc(shiftDay(todayYmd, -2)),
+      startYmd: yesterday,
+      endYmd: yesterday,
     }
   }
 
   if (period === 'week') {
-    const monday = shiftDay(todayYmd, -weekdayMonIndex(todayYmd))
-    const nextMonday = shiftDay(monday, 7)
-    const prevMonday = shiftDay(monday, -7)
-    const currentStart = dayBoundsUtc(monday).startUtc
-    const currentEnd = dayBoundsUtc(nextMonday).startUtc
+    const thisMonday = shiftDay(todayYmd, -weekdayMonIndex(todayYmd))
+    const prevMonday = shiftDay(thisMonday, -7) // début de la semaine complète précédente
+    const prevPrevMonday = shiftDay(thisMonday, -14)
     return {
-      current: { startUtc: currentStart, endUtc: currentEnd },
-      previous: { startUtc: dayBoundsUtc(prevMonday).startUtc, endUtc: currentStart },
-      startYmd: monday,
-      endYmd: shiftDay(monday, 6),
+      current: { startUtc: dayBoundsUtc(prevMonday).startUtc, endUtc: dayBoundsUtc(thisMonday).startUtc },
+      previous: { startUtc: dayBoundsUtc(prevPrevMonday).startUtc, endUtc: dayBoundsUtc(prevMonday).startUtc },
+      startYmd: prevMonday,
+      endYmd: shiftDay(prevMonday, 6),
     }
   }
 
-  // month
+  // month : le mois précédent complet
   const [yStr, mStr] = todayYmd.split('-')
   const year = Number(yStr)
   const month = Number(mStr)
   const firstThis = firstOfMonthYmd(year, month)
-  const next = shiftMonth(year, month, 1)
   const prev = shiftMonth(year, month, -1)
-  const firstNext = firstOfMonthYmd(next.year, next.month)
+  const prevPrev = shiftMonth(year, month, -2)
   const firstPrev = firstOfMonthYmd(prev.year, prev.month)
-  const currentStart = dayBoundsUtc(firstThis).startUtc
-  const currentEnd = dayBoundsUtc(firstNext).startUtc
+  const firstPrevPrev = firstOfMonthYmd(prevPrev.year, prevPrev.month)
   return {
-    current: { startUtc: currentStart, endUtc: currentEnd },
-    previous: { startUtc: dayBoundsUtc(firstPrev).startUtc, endUtc: currentStart },
-    startYmd: firstThis,
-    endYmd: shiftDay(firstNext, -1),
+    current: { startUtc: dayBoundsUtc(firstPrev).startUtc, endUtc: dayBoundsUtc(firstThis).startUtc },
+    previous: { startUtc: dayBoundsUtc(firstPrevPrev).startUtc, endUtc: dayBoundsUtc(firstPrev).startUtc },
+    startYmd: firstPrev,
+    endYmd: shiftDay(firstThis, -1),
   }
 }
