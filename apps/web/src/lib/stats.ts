@@ -210,3 +210,23 @@ export function cancelRate(orders: { status: string }[]): number {
   const cancelled = orders.filter((o) => o.status === 'annulee').length
   return Math.round((cancelled / orders.length) * 100)
 }
+
+/**
+ * Taux de conversion (%) : part des interlocuteurs distincts (chat_id ayant écrit) qui ont
+ * abouti à ≥1 commande sur la période. `writerChatIds` = clés des chats entrants,
+ * `orderChatIds` = clés des chats ayant passé commande (même espace de clés). Arrondi ;
+ * 0 si personne n'a écrit (pas de base de comparaison). Pur : l'appelant normalise les clés.
+ */
+export function conversionRate(
+  writerChatIds: Iterable<string>,
+  orderChatIds: Iterable<string>,
+): number {
+  const writers = new Set(writerChatIds)
+  if (writers.size === 0) return 0
+  const orderers = new Set(orderChatIds)
+  let converted = 0
+  for (const id of writers) {
+    if (orderers.has(id)) converted += 1
+  }
+  return Math.round((converted / writers.size) * 100)
+}
