@@ -11,7 +11,7 @@ type Fbq = ((...args: unknown[]) => void) & {
 
 declare global {
   interface Window {
-    appPixel?: { track: (event: string, data?: Record<string, unknown>) => void }
+    appPixel?: { track: (event: string, data?: Record<string, unknown>, options?: { eventID?: string }) => void }
     fbq?: Fbq
     _fbq?: Fbq
   }
@@ -50,9 +50,9 @@ export function MetaPixel({ pixelId }: { pixelId: string | null }) {
     window.fbq('init', pixelId)
     window.fbq('track', 'PageView')
     window.appPixel = {
-      track: (event, data) => {
+      track: (event, data, options) => {
         try {
-          window.fbq?.('track', event, data)
+          window.fbq?.('track', event, data, options)
         } catch {
           /* pixel indisponible : no-op */
         }

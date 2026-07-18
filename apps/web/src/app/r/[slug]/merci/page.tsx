@@ -13,7 +13,7 @@ export default async function MerciPage({ params, searchParams }: {
   const purchaseValue = t != null ? Number(t) : NaN
   return (
     <main className="mx-auto flex min-h-[70svh] max-w-md flex-col items-center justify-center gap-4 px-6 text-center">
-      <PurchasePing value={purchaseValue} />
+      <PurchasePing value={purchaseValue} orderKey={n ?? null} />
       <p className="text-6xl">✅</p>
       <h1 className="text-3xl font-bold">Commande n°{n} confirmée !</h1>
       {t && <p className="opacity-80">Total à régler à la remise : <strong>{formatFcfa(Number(t))}</strong></p>}
