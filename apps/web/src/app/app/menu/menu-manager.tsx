@@ -42,13 +42,13 @@ function AvailabilityToggle({ item }: { item: MenuStudioItem }) {
 function DishCard({ item, category, categories }: { item: MenuStudioItem; category: MenuStudioCategory; categories: MenuStudioCategory[] }) {
   const [pending, startTransition] = useTransition()
   return (
-    <div className={cn('flex flex-col overflow-hidden rounded-2xl border border-border bg-card transition-opacity', !item.available && 'opacity-60')}>
-      <div className="relative aspect-[4/3] w-full bg-muted">
+    <div className={cn('flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card transition-opacity', !item.available && 'opacity-60')}>
+      <div className="relative aspect-4/3 w-full overflow-hidden bg-muted">
         {item.photo_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.photo_url} alt={item.name} className="size-full object-cover" />
+          <img src={item.photo_url} alt={item.name} className="absolute inset-0 size-full object-cover" />
         ) : (
-          <div className="flex size-full items-center justify-center text-muted-foreground">
+          <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
             <ImageOff className="size-8" />
           </div>
         )}

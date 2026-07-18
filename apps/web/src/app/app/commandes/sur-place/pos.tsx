@@ -130,14 +130,14 @@ export function Pos({ menu }: { restaurantId: string; menu: PosMenuCategory[] })
               key={item.id}
               type="button"
               onClick={() => tapItem(item)}
-              className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card text-left shadow-xs transition-colors hover:border-primary/40 active:translate-y-px"
+              className="group flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card text-left shadow-xs transition-colors hover:border-primary/40 active:translate-y-px"
             >
-              <span className="relative block aspect-[4/3] w-full bg-muted">
+              <span className="relative block aspect-4/3 w-full overflow-hidden bg-muted">
                 {item.photoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.photoUrl} alt={item.name} className="size-full object-cover" />
+                  <img src={item.photoUrl} alt={item.name} className="absolute inset-0 size-full object-cover" />
                 ) : (
-                  <span className="flex size-full items-center justify-center text-muted-foreground">
+                  <span className="absolute inset-0 flex items-center justify-center text-muted-foreground">
                     <ShoppingCart className="size-6" />
                   </span>
                 )}

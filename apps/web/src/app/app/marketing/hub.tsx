@@ -31,9 +31,9 @@ function ToolCard({
     <Link href={href} className="group block">
       <Card className="flex h-full flex-col overflow-hidden rounded-2xl p-0 transition-colors hover:border-primary/40">
         {/* Cover vidéo animée (21:9, muette, en boucle) — icône du service en surimpression */}
-        <div className="relative aspect-[21/9] w-full overflow-hidden bg-muted">
+        <div className="relative aspect-21/9 w-full overflow-hidden bg-muted">
           <video
-            className="size-full object-cover"
+            className="absolute inset-0 size-full object-cover"
             src={video}
             autoPlay
             muted
