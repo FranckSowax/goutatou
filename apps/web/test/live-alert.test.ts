@@ -151,19 +151,42 @@ describe('decideAlert', () => {
     })
   })
 
-  // Paiement à la commande (Airtel manuel) : l'INSERT `a_verifier` est silencieux, c'est la
-  // validation « Paiement reçu ✓ » (UPDATE → 'paye') qui déclenche l'alerte — une seule fois.
+  // Paiement à la commande (Airtel manuel) : l'INSERT `a_verifier` déclenche une alerte DÉDIÉE
+  // « paiement à vérifier » (le client a déjà envoyé son argent), puis la validation
+  // « Paiement reçu ✓ » (UPDATE → 'paye') déclenche l'alerte commande — chacune une seule fois,
+  // jamais deux alertes pour le même événement.
   describe('paiement Airtel', () => {
-    it('INSERT payment_status=a_verifier → null (pas d\'alerte tant que non payé)', () => {
+    it('INSERT payment_status=a_verifier → alerte paiement dédiée', () => {
       const seen = new Set<string>()
       const evt = decideAlert({ type: 'INSERT', row: row({ payment_status: 'a_verifier' }) }, seen)
-      expect(evt).toBeNull()
+      expect(evt).toEqual({ kind: 'paiement', id: 'order-1', code: '42', amount: 5000 })
+    })
+
+    it('même INSERT a_verifier reçu 2x (redélivrance Realtime) → null la 2e fois', () => {
+      const seen = new Set<string>()
+      decideAlert({ type: 'INSERT', row: row({ payment_status: 'a_verifier' }) }, seen)
+      const second = decideAlert({ type: 'INSERT', row: row({ payment_status: 'a_verifier' }) }, seen)
+      expect(second).toBeNull()
     })
 
     it('INSERT payment_status=na (cash / historique) → alerte order (comportement actuel)', () => {
       const seen = new Set<string>()
       const evt = decideAlert({ type: 'INSERT', row: row({ payment_status: 'na' }) }, seen)
       expect(evt).toEqual({ kind: 'order', id: 'order-1', code: '42', amount: 5000 })
+    })
+
+    it('cycle complet a_verifier → paye : une alerte paiement PUIS une alerte order, pas de doublon', () => {
+      const seen = new Set<string>()
+      const first = decideAlert({ type: 'INSERT', row: row({ payment_status: 'a_verifier' }) }, seen)
+      expect(first?.kind).toBe('paiement')
+
+      const paid = row({ payment_status: 'paye', paid_at: new Date().toISOString() })
+      const second = decideAlert({ type: 'UPDATE', row: paid, oldPaymentStatus: 'a_verifier' }, seen)
+      expect(second?.kind).toBe('order')
+
+      // Redélivrances : plus aucune alerte, ni paiement ni order.
+      expect(decideAlert({ type: 'INSERT', row: row({ payment_status: 'a_verifier' }) }, seen)).toBeNull()
+      expect(decideAlert({ type: 'UPDATE', row: paid, oldPaymentStatus: 'a_verifier' }, seen)).toBeNull()
     })
 
     it('UPDATE a_verifier → paye (frais) → alerte order, une seule fois', () => {

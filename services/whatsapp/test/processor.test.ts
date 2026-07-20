@@ -120,6 +120,41 @@ describe('processor', () => {
     expect(react).toHaveBeenCalledWith('MSG-1', '✅')
   })
 
+  it('create_order rejette duplicate_order → message doux (pas de « Oups »), panier vidé, pas de ✅', async () => {
+    repo.loadConversation = vi.fn().mockResolvedValue({
+      state: 'CONFIRMATION',
+      cart: { items: [{ menuItemId: 'i1', name: 'Bo Bun', unitPrice: 4500, qty: 1 }], mode: 'sur_place' },
+    })
+    // Le repo enrobe l'erreur rpc : `create_order: <message Postgres>` (cf. repo.ts createOrder).
+    repo.createOrder = vi.fn().mockRejectedValue(new Error('create_order: duplicate_order'))
+    await expect(process()('chan-uuid', webhookPayload('1'))).resolves.toBeUndefined()
+    expect(sendText).toHaveBeenCalledWith(CHAT_ID, '✅ Votre commande est déjà enregistrée — un instant !')
+    expect(sendText).not.toHaveBeenCalledWith(CHAT_ID, expect.stringContaining('souci technique'))
+    expect(react).not.toHaveBeenCalled()
+    // Reset panier/état comme après une création réussie : le client a (ou va recevoir) la
+    // vraie confirmation via l'autre traitement.
+    expect(repo.saveConversation).toHaveBeenCalledWith('resto-1', 'cust-1', 'ACCUEIL',
+      expect.objectContaining({ items: [] }))
+  })
+
+  it('deux webhooks concurrents du même client → traitements sérialisés (load→save avant le load suivant)', async () => {
+    const events: string[] = []
+    let firstLoad = true
+    repo.loadConversation = vi.fn().mockImplementation(async () => {
+      events.push('load')
+      // Le premier load traîne : sans mutex, le second load partirait AVANT le premier save.
+      if (firstLoad) { firstLoad = false; await new Promise((r) => setTimeout(r, 20)) }
+      return { state: 'ACCUEIL', cart: EMPTY_CART }
+    })
+    repo.saveConversation = vi.fn().mockImplementation(async () => { events.push('save') })
+    const p = process()
+    await Promise.all([
+      p('chan-uuid', webhookPayload('menu')),
+      p('chan-uuid', webhookPayload('promos')),
+    ])
+    expect(events).toEqual(['load', 'save', 'load', 'save'])
+  })
+
   it('confirmation dont create_order échoue → pas de réaction ✅, message de secours', async () => {
     repo.loadConversation = vi.fn().mockResolvedValue({
       state: 'CONFIRMATION',

@@ -63,7 +63,13 @@ export async function createRestaurant(formData: FormData): Promise<{ inviteLink
 
 export async function configureWebhook(channelUuid: string, whapiToken: string) {
   await assertPlatformAdmin()
-  const webhookUrl = `${process.env.PUBLIC_WEBHOOK_BASE_URL}/hook/${channelUuid}`
+  // Secret partagé optionnel (miroir de WEBHOOK_SHARED_SECRET côté bot) : quand il est posé,
+  // le bot exige `?s=<secret>` sur l'URL de webhook. Jamais loggé, jamais renvoyé au client —
+  // il ne vit que dans l'URL enregistrée chez Whapi.
+  const secret = process.env.WEBHOOK_SHARED_SECRET
+  const webhookUrl = `${process.env.PUBLIC_WEBHOOK_BASE_URL}/hook/${channelUuid}${
+    secret ? `?s=${encodeURIComponent(secret)}` : ''
+  }`
   const whapi = new WhapiClient(whapiToken)
   if (!(await whapi.checkHealth())) throw new Error('Canal Whapi injoignable (token invalide ?)')
   await whapi.setWebhook(webhookUrl)

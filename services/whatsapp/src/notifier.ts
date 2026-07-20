@@ -291,10 +291,32 @@ export async function handleOrderInsert(
   decrypt: Decrypt = decryptToken,
 ): Promise<void> {
   try {
-    // Paiement Airtel à vérifier (spec paiement-commande) : ticket cuisine RETENU — il part
-    // à la validation « Paiement reçu ✓ » du resto (cf. handlePaymentConfirmed), jamais deux
-    // fois. Cash/na (et lignes sans colonnes payment) : comportement actuel inchangé.
-    if (newRow.payment_status === 'a_verifier') return
+    // Paiement Airtel à vérifier (spec paiement-commande) : le VRAI ticket de préparation
+    // est RETENU — il part à la validation « Paiement reçu ✓ » du resto (cf.
+    // handlePaymentConfirmed), jamais deux fois. Mais plus de silence total (audit fiabilité
+    // — correctif 4) : un message COURT, distinct du ticket, prévient le groupe cuisine
+    // qu'un paiement attend vérification — sinon personne n'est alerté tant que le dashboard
+    // n'est pas ouvert. Best-effort : tout échec est loggé, jamais propagé. Cash/na (et
+    // lignes sans colonnes payment) : comportement actuel inchangé (ticket complet ci-dessous).
+    if (newRow.payment_status === 'a_verifier') {
+      try {
+        const { data: restaurant } = await db
+          .from('restaurants').select('staff_group_id').eq('id', newRow.restaurant_id).single()
+        if (!restaurant?.staff_group_id) return
+        const { data: channel } = await db
+          .from('whapi_channels').select('token_encrypted, status').eq('restaurant_id', newRow.restaurant_id).single()
+        if (!channel || channel.status !== 'active') return
+        const whapiClient = makeWhapi(decrypt(channel.token_encrypted, tokenKey))
+        await whapiClient.sendText(
+          restaurant.staff_group_id,
+          `⏳ *Paiement Airtel à vérifier* — commande n°${newRow.order_number} · ${formatFcfa(newRow.total ?? 0)}. ` +
+          'Vérifiez le compte puis validez sur le dashboard.',
+        )
+      } catch (err) {
+        console.error(`[staff-group] alerte paiement à vérifier échouée commande ${newRow.id}`, err)
+      }
+      return
+    }
 
     const { data: restaurant } = await db
       .from('restaurants').select('staff_group_id').eq('id', newRow.restaurant_id).single()
@@ -317,30 +339,71 @@ export async function handleOrderInsert(
   }
 }
 
+/** Backoff de resouscription realtime (audit fiabilité — correctif 2). */
+const RESUBSCRIBE_BASE_MS = 1000
+const RESUBSCRIBE_MAX_MS = 60000
+
 export function startNotifier(
   db: SupabaseClient,
   tokenKey: string,
   wheelSecret?: string,
   wheelBaseUrl?: string,
 ): void {
-  db.channel('orders-status')
-    .on(
-      'postgres_changes',
-      { event: 'UPDATE', schema: 'public', table: 'orders' },
-      (payload) => {
-        handleOrderUpdate(
-          db, tokenKey, payload.old as OrderRow, payload.new as OrderRow,
-          undefined, undefined, wheelSecret, wheelBaseUrl,
-        ).catch((err) => console.error('[notifier]', err))
-      },
-    )
-    .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'orders' },
-      (payload) => {
-        handleOrderInsert(db, tokenKey, payload.new as OrderRow)
-          .catch((err) => console.error('[staff-group]', err))
-      },
-    )
-    .subscribe((status) => console.log(`[notifier] realtime: ${status}`))
+  // Resouscription automatique (audit fiabilité — correctif 2) : un bot qui tourne des
+  // semaines peut voir sa subscription realtime mourir (CHANNEL_ERROR/TIMED_OUT/CLOSED) —
+  // avant, ces statuts étaient seulement loggés et les tickets cuisine + notifications
+  // clients se perdaient silencieusement. Ici : removeChannel puis re-création après un
+  // backoff exponentiel borné (1 s → 2 → 4 → … max 60 s), remis à zéro sur SUBSCRIBED.
+  let backoffMs = RESUBSCRIBE_BASE_MS
+
+  const subscribeWithRetry = (): void => {
+    // Une seule replanification par instance de channel : un même channel peut émettre
+    // plusieurs statuts d'erreur d'affilée (ex. CHANNEL_ERROR puis CLOSED) — sans cette
+    // garde on empilerait des resouscriptions (doubles subscriptions, boucle serrée).
+    let retryScheduled = false
+
+    const channel = db.channel('orders-status')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'orders' },
+        (payload) => {
+          handleOrderUpdate(
+            db, tokenKey, payload.old as OrderRow, payload.new as OrderRow,
+            undefined, undefined, wheelSecret, wheelBaseUrl,
+          ).catch((err) => console.error('[notifier]', err))
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'orders' },
+        (payload) => {
+          handleOrderInsert(db, tokenKey, payload.new as OrderRow)
+            .catch((err) => console.error('[staff-group]', err))
+        },
+      )
+      .subscribe((status) => {
+        console.log(`[notifier] realtime: ${status}`)
+        if (status === 'SUBSCRIBED') {
+          backoffMs = RESUBSCRIBE_BASE_MS
+          return
+        }
+        if (status !== 'CHANNEL_ERROR' && status !== 'TIMED_OUT' && status !== 'CLOSED') return
+        if (retryScheduled) return
+        retryScheduled = true
+        const delayMs = backoffMs
+        backoffMs = Math.min(backoffMs * 2, RESUBSCRIBE_MAX_MS)
+        console.error(`[notifier] realtime ${status} — resouscription dans ${delayMs} ms`)
+        setTimeout(() => {
+          // removeChannel AVANT re-création : jamais deux subscriptions actives en même temps.
+          Promise.resolve(db.removeChannel(channel))
+            .catch((err) => console.error('[notifier] removeChannel échoué', err))
+            .then(() => {
+              console.log('[notifier] resouscription realtime')
+              subscribeWithRetry()
+            })
+        }, delayMs)
+      })
+  }
+
+  subscribeWithRetry()
 }

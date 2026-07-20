@@ -6,6 +6,7 @@ import { buttonsForState, matchButtonInput, type ButtonChoice } from './bot/butt
 import { beginCheckout, flatMenuItems, transition, type BotContext } from './bot/machine.js'
 import { isOptOutKeyword } from './campaigns/optout.js'
 import { nextSendDelayMs } from './campaigns/throttle.js'
+import { withLock } from './lock.js'
 import type { BotRepo } from './repo.js'
 import { APPROVAL_COPY, isManagerSender, parseApprovalButton, type ParsedApprovalButton } from './autostatus/approval.js'
 import type { ApprovalRepo } from './autostatus/approval-repo.js'
@@ -666,9 +667,13 @@ export function createProcessor(
     }
     const whapi = makeWhapi(channel.token)
 
-    for (const msg of messages) {
-      if (msg.from_me) continue
-
+    // Traitement d'UN message entrant — exécuté sous le mutex par client (cf. boucle en bas) :
+    // tout le read-modify-write conversationnel (logMessage → loadConversation → transition →
+    // saveConversation → envois) est sérialisé par clé `restaurantId:chatId` (audit fiabilité,
+    // correctif 1, cf. src/lock.ts) — deux webhooks rapprochés du même client ne s'écrasent
+    // plus le panier ni ne créent de double commande, sans jamais sérialiser entre restos ou
+    // clients différents.
+    const handleOneMessage = async (msg: WhapiMessage): Promise<void> => {
       // Tap sur un bouton/liste envoyé par le bot — messages[n].type 'reply'. Payload brut
       // TOUJOURS loggé (console) : la shape bouton (buttons_reply) est confirmée par la doc
       // Whapi, mais celle de liste (list_reply) est ASSUMÉE par analogie (cf. WhapiMessage.reply)
@@ -704,7 +709,7 @@ export function createProcessor(
           } catch (err) {
             console.error(`[arrival] erreur message ${msg.id}`, err)
           }
-          continue
+          return
         }
 
         const approvalAction = parseApprovalButton(replyId)
@@ -717,7 +722,7 @@ export function createProcessor(
           } catch (err) {
             console.error(`[approval] erreur message ${msg.id}`, err)
           }
-          continue
+          return
         }
 
         // Validation gérant des posts chaîne auto (CA5) : ids `chapp:`/`chrej:`/`chreg:`/`chcan:`
@@ -733,7 +738,7 @@ export function createProcessor(
           } catch (err) {
             console.error(`[channel-approval] erreur message ${msg.id}`, err)
           }
-          continue
+          return
         }
       }
 
@@ -753,7 +758,7 @@ export function createProcessor(
         isOrderMessage ? '🛒 Panier WhatsApp' :
         isReplyMessage ? (replyId?.startsWith('in:') ? replyId.slice(3) : (replyTitle ?? undefined)) :
         undefined
-      if (!body) continue
+      if (!body) return
 
       // Le log entrant affiche le texte LISIBLE (titre du bouton/ligne tapé), pas l'id
       // technique `in:x` retraduit en entrée machine — cf. spec bot-boutons § Processor.
@@ -761,7 +766,7 @@ export function createProcessor(
 
       // Idempotence : si ce message Whapi a déjà été loggé, on skip.
       const fresh = await repo.logMessage(channel.restaurantId, 'in', msg.chat_id, logBody, msg.id)
-      if (!fresh) continue
+      if (!fresh) return
 
       try {
         const customer = await repo.upsertCustomer(channel.restaurantId, msg.from, msg.chat_id, msg.from_name)
@@ -771,7 +776,7 @@ export function createProcessor(
         if (isOrderMessage) {
           const orderCtx = await repo.getBotContext(channel.restaurantId, channel.restaurantName, channel.driveEnabled)
           await handleNativeOrder(whapi, repo, channel.restaurantId, customer.id, msg.chat_id, msg.order?.order_id, msg.order?.token, orderCtx)
-          continue
+          return
         }
 
         // Repli par contexte de l'arrivée Drive (CL3 v2, cf. drive/arrival.ts) : si le round-trip
@@ -786,7 +791,7 @@ export function createProcessor(
           const pending = await deps.arrivalRepo.findPendingDriveOrder(channel.restaurantId, customer.id)
           if (pending) {
             await resolveArrivalOrder(whapi, repo, deps.arrivalRepo, channel.restaurantId, msg.chat_id, pending.id)
-            continue
+            return
           }
           // Aucune commande Drive en attente pour ce client : PAS de réponse spéciale (le
           // client pourrait n'avoir jamais commandé en drive) — le message suit le flux machine
@@ -802,7 +807,7 @@ export function createProcessor(
           } catch (err) {
             await repo.logMessage(channel.restaurantId, 'out', msg.chat_id, bye, undefined, String(err))
           }
-          continue
+          return
         }
 
         const conv = await repo.loadConversation(channel.restaurantId, customer.id)
@@ -863,12 +868,28 @@ export function createProcessor(
         let nextCart = res.cart
 
         if (res.createOrder) {
-          const order = await repo.createOrder(channel.restaurantId, customer.id, res.cart)
-          replies.push(orderConfirmedCopy(order.orderNumber, order.total, res.cart))
-          nextCart = EMPTY_CART
-          // Réaction ✅ UNIQUEMENT quand la commande a bien été créée (awaited best-effort :
-          // un échec Whapi ne doit jamais faire échouer la conversation — cf. spec).
-          await whapi.react(msg.id, '✅').catch((err) => console.error('[react]', err))
+          try {
+            const order = await repo.createOrder(channel.restaurantId, customer.id, res.cart)
+            replies.push(orderConfirmedCopy(order.orderNumber, order.total, res.cart))
+            nextCart = EMPTY_CART
+            // Réaction ✅ UNIQUEMENT quand la commande a bien été créée (awaited best-effort :
+            // un échec Whapi ne doit jamais faire échouer la conversation — cf. spec).
+            await whapi.react(msg.id, '✅').catch((err) => console.error('[react]', err))
+          } catch (err) {
+            // Garde SQL anti-double-commande (create_order rejette `duplicate_order` quand une
+            // commande whatsapp du même client existe depuis < 20 s — défense en profondeur
+            // derrière le mutex ci-dessus, utile en multi-instances). Ce n'est PAS une panne :
+            // la vraie commande a déjà été créée par l'autre traitement — pas de « Oups »,
+            // aucune création, message doux SANS numéro (on ne le connaît pas ici), et reset
+            // panier/état comme après une création réussie.
+            if (err instanceof Error && err.message.includes('duplicate_order')) {
+              console.warn(`[processor] duplicate_order absorbé (client ${customer.id})`)
+              replies.push('✅ Votre commande est déjà enregistrée — un instant !')
+              nextCart = EMPTY_CART
+            } else {
+              throw err
+            }
+          }
         }
 
         await repo.saveConversation(channel.restaurantId, customer.id, res.state, nextCart)
@@ -937,6 +958,13 @@ export function createProcessor(
           await whapi.sendText(msg.chat_id, 'Oups, un souci technique 😅 Tapez *menu* pour recommencer.')
         } catch { /* canal en erreur : déjà loggé */ }
       }
+    }
+
+    for (const msg of messages) {
+      if (msg.from_me) continue
+      // Mutex par client (cf. handleOneMessage ci-dessus) : la clé combine resto ET chat pour
+      // ne jamais sérialiser deux clients (ou deux restos) entre eux.
+      await withLock(`${channel.restaurantId}:${msg.chat_id}`, () => handleOneMessage(msg))
     }
   }
 }

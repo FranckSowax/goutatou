@@ -41,12 +41,13 @@ describe('buildStaffTicket — ligne Paiement', () => {
   })
 })
 
-function fakeInsertDb() {
+function fakeInsertDb(opts: { staffGroupId?: string | null } = {}) {
+  const { staffGroupId = 'grp1@g.us' } = opts
   const sendText = vi.fn().mockResolvedValue({ id: 'x' })
   const db = {
     from: vi.fn((table: string) => {
       if (table === 'restaurants') {
-        return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: { staff_group_id: 'grp1@g.us' } }) }) }) }
+        return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: { staff_group_id: staffGroupId } }) }) }) }
       }
       if (table === 'whapi_channels') {
         return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: { token_encrypted: 'enc', status: 'active' } }) }) }) }
@@ -64,13 +65,40 @@ function fakeInsertDb() {
 }
 
 describe('handleOrderInsert — paiement Airtel à vérifier', () => {
-  it('payment_status a_verifier → AUCUN ticket cuisine (il partira à la validation)', async () => {
+  it('payment_status a_verifier → message COURT « à vérifier » au groupe, PAS le ticket de préparation', async () => {
     const { db, sendText } = fakeInsertDb()
     await handleOrderInsert(
       db as never, 'k'.repeat(64),
       { ...baseRow, payment_method: 'airtel', payment_status: 'a_verifier' },
-      () => ({ sendText }))
+      () => ({ sendText }), vi.fn().mockReturnValue('tok'))
+    expect(sendText).toHaveBeenCalledTimes(1)
+    const [groupId, message] = sendText.mock.calls[0]
+    expect(groupId).toBe('grp1@g.us')
+    expect(message).toContain('⏳ *Paiement Airtel à vérifier*')
+    expect(message).toContain('n°7')
+    expect(message).toContain('4 500 FCFA')
+    expect(message).toContain('validez sur le dashboard')
+    // Distinct du ticket de préparation : ni en-tête « Commande # », ni lignes d'articles.
+    expect(message).not.toContain('Commande #')
+    expect(message).not.toContain('Paiement : 📱')
+  })
+
+  it('a_verifier sans staff_group_id → aucun envoi (silencieux, comme le ticket)', async () => {
+    const { db, sendText } = fakeInsertDb({ staffGroupId: null })
+    await handleOrderInsert(
+      db as never, 'k'.repeat(64),
+      { ...baseRow, payment_method: 'airtel', payment_status: 'a_verifier' },
+      () => ({ sendText }), vi.fn().mockReturnValue('tok'))
     expect(sendText).not.toHaveBeenCalled()
+  })
+
+  it('a_verifier dont sendText échoue → loggé, jamais propagé (best-effort)', async () => {
+    const { db, sendText } = fakeInsertDb()
+    sendText.mockRejectedValue(new Error('whapi 500'))
+    await expect(handleOrderInsert(
+      db as never, 'k'.repeat(64),
+      { ...baseRow, payment_method: 'airtel', payment_status: 'a_verifier' },
+      () => ({ sendText }), vi.fn().mockReturnValue('tok'))).resolves.toBeUndefined()
   })
 
   it('payment_status na (cash/flux actuel) → ticket envoyé comme avant', async () => {

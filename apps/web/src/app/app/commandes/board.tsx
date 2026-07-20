@@ -28,6 +28,10 @@ type Filter = 'all' | OrderCard['status']
 // utilisé par ORDER_STATUS_LABELS (recue → en_preparation → prete → recuperee, + annulee).
 const STATUS_OPTIONS = Object.keys(ORDER_STATUS_LABELS) as OrderCard['status'][]
 
+// Message d'erreur générique des mutations (pattern livraison/board.tsx) : jamais de
+// `error.message` brut — masqué par Next en prod, et illisible pour le gérant de toute façon.
+const ACTION_ERROR = 'Action impossible — vérifiez votre connexion et réessayez.'
+
 const PILLS: { key: Filter; label: string }[] = [
   { key: 'all', label: 'Toutes' },
   { key: 'recue', label: 'Reçues' },
@@ -104,6 +108,9 @@ export function Board({ initialOrders, initialQuery = '', isTodayView = true }: 
   const [q, setQ] = useState(initialQuery)
   const [selected, setSelected] = useState<OrderCard | null>(null)
   const [pending, startTransition] = useTransition()
+  // Erreur de la dernière mutation (réseau/RLS) — remise à zéro au lancement de la suivante,
+  // donc effacée dès le prochain succès. Affichée en bandeau discret près des boutons.
+  const [actionError, setActionError] = useState<string | null>(null)
 
   useEffect(() => {
     const supabase = createBrowserClient(
@@ -137,24 +144,39 @@ export function Board({ initialOrders, initialQuery = '', isTodayView = true }: 
   function advance(o: OrderCard) {
     const n = nextStatus(o.status)
     if (!n) return
+    setActionError(null)
     startTransition(async () => {
-      await updateOrderStatus(o.id, n)
-      setSelected(null)
+      try {
+        await updateOrderStatus(o.id, n)
+        setSelected(null)
+      } catch {
+        setActionError(ACTION_ERROR)
+      }
     })
   }
 
   function cancel(o: OrderCard) {
+    setActionError(null)
     startTransition(async () => {
-      await cancelOrder(o.id)
-      setSelected(null)
+      try {
+        await cancelOrder(o.id)
+        setSelected(null)
+      } catch {
+        setActionError(ACTION_ERROR)
+      }
     })
   }
 
   /** Vérification humaine (appel/WhatsApp client) — bascule verified_at, garde le modal ouvert. */
   function verify(o: OrderCard, verified: boolean) {
+    setActionError(null)
     startTransition(async () => {
-      await verifyOrder(o.id, verified)
-      setSelected((cur) => (cur && cur.id === o.id ? { ...cur, verified_at: verified ? new Date().toISOString() : null } : cur))
+      try {
+        await verifyOrder(o.id, verified)
+        setSelected((cur) => (cur && cur.id === o.id ? { ...cur, verified_at: verified ? new Date().toISOString() : null } : cur))
+      } catch {
+        setActionError(ACTION_ERROR)
+      }
     })
   }
 
@@ -162,9 +184,14 @@ export function Board({ initialOrders, initialQuery = '', isTodayView = true }: 
    *  côté serveur ; le badge de la ligne suit via Realtime (router.refresh), le modal est mis à
    *  jour localement comme pour verify(). */
   function confirmPay(o: OrderCard) {
+    setActionError(null)
     startTransition(async () => {
-      await confirmPayment(o.id)
-      setSelected((cur) => (cur && cur.id === o.id ? { ...cur, payment_status: 'paye' } : cur))
+      try {
+        await confirmPayment(o.id)
+        setSelected((cur) => (cur && cur.id === o.id ? { ...cur, payment_status: 'paye' } : cur))
+      } catch {
+        setActionError(ACTION_ERROR)
+      }
     })
   }
 
@@ -173,8 +200,13 @@ export function Board({ initialOrders, initialQuery = '', isTodayView = true }: 
   function changeStatus(o: OrderCard, status: OrderCard['status']) {
     if (status === o.status) return
     if (status === 'annulee' && !window.confirm(`Annuler la commande n°${o.order_number} ?`)) return
+    setActionError(null)
     startTransition(async () => {
-      await updateOrderStatus(o.id, status)
+      try {
+        await updateOrderStatus(o.id, status)
+      } catch {
+        setActionError(ACTION_ERROR)
+      }
     })
   }
 
@@ -226,6 +258,11 @@ export function Board({ initialOrders, initialQuery = '', isTodayView = true }: 
           )
         })}
       </div>
+
+      {/* Erreur de mutation (réseau/RLS) — bandeau discret, effacé au prochain succès. */}
+      {actionError && (
+        <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{actionError}</p>
+      )}
 
       {/* Bandes commande pleine largeur */}
       <div className="divide-y divide-border rounded-2xl border border-border bg-card shadow-xs">
@@ -465,6 +502,9 @@ export function Board({ initialOrders, initialQuery = '', isTodayView = true }: 
                   )}
                 </div>
               </div>
+
+              {/* Même erreur de mutation, répétée près des boutons du modal. */}
+              {actionError && <p className="text-sm text-destructive">{actionError}</p>}
 
               {(next || selected.status === 'recue') && (
                 <DialogFooter className="gap-2 sm:gap-2">
