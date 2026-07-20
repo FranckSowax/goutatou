@@ -15,32 +15,50 @@ import { EditItemDialog } from './edit-item-dialog'
 import { createCategory, createItem, deleteCategory, deleteItem, renameCategory, toggleItemAvailable } from './actions'
 import type { MenuStudioCategory, MenuStudioItem } from './menu-studio'
 
+// Message d'erreur générique des mutations (pattern livraison/board.tsx) : jamais de
+// `error.message` brut — masqué par Next en prod, et illisible pour le gérant de toute façon.
+const ACTION_ERROR = 'Action impossible — vérifiez votre connexion et réessayez.'
+
 /** Interrupteur Disponible / Indisponible, accès direct sur la carte (un tap, sans ouvrir le modal). */
 function AvailabilityToggle({ item }: { item: MenuStudioItem }) {
   const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
   const on = item.available
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={on ? 'Rendre indisponible' : 'Rendre disponible'}
-      disabled={pending}
-      onClick={() => startTransition(() => toggleItemAvailable(item.id, !on))}
-      className="flex items-center gap-2 disabled:opacity-60"
-    >
-      <span className={cn('relative h-6 w-11 shrink-0 rounded-full transition-colors', on ? 'bg-primary' : 'bg-muted-foreground/30')}>
-        <span className={cn('absolute top-0.5 size-5 rounded-full bg-background shadow transition-all', on ? 'left-[22px]' : 'left-0.5')} />
-      </span>
-      <span className={cn('text-xs font-medium', on ? 'text-primary' : 'text-muted-foreground')}>
-        {on ? 'Disponible' : 'Indisponible'}
-      </span>
-    </button>
+    <div className="flex min-w-0 flex-col gap-1">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-label={on ? 'Rendre indisponible' : 'Rendre disponible'}
+        disabled={pending}
+        onClick={() => {
+          setError(null)
+          startTransition(async () => {
+            try {
+              await toggleItemAvailable(item.id, !on)
+            } catch {
+              setError(ACTION_ERROR)
+            }
+          })
+        }}
+        className="flex items-center gap-2 disabled:opacity-60"
+      >
+        <span className={cn('relative h-6 w-11 shrink-0 rounded-full transition-colors', on ? 'bg-primary' : 'bg-muted-foreground/30')}>
+          <span className={cn('absolute top-0.5 size-5 rounded-full bg-background shadow transition-all', on ? 'left-[22px]' : 'left-0.5')} />
+        </span>
+        <span className={cn('text-xs font-medium', on ? 'text-primary' : 'text-muted-foreground')}>
+          {on ? 'Disponible' : 'Indisponible'}
+        </span>
+      </button>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
   )
 }
 
 function DishCard({ item, category, categories }: { item: MenuStudioItem; category: MenuStudioCategory; categories: MenuStudioCategory[] }) {
   const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
   return (
     <div className={cn('flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card transition-opacity', !item.available && 'opacity-60')}>
       <div className="relative aspect-4/3 w-full overflow-hidden bg-muted">
@@ -75,13 +93,22 @@ function DishCard({ item, category, categories }: { item: MenuStudioItem; catego
               aria-label={`Supprimer ${item.name}`}
               disabled={pending}
               onClick={() => {
-                if (window.confirm(`Supprimer « ${item.name} » ?`)) startTransition(() => deleteItem(item.id))
+                if (!window.confirm(`Supprimer « ${item.name} » ?`)) return
+                setError(null)
+                startTransition(async () => {
+                  try {
+                    await deleteItem(item.id)
+                  } catch {
+                    setError(ACTION_ERROR)
+                  }
+                })
               }}
             >
               <Trash2 className="size-3.5" />
             </Button>
           </div>
         </div>
+        {error && <p className="text-xs text-destructive">{error}</p>}
       </div>
     </div>
   )
@@ -90,6 +117,7 @@ function DishCard({ item, category, categories }: { item: MenuStudioItem; catego
 function NewDishCard({ categoryId }: { categoryId: string }) {
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -104,7 +132,17 @@ function NewDishCard({ categoryId }: { categoryId: string }) {
       <DialogContent>
         <DialogHeader><DialogTitle>Nouveau plat</DialogTitle></DialogHeader>
         <form
-          action={(fd) => startTransition(async () => { await createItem(fd); setOpen(false) })}
+          action={(fd) => {
+            setError(null)
+            startTransition(async () => {
+              try {
+                await createItem(fd)
+                setOpen(false)
+              } catch {
+                setError(ACTION_ERROR)
+              }
+            })
+          }}
           className="flex flex-col gap-3"
         >
           <input type="hidden" name="category_id" value={categoryId} />
@@ -124,6 +162,7 @@ function NewDishCard({ categoryId }: { categoryId: string }) {
             <Label htmlFor="dish-photo">Photo</Label>
             <Input id="dish-photo" name="photo" type="file" accept="image/*" />
           </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
           <Button type="submit" disabled={pending} className="mt-1">Créer le plat</Button>
         </form>
       </DialogContent>
@@ -161,6 +200,7 @@ function NewCategoryButton() {
 function CategoryActions({ category }: { category: MenuStudioCategory }) {
   const [renaming, setRenaming] = useState(false)
   const [pending, startTransition] = useTransition()
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   return (
     <div className="flex items-center gap-1">
       <Dialog open={renaming} onOpenChange={setRenaming}>
@@ -187,9 +227,24 @@ function CategoryActions({ category }: { category: MenuStudioCategory }) {
           <p className="text-sm text-muted-foreground">
             La catégorie et tous ses plats seront supprimés. Cette action est irréversible.
           </p>
+          {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
           <DialogFooter className="gap-2 sm:gap-2">
             <DialogClose asChild><Button type="button" variant="outline">Annuler</Button></DialogClose>
-            <Button type="button" variant="destructive" disabled={pending} onClick={() => startTransition(() => deleteCategory(category.id))}>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={pending}
+              onClick={() => {
+                setDeleteError(null)
+                startTransition(async () => {
+                  try {
+                    await deleteCategory(category.id)
+                  } catch {
+                    setDeleteError(ACTION_ERROR)
+                  }
+                })
+              }}
+            >
               Supprimer
             </Button>
           </DialogFooter>

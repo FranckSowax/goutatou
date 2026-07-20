@@ -10,6 +10,7 @@
 
 export type LiveEvent =
   | { kind: 'order'; id: string; code: string; amount: number }
+  | { kind: 'paiement'; id: string; code: string; amount: number }
   | { kind: 'arrival'; id: string; code: string; note: string | null }
 
 export function decideAlert(
@@ -34,11 +35,17 @@ export function decideAlert(
   const { type, row, oldArrivedAt, oldPaymentStatus } = evt
 
   if (type === 'INSERT') {
-    // Paiement Airtel en attente de vérification : INSERT silencieux — l'alerte cuisine ne part
-    // qu'à la validation « Paiement reçu ✓ » (UPDATE payment_status → 'paye' ci-dessous).
-    if (row.payment_status === 'a_verifier') return null
     if (seen.has(row.id)) return null
     seen.add(row.id)
+    // Paiement Airtel en attente de vérification : le client a DÉJÀ envoyé son argent — alerte
+    // dédiée « paiement à vérifier » (ambre), distincte de « nouvelle commande ». Pas de double
+    // alerte pour le même événement : cet INSERT ne déclenche QUE l'alerte paiement, et c'est la
+    // validation « Paiement reçu ✓ » (UPDATE payment_status → 'paye' ci-dessous, clé `pay:<id>`)
+    // qui déclenchera ensuite l'alerte « nouvelle commande ». Une commande cash reste sur la
+    // branche `order` classique, inchangée.
+    if (row.payment_status === 'a_verifier') {
+      return { kind: 'paiement', id: row.id, code: String(row.order_number), amount: row.total }
+    }
     return { kind: 'order', id: row.id, code: String(row.order_number), amount: row.total }
   }
 

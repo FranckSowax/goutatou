@@ -144,5 +144,5 @@ const processWebhook = createProcessor(repo, (token) => new WhapiClient(token), 
   loyaltyBaseUrl: config.wheelBaseUrl,
 })
 
-const app = createApp({ processWebhook })
+const app = createApp({ processWebhook, webhookSharedSecret: config.webhookSharedSecret })
 app.listen(config.port, () => console.log(`[service-whatsapp] écoute sur :${config.port}`))
