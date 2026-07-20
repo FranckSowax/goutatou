@@ -50,7 +50,12 @@ export async function POST(req: Request) {
   // Endpoint public non authentifié qui insère dans `customers` et émet des jetons de roue :
   // rate-limit par IP et par restaurant pour empêcher un scraping de codes de lot via des
   // numéros fabriqués (quelques tentatives par IP et par heure, cf. apps/web/src/lib/rate-limit.ts).
-  const rl = await enforceRateLimit(db, wheelUnlockRateKeys(restaurantId, clientIp(req.headers)))
+  // Fail-CLOSED (`onError: 'deny'`) : une panne de la table de rate-limit ne doit pas rouvrir le
+  // scraping de codes de lot via des numéros fabriqués — mieux vaut refuser la roue quelques
+  // minutes que d'exposer l'endpoint d'écriture `customers` + émission de jetons sans borne.
+  const rl = await enforceRateLimit(db, wheelUnlockRateKeys(restaurantId, clientIp(req.headers)), {
+    onError: 'deny',
+  })
   if (!rl.ok) {
     return NextResponse.json(
       { error: `Trop de tentatives. Réessayez dans ${Math.ceil(rl.retryAfter / 60)} min.` },

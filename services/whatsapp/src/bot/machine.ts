@@ -183,6 +183,13 @@ export function beginCheckout(cart: Cart, ctx: BotContext): TransitionResult {
   return result('MODE', cart, [copy.cartRecap(cart), copy.chooseMode(modes.map((m) => m.label))])
 }
 
+/**
+ * Réponses de refus qui ne doivent JAMAIS être prises pour une référence de transaction Airtel
+ * (audit lot B — correctif 4c). « non » fait 3 caractères et satisfaisait donc le seuil
+ * `ref.length >= 3` : la commande partait avec « non » comme référence de paiement.
+ */
+const REF_REFUSALS = new Set(['non', 'nan', 'rien', 'aucune', 'aucun', 'pas encore'])
+
 export function transition(state: BotState, cart: Cart, input: string, ctx: BotContext): TransitionResult {
   const text = input.trim().toLowerCase()
 
@@ -381,13 +388,33 @@ export function transition(state: BotState, cart: Cart, input: string, ctx: BotC
     }
 
     case 'PAIEMENT_REF': {
+      const pay = ctx.payment
+      // Même garde-fou que PAIEMENT (audit lot B — correctif 4c) : si la config Airtel a disparu
+      // entre-temps (le resto désactive Airtel pendant la conversation), on ne peut plus créer une
+      // commande `airtel` / `a_verifier` — son ticket cuisine resterait retenu indéfiniment
+      // (commande fantôme). On bascule sur le flux cash/sans paiement, comme PAIEMENT.
+      if (!pay?.airtelEnabled || !pay.airtelNumber) return result('ACCUEIL', cart, [], true)
+
       // Référence de transaction Airtel : tout texte ≥ 3 caractères, ou « payé »/« paye ».
       // Les mots-clés globaux (annuler, humain…) restent évalués avant ce switch.
       const ref = input.trim()
-      if (text === 'payé' || text === 'paye' || ref.length >= 3) {
+      if (text === 'payé' || text === 'paye') {
+        return result('ACCUEIL', { ...cart, payment: 'airtel', paymentRef: ref }, [], true)
+      }
+      // « non » (et ses variantes de refus) fait 3 caractères et passait donc pour une référence
+      // valide : une commande était créée avec la référence « non ». On redemande à la place.
+      if (REF_REFUSALS.has(text)) return result('PAIEMENT_REF', cart, [copy.paymentRefPrompt])
+      if (ref.length >= 3) {
         return result('ACCUEIL', { ...cart, payment: 'airtel', paymentRef: ref }, [], true)
       }
       return result('PAIEMENT_REF', cart, [copy.paymentRefPrompt])
     }
+
+    // État inconnu (ligne `conversations` écrite par une version antérieure, valeur corrompue,
+    // état retiré du produit) : sans `default`, le switch renvoyait `undefined` et l'appelant
+    // jetait — le client recevait « Oups » à chaque message, en boucle, sans issue. On repart
+    // proprement sur ACCUEIL (audit lot B — correctif 4b).
+    default:
+      return result('ACCUEIL', cart, [copy.welcome(ctx.restaurantName, ctx.botWelcome)])
   }
 }

@@ -17,7 +17,7 @@ if (existsSync(envFile)) {
 const hasOwnerCreds = !!(process.env.E2E_OWNER_EMAIL && process.env.E2E_OWNER_PASSWORD)
 const hasStaffCreds = !!(process.env.E2E_STAFF_PHONE && process.env.E2E_STAFF_PASSWORD)
 
-const OWNER_ONLY = /(app-pages|flows)\.spec\.ts/ // specs du projet patron authentifié
+const OWNER_ONLY = /(app-pages|flows|csp)\.spec\.ts/ // specs du projet patron authentifié
 const STAFF_ONLY = /staff-view\.spec\.ts/ // specs du projet employé authentifié
 
 // Projet non authentifié : pages publiques + gardes (ignore les specs connectées).

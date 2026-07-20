@@ -3,6 +3,25 @@ import { decryptToken, EMPTY_CART, type BotState, type Cart } from '@goutatou/db
 import type { BotContext } from './bot/machine.js'
 import type { BotProfile } from './bot/copy.js'
 
+/**
+ * États connus de la machine conversationnelle — doit rester aligné sur `BotState`
+ * (@goutatou/db types.ts). Sert à valider ce qu'on relit dans `conversations.state` (texte libre
+ * côté DB) plutôt qu'à le caster aveuglément (audit fiabilité lot B — correctif 4a).
+ */
+const BOT_STATES: readonly BotState[] = [
+  'ACCUEIL', 'MENU', 'MODE', 'CRENEAU', 'ADRESSE', 'CONFIRMATION', 'HUMAIN',
+  'SUPPLEMENTS', 'SUPPLEMENTS_CHECKOUT', 'PAIEMENT', 'PAIEMENT_REF',
+]
+
+export function isBotState(value: unknown): value is BotState {
+  return typeof value === 'string' && (BOT_STATES as readonly string[]).includes(value)
+}
+
+/** Forme minimale exigée d'un panier relu depuis le jsonb : un objet avec `items` tableau. */
+export function isCart(value: unknown): value is Cart {
+  return typeof value === 'object' && value !== null && Array.isArray((value as { items?: unknown }).items)
+}
+
 interface RestaurantProfileRow {
   address: string | null
   contact_phone: string | null
@@ -221,7 +240,15 @@ export function createRepo(db: SupabaseClient, tokenKey: string): BotRepo {
         .eq('customer_id', customerId)
         .maybeSingle()
       if (!data) return { state: 'ACCUEIL', cart: EMPTY_CART }
-      return { state: data.state as BotState, cart: data.cart as Cart }
+      // Relecture DÉFENSIVE (audit fiabilité lot B — correctif 4a) : `conversations.state` est du
+      // texte libre et `cart` du jsonb — une ligne écrite par une version antérieure du bot, un
+      // état supprimé du produit ou un panier corrompu à la main produisaient un cast nu vers
+      // BotState/Cart, donc un `transition()` sur un état inconnu (« Oups » en boucle) ou un
+      // `cart.items` non itérable. Forme invalide → on repart proprement de zéro.
+      if (!isBotState(data.state) || !isCart(data.cart)) {
+        return { state: 'ACCUEIL', cart: EMPTY_CART }
+      }
+      return { state: data.state, cart: data.cart }
     },
 
     async saveConversation(restaurantId, customerId, state, cart) {

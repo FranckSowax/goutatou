@@ -32,7 +32,13 @@ export function startWheelReminderWorker(deps: WheelReminderWorkerDeps & { pollM
     try {
       const due = await deps.repo.claimExpiringSpins(new Date().toISOString())
       for (const r of due) {
-        await processReminderOnce(r, deps)
+        // Isolation par rappel (audit lot B — correctif 3) : un throw sur un rappel ne doit pas
+        // abandonner les rappels suivants du même tick.
+        try {
+          await processReminderOnce(r, deps)
+        } catch (err) {
+          console.error('[wheel-reminder] rappel', r.id, err)
+        }
       }
     } catch (err) {
       console.error('[wheel-reminder]', err)

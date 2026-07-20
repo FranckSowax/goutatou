@@ -86,7 +86,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Carte de fidélité indisponible.' }, { status: 403 })
     }
 
-    // Upsert client par (restaurant_id, phone). À la création : chat_id WhatsApp + opt-in marketing.
+    // Upsert client par (restaurant_id, phone). À la création : chat_id WhatsApp uniquement.
+    // PAS d'opt-in marketing ici : `loyalty_stamp_code` est affiché publiquement (QR en caisse),
+    // donc n'importe qui peut poster un numéro arbitraire — le consentement marketing ne peut pas
+    // être déduit d'un scan. On laisse le défaut de la colonne, comme la LP et le comptoir
+    // (src/app/app/commandes/sur-place/actions.ts) qui omettent délibérément le champ.
     const { data: existing } = await db
       .from('customers')
       .select('id')
@@ -104,7 +108,6 @@ export async function POST(req: Request) {
           phone,
           chat_id: `${phone}@s.whatsapp.net`,
           name: null,
-          marketing_opt_in: true,
           opted_out: false,
         })
         .select('id')

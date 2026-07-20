@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { WhapiClient, WhapiError } from '../src/client.js'
+import { WhapiClient, WhapiError, parseRetryAfterMs } from '../src/client.js'
 
 function mockFetch(responses: Array<{ status: number; body?: unknown }>) {
   const fn = vi.fn()
@@ -625,5 +625,169 @@ describe('WhapiClient', () => {
     const client = new WhapiClient('tok123', { fetchFn, retryDelayMs: 0 })
     const res = await client.readPollResults('MSG1')
     expect(res).toEqual({ options: [], total: 0 })
+  })
+})
+
+/**
+ * Lot B « durcissement » — correctif 1 : timeout sur chaque fetch + 429 retryable
+ * (Retry-After respecté, plafonné à 30 s). Voir packages/whapi/src/client.ts, request().
+ */
+describe('WhapiClient — timeout et rate limit (429)', () => {
+  function rateLimited(retryAfter?: string) {
+    return new Response('{}', {
+      status: 429,
+      headers: retryAfter === undefined ? {} : { 'Retry-After': retryAfter },
+    })
+  }
+
+  it('pose un AbortSignal (timeout par défaut 15 s) sur chaque fetch', async () => {
+    const fetchFn = mockFetch([{ status: 200, body: {} }])
+    const client = new WhapiClient('t', { fetchFn, retryDelayMs: 0 })
+    await client.sendText('x@s.whatsapp.net', 'y')
+    const [, init] = fetchFn.mock.calls[0]
+    expect(init.signal).toBeInstanceOf(AbortSignal)
+  })
+
+  it('timeout par défaut = 15 s, surchargeable via le constructeur', async () => {
+    const spy = vi.spyOn(AbortSignal, 'timeout')
+    try {
+      const fetchFn = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
+      await new WhapiClient('t', { fetchFn, retryDelayMs: 0 }).sendText('x@s.whatsapp.net', 'y')
+      expect(spy).toHaveBeenLastCalledWith(15000)
+      await new WhapiClient('t', { fetchFn, retryDelayMs: 0, timeoutMs: 3000 }).sendText('x@s.whatsapp.net', 'y')
+      expect(spy).toHaveBeenLastCalledWith(3000)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it("le signal avorte réellement à l'expiration du délai", async () => {
+    const fetchFn = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }))
+    const client = new WhapiClient('t', { fetchFn, retryDelayMs: 0, timeoutMs: 10 })
+    await client.sendText('x@s.whatsapp.net', 'y')
+    const signal = fetchFn.mock.calls[0][1].signal as AbortSignal
+    expect(signal.aborted).toBe(false)
+    await new Promise((r) => setTimeout(r, 30))
+    expect(signal.aborted).toBe(true)
+  })
+
+  it('timeout (AbortError) → retryable : nouvelle tentative puis succès', async () => {
+    const timeout = Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' })
+    const fetchFn = vi.fn()
+      .mockRejectedValueOnce(timeout)
+      .mockResolvedValueOnce(new Response(JSON.stringify({ message: { id: 'M9' } }), { status: 200 }))
+    const client = new WhapiClient('t', { fetchFn, retryDelayMs: 0 })
+    const res = await client.sendText('x@s.whatsapp.net', 'y')
+    expect(res.id).toBe('M9')
+    expect(fetchFn).toHaveBeenCalledTimes(2)
+  })
+
+  it('timeout systématique → échec après 3 tentatives, erreur remontée', async () => {
+    const timeout = Object.assign(new Error('timeout'), { name: 'TimeoutError' })
+    const fetchFn = vi.fn().mockRejectedValue(timeout)
+    const client = new WhapiClient('t', { fetchFn, retryDelayMs: 0 })
+    await expect(client.sendText('x@s.whatsapp.net', 'y')).rejects.toThrow('timeout')
+    expect(fetchFn).toHaveBeenCalledTimes(3)
+  })
+
+  it('429 puis 200 → retry (plus de jet immédiat)', async () => {
+    const fetchFn = vi.fn()
+      .mockResolvedValueOnce(rateLimited())
+      .mockResolvedValueOnce(new Response(JSON.stringify({ message: { id: 'M3' } }), { status: 200 }))
+    const client = new WhapiClient('t', { fetchFn, retryDelayMs: 0 })
+    const res = await client.sendText('x@s.whatsapp.net', 'y')
+    expect(res.id).toBe('M3')
+    expect(fetchFn).toHaveBeenCalledTimes(2)
+  })
+
+  it('429 avec Retry-After (secondes) → attend la durée annoncée', async () => {
+    const delays: number[] = []
+    const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: () => void, ms?: number) => {
+      delays.push(ms ?? 0)
+      fn()
+      return 0 as unknown as NodeJS.Timeout
+    }) as unknown as typeof setTimeout)
+    try {
+      const fetchFn = vi.fn()
+        .mockResolvedValueOnce(rateLimited('2'))
+        .mockResolvedValueOnce(new Response(JSON.stringify({ message: { id: 'M4' } }), { status: 200 }))
+      const client = new WhapiClient('t', { fetchFn, retryDelayMs: 500 })
+      await client.sendText('x@s.whatsapp.net', 'y')
+      expect(delays).toEqual([2000])
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('429 avec Retry-After démesuré → attente plafonnée à 30 s', async () => {
+    const delays: number[] = []
+    const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: () => void, ms?: number) => {
+      delays.push(ms ?? 0)
+      fn()
+      return 0 as unknown as NodeJS.Timeout
+    }) as unknown as typeof setTimeout)
+    try {
+      const fetchFn = vi.fn()
+        .mockResolvedValueOnce(rateLimited('3600'))
+        .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      const client = new WhapiClient('t', { fetchFn, retryDelayMs: 500 })
+      await client.sendText('x@s.whatsapp.net', 'y')
+      expect(delays).toEqual([30000])
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('429 sans Retry-After → backoff exponentiel habituel (500, 1000)', async () => {
+    const delays: number[] = []
+    const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: () => void, ms?: number) => {
+      delays.push(ms ?? 0)
+      fn()
+      return 0 as unknown as NodeJS.Timeout
+    }) as unknown as typeof setTimeout)
+    try {
+      const fetchFn = vi.fn().mockResolvedValue(rateLimited())
+      const client = new WhapiClient('t', { fetchFn, retryDelayMs: 500 })
+      await expect(client.sendText('x@s.whatsapp.net', 'y')).rejects.toBeInstanceOf(WhapiError)
+      expect(delays).toEqual([500, 1000])
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('429 persistant → WhapiError explicite portant le statut 429 après 3 tentatives', async () => {
+    const fetchFn = vi.fn().mockResolvedValue(rateLimited('0'))
+    const client = new WhapiClient('t', { fetchFn, retryDelayMs: 0 })
+    const err = await client.sendText('x@s.whatsapp.net', 'y').catch((e) => e)
+    expect(err).toBeInstanceOf(WhapiError)
+    expect((err as WhapiError).status).toBe(429)
+    expect((err as WhapiError).message).toContain('rate limit')
+    expect(fetchFn).toHaveBeenCalledTimes(3)
+  })
+
+  it('4xx non-429 (404) : toujours aucun retry', async () => {
+    const fetchFn = mockFetch([{ status: 404 }])
+    const client = new WhapiClient('t', { fetchFn, retryDelayMs: 0 })
+    await expect(client.sendText('x@s.whatsapp.net', 'y')).rejects.toBeInstanceOf(WhapiError)
+    expect(fetchFn).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('parseRetryAfterMs', () => {
+  it('secondes → ms', () => {
+    expect(parseRetryAfterMs('12')).toBe(12000)
+  })
+  it('date HTTP → délai restant en ms', () => {
+    const now = Date.parse('2026-07-20T10:00:00.000Z')
+    expect(parseRetryAfterMs('Mon, 20 Jul 2026 10:00:05 GMT', now)).toBe(5000)
+  })
+  it('date déjà passée → 0 (jamais négatif)', () => {
+    const now = Date.parse('2026-07-20T10:00:00.000Z')
+    expect(parseRetryAfterMs('Mon, 20 Jul 2026 09:59:00 GMT', now)).toBe(0)
+  })
+  it('en-tête absent ou illisible → null (backoff habituel)', () => {
+    expect(parseRetryAfterMs(null)).toBeNull()
+    expect(parseRetryAfterMs('')).toBeNull()
+    expect(parseRetryAfterMs('bientôt')).toBeNull()
   })
 })

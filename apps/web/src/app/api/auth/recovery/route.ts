@@ -70,7 +70,14 @@ export async function POST(req: Request) {
   const t0 = Date.now()
   const admin = createAdminClient()
 
-  const rl = await enforceRateLimit(admin, recoveryRateKeys(clientIp(req.headers)))
+  // Fail-CLOSED (`onError: 'deny'`) : ici l'anti-énumération prime sur la disponibilité. Si la
+  // table de rate-limit tombe, on refuse plutôt que de rouvrir en grand le bruteforce d'emails.
+  // Cela ne crée aucun oracle : ce 429 est émis AVANT le moindre accès aux données du compte
+  // (il ne dépend que de l'IP), et il est rigoureusement identique — corps, status, `Retry-After`
+  // — à celui d'une limite réellement atteinte, donc les deux causes sont indiscernables. Tous
+  // les autres chemins (compte inexistant, canal HS, generateLink KO…) restent inchangés :
+  // réponse neutre `{ ok: true }` via `neutral(t0)` et son plancher de temps constant.
+  const rl = await enforceRateLimit(admin, recoveryRateKeys(clientIp(req.headers)), { onError: 'deny' })
   if (!rl.ok) {
     return NextResponse.json(
       { error: `Trop de tentatives. Réessayez dans ${Math.ceil(rl.retryAfter / 60)} min.` },
