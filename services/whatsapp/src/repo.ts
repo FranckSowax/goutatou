@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { decryptToken, EMPTY_CART, type BotState, type Cart } from '@goutatou/db'
 import type { BotContext } from './bot/machine.js'
 import type { BotProfile } from './bot/copy.js'
+import type { ActiveOrderInfo } from './bot/order-status.js'
 
 /**
  * États connus de la machine conversationnelle — doit rester aligné sur `BotState`
@@ -95,6 +96,17 @@ export interface BotRepo {
    * spec catalogue § Conversation), jamais chargé sur chaque message.
    */
   hasWaProducts(restaurantId: string): Promise<boolean>
+  /**
+   * Dernière commande ACTIVE de CE client (statut ∉ {recuperee, annulee}), pour le seul mot-clé de
+   * suivi « où en est ma commande » (lot C3 — correctif 2) — jamais chargée sur chaque message.
+   * La plus RÉCENTE (`order by created_at desc limit 1`) tranche s'il y en a plusieurs.
+   *
+   * OPTIONNELLE (contrairement aux autres méthodes, même contrat que `deps.approvalRepo` côté
+   * processor) : addition purement additive — un déploiement/test qui ne la fournit pas répond la
+   * copie douce « pas de commande en cours » plutôt que de planter, et les nombreux mocks `BotRepo`
+   * existants restent valides sans modification.
+   */
+  getActiveOrder?(restaurantId: string, customerId: string): Promise<ActiveOrderInfo | null>
   loadConversation(restaurantId: string, customerId: string): Promise<{ state: BotState; cart: Cart }>
   saveConversation(restaurantId: string, customerId: string, state: BotState, cart: Cart): Promise<void>
   createOrder(restaurantId: string, customerId: string, cart: Cart): Promise<{ orderNumber: number; total: number }>
@@ -230,6 +242,29 @@ export function createRepo(db: SupabaseClient, tokenKey: string): BotRepo {
         .eq('restaurant_id', restaurantId)
         .not('wa_product_id', 'is', null)
       return (count ?? 0) > 0
+    },
+
+    async getActiveOrder(restaurantId, customerId) {
+      // Filtres dans la requête même (mirror drive/arrival-repo.ts findPendingDriveOrder) : aucun
+      // check applicatif après coup, donc aucune fuite possible d'une commande d'un autre resto/
+      // client. `total` est la colonne calculée par create_order (cf. migration core_schema).
+      const { data } = await db
+        .from('orders')
+        .select('order_number, status, mode, total')
+        .eq('restaurant_id', restaurantId)
+        .eq('customer_id', customerId)
+        .not('status', 'in', '(recuperee,annulee)')
+        .order('created_at', { ascending: false })
+        .limit(1)
+      const rows = (data ?? []) as {
+        order_number: number | string; status: ActiveOrderInfo['status']
+        mode: ActiveOrderInfo['mode']; total: number
+      }[]
+      if (rows.length === 0) return null
+      const row = rows[0]
+      return {
+        orderNumber: Number(row.order_number), status: row.status, mode: row.mode, total: row.total,
+      }
     },
 
     async loadConversation(restaurantId, customerId) {

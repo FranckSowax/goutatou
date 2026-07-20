@@ -4,12 +4,13 @@ import { decryptToken } from '@goutatou/db/crypto'
 import { WhapiClient } from '@goutatou/whapi'
 import { createSupabaseServer } from '@/lib/supabase/server'
 import { deliveryLinks, buildDeliveryMessage } from '@/lib/delivery'
+import { requireMember } from '@/lib/member'
 
+/** Garde membre (employé compris) — résolution unifiée via `lib/member.ts`. */
 async function myRestaurantId(): Promise<string> {
   const supabase = await createSupabaseServer()
-  const { data, error } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).single()
-  if (error || !data) throw new Error('Aucun restaurant associé à ce compte')
-  return data.restaurant_id as string
+  const { restaurantId } = await requireMember(supabase)
+  return restaurantId
 }
 
 /**

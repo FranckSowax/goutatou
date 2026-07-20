@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ChevronLeft, ChevronRight, Store } from 'lucide-react'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { getMember } from '@/lib/member'
 import { Button } from '@/components/ui/button'
 import type { OrderCard } from '@/lib/orders'
 import { dayBoundsUtc, formatDayLabel, formatYmdLibreville, isValidYmd, shiftDay } from '@/lib/order-day'
@@ -23,6 +24,9 @@ export default async function CommandesPage({ searchParams }: { searchParams: Pr
   const { startUtc, endUtc } = dayBoundsUtc(day)
 
   const supabase = await createSupabaseServer()
+  // Tenant courant : sert uniquement à filtrer l'abonnement Realtime du board
+  // (`restaurant_id=eq.<id>`) — la lecture ci-dessous est déjà cloisonnée par RLS.
+  const member = await getMember(supabase)
   const { data } = await supabase
     .from('orders')
     .select(`id, order_number, status, mode, source, total, created_at, delivery_address,
@@ -85,9 +89,32 @@ export default async function CommandesPage({ searchParams }: { searchParams: Pr
             <Link href={dayHref(today, q)}>Aujourd’hui</Link>
           </Button>
         )}
+
+        {/* Saut direct à une date : `<input type="date">` natif (sélecteur système sur mobile),
+            dans un simple formulaire GET — même paramètre d'URL `date` que les flèches, aucun
+            JavaScript requis. `max` = aujourd'hui au fuseau du resto (cf. lib/order-day.ts). */}
+        <form method="get" action="/app/commandes" className="flex items-center gap-2">
+          {q && <input type="hidden" name="q" value={q} />}
+          <label htmlFor="jour" className="sr-only">Aller à une date</label>
+          <input
+            id="jour"
+            type="date"
+            name="date"
+            defaultValue={day}
+            max={today}
+            className="h-11 rounded-lg border border-border bg-card px-3 text-sm text-foreground shadow-xs focus-visible:outline-2 focus-visible:outline-primary sm:h-9"
+          />
+          <Button type="submit" variant="outline" size="sm">Aller</Button>
+        </form>
       </div>
 
-      <Board key={`${day}-${q ?? ''}`} initialOrders={orders} initialQuery={q ?? ''} isTodayView={isTodayView} />
+      <Board
+        key={`${day}-${q ?? ''}`}
+        initialOrders={orders}
+        initialQuery={q ?? ''}
+        isTodayView={isTodayView}
+        restaurantId={member?.restaurantId}
+      />
     </div>
   )
 }

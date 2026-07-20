@@ -59,12 +59,26 @@ function AvailabilityToggle({ item }: { item: MenuStudioItem }) {
 function DishCard({ item, category, categories }: { item: MenuStudioItem; category: MenuStudioCategory; categories: MenuStudioCategory[] }) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
   return (
     <div className={cn('flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card transition-opacity', !item.available && 'opacity-60')}>
       <div className="relative aspect-4/3 w-full overflow-hidden bg-muted">
         {item.photo_url ? (
+          // `<img>` assumé plutôt que next/image : `images.remotePatterns` (next.config.ts) n'autorise
+          // que le bucket Supabase du projet, or les photos peuvent venir d'ailleurs (données de
+          // démonstration images.unsplash.com, anciennes URL importées) — next/image renverrait une 400
+          // et casserait la carte. On garde donc `<img>`, mais avec `loading="lazy"`, `decoding="async"`
+          // et des dimensions explicites (ratio 4/3 du conteneur) pour éviter le reflow.
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.photo_url} alt={item.name} className="absolute inset-0 size-full object-cover" />
+          <img
+            src={item.photo_url}
+            alt={item.name}
+            width={640}
+            height={480}
+            loading="lazy"
+            decoding="async"
+            className="absolute inset-0 size-full object-cover"
+          />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
             <ImageOff className="size-8" />
@@ -86,26 +100,50 @@ function DishCard({ item, category, categories }: { item: MenuStudioItem; catego
           <AvailabilityToggle item={item} />
           <div className="flex items-center gap-1">
             <EditItemDialog item={item} categoryId={category.id} categories={categories} />
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-sm"
-              aria-label={`Supprimer ${item.name}`}
-              disabled={pending}
-              onClick={() => {
-                if (!window.confirm(`Supprimer « ${item.name} » ?`)) return
-                setError(null)
-                startTransition(async () => {
-                  try {
-                    await deleteItem(item.id)
-                  } catch {
-                    setError(ACTION_ERROR)
-                  }
-                })
-              }}
-            >
-              <Trash2 className="size-3.5" />
-            </Button>
+            {/* Suppression d'un plat : même Dialog FR que la suppression de catégorie (plus de
+                window.confirm natif), et cible tactile ≥ 44 px (usage au comptoir, au doigt). */}
+            <Dialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
+              <DialogTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="min-h-11 min-w-11"
+                  aria-label={`Supprimer ${item.name}`}
+                  disabled={pending}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader><DialogTitle>Supprimer « {item.name} » ?</DialogTitle></DialogHeader>
+                <p className="text-sm text-muted-foreground">
+                  Le plat sera retiré de votre carte. Cette action est définitive.
+                </p>
+                {error && <p className="text-sm text-destructive">{error}</p>}
+                <DialogFooter className="gap-2 sm:gap-2">
+                  <DialogClose asChild><Button type="button" variant="outline">Annuler</Button></DialogClose>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    disabled={pending}
+                    onClick={() => {
+                      setError(null)
+                      startTransition(async () => {
+                        try {
+                          await deleteItem(item.id)
+                          setConfirmingDelete(false)
+                        } catch {
+                          setError(ACTION_ERROR)
+                        }
+                      })
+                    }}
+                  >
+                    Supprimer
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
         {error && <p className="text-xs text-destructive">{error}</p>}
@@ -205,7 +243,7 @@ function CategoryActions({ category }: { category: MenuStudioCategory }) {
     <div className="flex items-center gap-1">
       <Dialog open={renaming} onOpenChange={setRenaming}>
         <DialogTrigger asChild>
-          <Button type="button" variant="ghost" size="icon-sm" aria-label="Renommer la catégorie"><Pencil className="size-3.5" /></Button>
+          <Button type="button" variant="ghost" size="icon" className="min-h-11 min-w-11" aria-label="Renommer la catégorie"><Pencil className="size-4" /></Button>
         </DialogTrigger>
         <DialogContent>
           <DialogHeader><DialogTitle>Renommer « {category.name} »</DialogTitle></DialogHeader>
@@ -220,7 +258,7 @@ function CategoryActions({ category }: { category: MenuStudioCategory }) {
       </Dialog>
       <Dialog>
         <DialogTrigger asChild>
-          <Button type="button" variant="ghost" size="icon-sm" aria-label="Supprimer la catégorie"><Trash2 className="size-3.5" /></Button>
+          <Button type="button" variant="ghost" size="icon" className="min-h-11 min-w-11" aria-label="Supprimer la catégorie"><Trash2 className="size-4" /></Button>
         </DialogTrigger>
         <DialogContent>
           <DialogHeader><DialogTitle>Supprimer « {category.name} » ?</DialogTitle></DialogHeader>

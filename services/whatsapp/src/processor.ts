@@ -20,6 +20,8 @@ import type { ChannelApprovalRepo } from './autochannel/approval-repo.js'
 import { buildChannelCaption } from './autochannel/captions.js'
 import { ARRIVAL_COPY, isArrivalText, parseArrivalButton } from './drive/arrival.js'
 import type { ArrivalRepo } from './drive/arrival-repo.js'
+import { MEDIA_COPY, mediaLogBody, mediaThrottle, unsupportedMediaKind, type MediaKind } from './bot/media.js'
+import { isOrderStatusKeyword } from './bot/order-status.js'
 
 interface WhapiMessage {
   id: string
@@ -651,6 +653,48 @@ async function handleChannelApprovalButton(
   }
 }
 
+/**
+ * Média entrant NON pris en charge (note vocale, image, vidéo, sticker, document… — lot C3
+ * « UX bot », correctif 1) : au lieu du silence (« tout autre type reste ignoré » en v1), on
+ * répond UNE phrase courte, chaleureuse et actionnable. Au Gabon la note vocale est le mode
+ * dominant : sans cette réponse, le client croit que le restaurant l'ignore.
+ *
+ * Gardes, dans l'ordre :
+ * 1. `from_me` — filtré en amont par la boucle principale (le restaurant qui envoie un vocal à son
+ *    client ne déclenche jamais rien ici).
+ * 2. Idempotence — MÊME dédup `logMessage` que le reste du bot : un webhook redélivré (même
+ *    `whapi_message_id`) renvoie `false` et sort sans rien envoyer.
+ * 3. État `HUMAIN` — le client est déjà en relation avec l'équipe : on n'envoie RIEN, le
+ *    restaurateur écoutera le vocal lui-même (mirror du silence de la machine en HUMAIN).
+ * 4. Anti-spam — une seule réponse par chat et par fenêtre (cf. bot/media.ts `mediaThrottle`,
+ *    10 min) : 5 vocaux d'affilée ⇒ 1 réponse.
+ *
+ * Aucune conversation n'est écrite (pas de `saveConversation`) : un média ne fait pas avancer la
+ * machine à états, il ne doit donc jamais altérer le panier ni l'état du client.
+ */
+async function handleUnsupportedMedia(
+  whapi: ProcessorWhapi,
+  repo: BotRepo,
+  restaurantId: string,
+  chatId: string,
+  whapiMessageId: string,
+  from: string,
+  fromName: string | undefined,
+  type: string,
+  kind: MediaKind,
+): Promise<void> {
+  const fresh = await repo.logMessage(restaurantId, 'in', chatId, mediaLogBody(type, kind), whapiMessageId)
+  if (!fresh) return
+
+  const customer = await repo.upsertCustomer(restaurantId, from, chatId, fromName)
+  const conv = await repo.loadConversation(restaurantId, customer.id)
+  if (conv.state === 'HUMAIN') return
+
+  if (!mediaThrottle.shouldReply(`${restaurantId}:${chatId}`, Date.now())) return
+
+  await sendOneReply(whapi, repo, restaurantId, chatId, MEDIA_COPY[kind], null)
+}
+
 export function createProcessor(
   repo: BotRepo,
   makeWhapi: (token: string) => ProcessorWhapi,
@@ -740,6 +784,24 @@ export function createProcessor(
           }
           return
         }
+      }
+
+      // Média non pris en charge (lot C3 — correctif 1) : vocal/image/vidéo/sticker/document…
+      // INTERCEPTÉ ICI — après les boutons gérant (qui ne sont jamais des médias) et avant le
+      // calcul de `body` ci-dessous, qui renvoyait `undefined` pour ces types et sortait en
+      // silence. `unsupportedMediaKind` est une ALLOWLIST : les événements techniques (system,
+      // action, types futurs inconnus) restent silencieux, comme avant.
+      const mediaKind = unsupportedMediaKind(msg.type)
+      if (mediaKind) {
+        try {
+          await handleUnsupportedMedia(
+            whapi, repo, channel.restaurantId, msg.chat_id, msg.id, msg.from, msg.from_name,
+            msg.type, mediaKind,
+          )
+        } catch (err) {
+          console.error(`[media] erreur message ${msg.id}`, err)
+        }
+        return
       }
 
       // Un message location est converti en lien Google Maps et traité EXACTEMENT comme un
@@ -854,6 +916,18 @@ export function createProcessor(
           } else {
             ctx = { ...baseCtx, wheel: await repo.getWheelInfo(channel.restaurantId, customer.id) }
           }
+        }
+
+        // Suivi de commande (lot C3 — correctif 2) : `ctx.activeOrder` chargé UNIQUEMENT sur le
+        // mot-clé de suivi (mirror ctx.wheel/ctx.loyalty ci-dessus — pas une requête par message)
+        // et jamais en état HUMAIN (où la machine avale de toute façon la commande). `null` quand
+        // le repo ne fournit pas `getActiveOrder` (méthode optionnelle, cf. repo.ts) : la machine
+        // répond alors la copie douce « pas de commande en cours » plutôt que de planter.
+        if (conv.state !== 'HUMAIN' && isOrderStatusKeyword(body)) {
+          const activeOrder = repo.getActiveOrder
+            ? await repo.getActiveOrder(channel.restaurantId, customer.id)
+            : null
+          ctx = { ...ctx, activeOrder }
         }
 
         // Round-trip de l'id `in:<x>` non garanti par WhatsApp : un tap peut revenir sans id (ou

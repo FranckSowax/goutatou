@@ -1,7 +1,5 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { useMemo, useState } from 'react'
 import { statusStateLabel } from '@goutatou/db/types'
 import type { StatusState } from '@goutatou/db/types'
 import { Card } from '@/components/ui/card'
@@ -19,6 +17,7 @@ import {
 } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { badgeVariantForStatus } from '@/lib/status-badge'
+import { useTableRefresh } from '@/lib/use-table-refresh'
 import { cancelStatus } from './actions'
 import { StatusPreview } from './status-preview'
 import { fontStyleFor, filterStatusesByState, paginate, STATUS_FILTER_OPTIONS } from './shared'
@@ -45,16 +44,10 @@ function audienceLabel(a: StatusAudience): string {
 }
 
 export function Board({ initial }: { initial: Row[] }) {
-  const router = useRouter()
   const [filter, setFilter] = useState<StatusFilterState>('all')
   const [page, setPage] = useState(1)
 
-  useEffect(() => {
-    const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
-    const ch = supabase.channel('statuses').on('postgres_changes',
-      { event: '*', schema: 'public', table: 'statuses' }, () => router.refresh()).subscribe()
-    return () => { void supabase.removeChannel(ch) }
-  }, [router])
+  useTableRefresh({ channelName: 'statuses', tables: ['statuses'] })
 
   const filtered = useMemo(() => filterStatusesByState(initial, filter), [initial, filter])
   const { items: pageItems, page: currentPage, pageCount } = useMemo(

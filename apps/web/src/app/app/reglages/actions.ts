@@ -8,12 +8,11 @@ import { assertOwner } from '@/lib/roles'
 import { parseLatLng } from '@/lib/gps'
 import { normalizeGabonPhone } from '@/lib/lp/wa'
 
+/** Garde PATRON — `assertOwner` renvoie déjà le membre, plus de seconde requête `restaurant_members`. */
 async function myRestaurantId(): Promise<string> {
   const supabase = await createSupabaseServer()
-  await assertOwner(supabase)
-  const { data, error } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).single()
-  if (error || !data) throw new Error('Aucun restaurant associé à ce compte')
-  return data.restaurant_id
+  const { restaurantId } = await assertOwner(supabase)
+  return restaurantId
 }
 
 // Chaîne vide/absente → null (pas de valeur imposée), sinon trim.
@@ -68,14 +67,7 @@ export async function updateMyRestaurantProfile(formData: FormData) {
  */
 export async function createStaffGroup() {
   const supabase = await createSupabaseServer()
-  await assertOwner(supabase)
-  const { data: member, error: memberErr } = await supabase
-    .from('restaurant_members')
-    .select('restaurant_id')
-    .limit(1)
-    .single()
-  if (memberErr || !member) throw new Error('Aucun restaurant associé à ce compte')
-  const restaurantId = member.restaurant_id as string
+  const { restaurantId } = await assertOwner(supabase)
 
   const { data: resto, error: restoErr } = await supabase
     .from('restaurants')

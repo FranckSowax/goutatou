@@ -1,6 +1,7 @@
 'use server'
 import { revalidatePath } from 'next/cache'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { requireMember } from '@/lib/member'
 
 /**
  * Note libre attachée à un client. Garde membre (`restaurant_members`) puis écriture via le client
@@ -9,12 +10,7 @@ import { createSupabaseServer } from '@/lib/supabase/server'
  */
 export async function updateCustomerNote(customerId: string, notes: string): Promise<void> {
   const supabase = await createSupabaseServer()
-  const { data: member, error: memberErr } = await supabase
-    .from('restaurant_members')
-    .select('restaurant_id')
-    .limit(1)
-    .single()
-  if (memberErr || !member) throw new Error('Aucun restaurant associé à ce compte')
+  await requireMember(supabase)
 
   const { error } = await supabase
     .from('customers')

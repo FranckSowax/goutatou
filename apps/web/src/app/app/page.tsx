@@ -40,6 +40,8 @@ interface HomeOrderRow extends HomeOrderInput {
   id: string
   order_number: number
   customer_name: string | null
+  payment_method: string | null
+  payment_status: string | null
 }
 
 interface TodoItem {
@@ -78,7 +80,7 @@ export default async function HomePage() {
         .single(),
       supabase
         .from('orders')
-        .select('id, order_number, status, total, created_at, customers(name)')
+        .select('id, order_number, status, total, created_at, payment_method, payment_status, customers(name)')
         .gte('created_at', new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString())
         .order('created_at', { ascending: false }),
       user
@@ -109,10 +111,24 @@ export default async function HomePage() {
       total: o.total as number,
       created_at: o.created_at as string,
       customer_name: customer?.name ?? null,
+      payment_method: (o.payment_method as string | null) ?? null,
+      payment_status: (o.payment_status as string | null) ?? null,
     }
   })
 
   const kpis = computeHomeKpis(orders, new Date().toISOString())
+
+  // Encaissement du jour par méthode + reste à vérifier — le hero porte déjà « CA du jour » et
+  // « en cours », les tuiles ne les répètent plus (lot C2).
+  const todayOrders = orders.filter((o) => o.status !== 'annulee' && isToday(o.created_at))
+  const encaisseCash = todayOrders
+    .filter((o) => o.payment_method === 'cash')
+    .reduce((s, o) => s + o.total, 0)
+  // Transferts Airtel Money annoncés mais pas encore pointés par le resto : très actionnable,
+  // on regarde toute la fenêtre chargée (7 jours) et pas seulement aujourd'hui.
+  const airtelAVerifier = orders.filter(
+    (o) => o.status !== 'annulee' && o.payment_method === 'airtel' && o.payment_status === 'a_verifier',
+  ).length
   const latest = orders.slice(0, 5)
   const lp = parseLpConfig(restaurant?.lp_config, restaurantName)
 
@@ -147,7 +163,7 @@ export default async function HomePage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <HomeRefresh />
+      <HomeRefresh restaurantId={restaurantId} />
 
       {showOnboarding && (
         <OnboardingCard steps={onboardingSteps(onboardingState)} progress={onboardingProgress(onboardingState)} />
@@ -185,8 +201,14 @@ export default async function HomePage() {
 
           {/* KPIs pastel */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <KpiCard tint="mint" label="CA du jour" value={formatFcfa(kpis.caJour)} />
-            <KpiCard tint="peach" label="En cours" value={String(kpis.enCours)} />
+            <KpiCard tint="mint" label="Encaissé cash aujourd’hui" value={formatFcfa(encaisseCash)} />
+            {/* Compteur actionnable : mène droit aux commandes à pointer. */}
+            <Link
+              href="/app/commandes"
+              className="block h-full rounded-2xl focus-visible:outline-2 focus-visible:outline-primary [&>div]:h-full"
+            >
+              <KpiCard tint="peach" label="Paiements Airtel à vérifier" value={String(airtelAVerifier)} />
+            </Link>
             <KpiCard tint="sky" label="Prêtes" value={String(kpis.pretes)} />
             <KpiCard tint="rose" label="Panier moyen (jour)" value={formatFcfa(kpis.panierMoyen)} />
           </div>

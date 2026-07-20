@@ -1,4 +1,5 @@
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { dayBoundsUtc, formatYmdLibreville } from '@/lib/order-day'
 import { DeliveryBoard, type DeliveryRow, type ActiveLivreur } from './board'
 
 export const dynamic = 'force-dynamic'
@@ -33,6 +34,10 @@ export default async function LivraisonPage() {
   }
   const restaurantId = member.restaurant_id
 
+  // Fenêtre bornée (perf) : les livraisons du jour civil courant (Libreville) + TOUTES celles encore
+  // actives (à attribuer / en cours), même créées un jour précédent — elles ne doivent jamais
+  // disparaître du board. La colonne « Livrées » ne montre donc que la journée en cours.
+  const { startUtc, endUtc } = dayBoundsUtc(formatYmdLibreville(new Date()))
   const { data: raw } = await supabase
     .from('deliveries')
     .select(
@@ -42,7 +47,9 @@ export default async function LivraisonPage() {
               customers(name, phone), order_items(name, qty))`,
     )
     .eq('restaurant_id', restaurantId)
+    .or(`and(created_at.gte.${startUtc},created_at.lt.${endUtc}),dispatch_state.in.(pending,assigned)`)
     .order('created_at', { ascending: false })
+    .limit(300)
 
   const { data: livreurs } = await supabase
     .from('livreurs')

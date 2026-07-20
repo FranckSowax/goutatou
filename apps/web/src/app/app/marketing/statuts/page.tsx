@@ -88,9 +88,12 @@ export default async function StatutsPage({
   }
   const restaurantId = member.restaurant_id as string
   const premium = await isPremium(supabase, restaurantId)
+  // Historique borné côté serveur : le Board pagine de toute façon côté client, inutile de charger
+  // tout l'historique du resto à chaque affichage.
   const { data: statuses } = await supabase.from('statuses')
     .select('id, kind, content, media_url, bg_color, caption_color, font_type, audience, state, scheduled_at, created_at')
     .order('created_at', { ascending: false })
+    .limit(100)
 
   const { data: restaurant } = await supabase.from('restaurants')
     .select('auto_status_enabled, auto_status_times, auto_status_count, auto_status_cursor, auto_status_last_slot, auto_status_validation, auto_status_manager_phone, contact_phone, staff_group_id, auto_status_echo_channel')
