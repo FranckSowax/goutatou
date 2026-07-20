@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { verifyLoyaltyToken } from '@goutatou/db/loyalty'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { clientIp, enforceRateLimit, profileRateKeys } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -31,6 +32,19 @@ export async function POST(req: Request) {
     typeof body.birthdate === 'string' && DATE_RE.test(body.birthdate) ? body.birthdate : null
 
   const db = createAdminClient()
+
+  // Rate-limit par IP, scopé au restaurant du jeton (donc appliqué APRÈS la vérification du
+  // jeton : un appelant sans jeton valide est déjà rejeté au-dessus et ne consomme pas de quota).
+  // Fail-open (défaut) : le jeton HMAC porte déjà l'essentiel de la protection, une panne du
+  // sous-système ne doit pas empêcher un client de corriger son prénom.
+  const rl = await enforceRateLimit(db, profileRateKeys(claims.rid, clientIp(req.headers)))
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: `Trop de tentatives. Réessayez dans ${Math.ceil(rl.retryAfter / 60)} min.` },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } },
+    )
+  }
+
   const { error } = await db
     .from('customers')
     .update({ name: name || null, birthdate })

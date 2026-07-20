@@ -112,7 +112,13 @@ export function startCatalogWorker(deps: CatalogWorkerDeps & { pollMs: number })
     try {
       const due = await deps.repo.claimSyncRequests()
       for (const r of due) {
-        await syncRestaurantCatalog(r.restaurantId, deps)
+        // Isolation par restaurant (audit lot B — correctif 3) : un throw sur une sync ne doit
+        // pas abandonner les restaurants suivants du même tick.
+        try {
+          await syncRestaurantCatalog(r.restaurantId, deps)
+        } catch (err) {
+          console.error('[catalog-sync] restaurant', r.restaurantId, err)
+        }
       }
     } catch (err) {
       console.error('[catalog-sync]', err)

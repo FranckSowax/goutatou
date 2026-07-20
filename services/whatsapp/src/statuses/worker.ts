@@ -116,7 +116,13 @@ export async function runStatusWorkerOnce(deps: StatusWorkerDeps): Promise<void>
   await deps.repo.cancelExpiredPendingApproval(nowIso)
   const due = await deps.repo.claimDue(nowIso)
   for (const s of due) {
-    await processStatusOnce(s, deps)
+    // Isolation par statut (audit lot B — correctif 3) : un throw sur un statut ne doit pas
+    // abandonner les statuts suivants du même tick.
+    try {
+      await processStatusOnce(s, deps)
+    } catch (err) {
+      console.error('[status-worker] statut', s.id, err)
+    }
   }
 }
 

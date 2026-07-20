@@ -9,40 +9,83 @@ interface Opts {
   baseUrl?: string
   fetchFn?: typeof fetch
   retryDelayMs?: number
+  /**
+   * Délai maximal d'un appel HTTP avant abandon (AbortSignal.timeout) — défaut 15 s.
+   * Un timeout est traité comme une erreur réseau : retryable, comme un ECONNRESET.
+   * Sans ce garde-fou, un appel Whapi qui pend bloque indéfiniment un webhook ou un tick worker.
+   */
+  timeoutMs?: number
 }
 
 const MAX_ATTEMPTS = 3
+const DEFAULT_TIMEOUT_MS = 15_000
+/** Plafond d'attente imposé par un `Retry-After` (un 429 avec Retry-After: 3600 ne doit pas geler un worker). */
+const MAX_RETRY_AFTER_MS = 30_000
+
+/**
+ * Lit l'en-tête `Retry-After` d'une réponse 429 : soit un nombre de secondes ("120"), soit une
+ * date HTTP ("Wed, 21 Oct 2026 07:28:00 GMT"). Renvoie un délai en ms, plafonné par l'appelant,
+ * ou `null` si l'en-tête est absent/illisible (→ backoff exponentiel habituel).
+ */
+export function parseRetryAfterMs(header: string | null, now: number = Date.now()): number | null {
+  if (header === null) return null
+  const raw = header.trim()
+  if (raw === '') return null
+  if (/^\d+$/.test(raw)) return Number(raw) * 1000
+  const date = Date.parse(raw)
+  if (Number.isNaN(date)) return null
+  return Math.max(0, date - now)
+}
 
 export class WhapiClient {
   private baseUrl: string
   private fetchFn: typeof fetch
   private retryDelayMs: number
+  private timeoutMs: number
 
   constructor(private token: string, opts: Opts = {}) {
     this.baseUrl = opts.baseUrl ?? 'https://gate.whapi.cloud'
     this.fetchFn = opts.fetchFn ?? fetch
     this.retryDelayMs = opts.retryDelayMs ?? 500
+    this.timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS
   }
 
   private async request(method: string, path: string, body?: unknown): Promise<unknown> {
     let lastError: unknown
+    // Délai à respecter avant la prochaine tentative : backoff exponentiel par défaut, ou la
+    // valeur dictée par `Retry-After` quand Whapi nous limite (429).
+    let nextDelayMs: number | null = null
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      if (attempt > 0) await new Promise((r) => setTimeout(r, this.retryDelayMs * 2 ** (attempt - 1)))
+      if (attempt > 0) {
+        const delay = nextDelayMs ?? this.retryDelayMs * 2 ** (attempt - 1)
+        nextDelayMs = null
+        if (delay > 0) await new Promise((r) => setTimeout(r, delay))
+      }
       try {
         const res = await this.fetchFn(`${this.baseUrl}${path}`, {
           method,
           headers: { Authorization: `Bearer ${this.token}`, 'Content-Type': 'application/json' },
           body: body === undefined ? undefined : JSON.stringify(body),
+          signal: AbortSignal.timeout(this.timeoutMs),
         })
         if (res.ok) return res.json().catch(() => ({}))
+        if (res.status === 429) {
+          // Rate limit : retryable, en respectant `Retry-After` s'il est fourni (plafonné à 30 s).
+          const retryAfter = parseRetryAfterMs(res.headers?.get?.('Retry-After') ?? null)
+          nextDelayMs = retryAfter === null ? null : Math.min(retryAfter, MAX_RETRY_AFTER_MS)
+          lastError = new WhapiError(`Whapi 429 (rate limit) sur ${path}`, 429)
+          continue
+        }
         if (res.status >= 500) {
           lastError = new WhapiError(`Whapi ${res.status} sur ${path}`, res.status)
           continue // retry sur 5xx uniquement
         }
         throw new WhapiError(`Whapi ${res.status} sur ${path}`, res.status)
       } catch (err) {
-        if (err instanceof WhapiError && err.status !== undefined && err.status < 500) throw err
-        lastError = err // erreur réseau → retry
+        // 4xx non-429 : jet immédiat (comportement historique inchangé). Le reste (erreur réseau,
+        // TimeoutError de l'AbortSignal) → retry.
+        if (err instanceof WhapiError && err.status !== undefined && err.status < 500 && err.status !== 429) throw err
+        lastError = err
       }
     }
     throw lastError instanceof Error ? lastError : new WhapiError('échec réseau Whapi')

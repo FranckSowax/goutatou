@@ -22,35 +22,45 @@ export async function processCampaignOnce(campaign: DueCampaign, deps: WorkerDep
   if (!channel || channel.status !== 'active') return
   const whapi = deps.makeWhapi(channel.token)
 
-  const batch = await deps.repo.nextPendingBatch(campaign.id, deps.batchSize)
-  for (const r of batch) {
-    if (await deps.repo.isCanceled(campaign.id)) return
+  // Drain : la campagne est réservée pour CE tick (claim atomique, cf. repo.claimScheduledDue —
+  // audit lot B correctif 2), on enchaîne donc les lots jusqu'à épuisement au lieu d'attendre le
+  // tick suivant pour le lot d'après. Débit nominal inchangé (les ticks s'enchaînaient déjà dos à
+  // dos), mais plus besoin de re-réclamer la campagne à chaque lot. Sortie de boucle : lot vide.
+  for (;;) {
+    const batch = await deps.repo.nextPendingBatch(campaign.id, deps.batchSize)
+    if (batch.length === 0) break
+    for (const r of batch) {
+      if (await deps.repo.isCanceled(campaign.id)) return
 
-    // Pré-validation : numéro invalide ou sans WhatsApp → failed 'numéro invalide', aucun envoi,
-    // aucun crédit du throttle consommé (pas de sleep pour ce destinataire).
-    if (!validPhoneForCountry(r.phone)) {
-      await deps.repo.markRecipient(r.recipientId, campaign.id, false, 'numéro invalide')
-      continue
-    }
-    let hasWhatsapp = true
-    try {
-      hasWhatsapp = await whapi.checkContact(r.phone)
-    } catch {
-      hasWhatsapp = true // erreur réseau checkContact : fail-open, on ne bloque pas la campagne
-    }
-    if (!hasWhatsapp) {
-      await deps.repo.markRecipient(r.recipientId, campaign.id, false, 'numéro invalide')
-      continue
-    }
+      // Pré-validation : numéro invalide ou sans WhatsApp → failed 'numéro invalide', aucun envoi,
+      // aucun crédit du throttle consommé (pas de sleep pour ce destinataire).
+      if (!validPhoneForCountry(r.phone)) {
+        await deps.repo.markRecipient(r.recipientId, campaign.id, false, 'numéro invalide')
+        continue
+      }
+      let hasWhatsapp = true
+      try {
+        hasWhatsapp = await whapi.checkContact(r.phone)
+      } catch {
+        hasWhatsapp = true // erreur réseau checkContact : fail-open, on ne bloque pas la campagne
+      }
+      if (!hasWhatsapp) {
+        await deps.repo.markRecipient(r.recipientId, campaign.id, false, 'numéro invalide')
+        continue
+      }
 
-    try {
-      if (campaign.mediaUrl) await whapi.sendImage(r.chatId, campaign.mediaUrl, campaign.body)
-      else await whapi.sendText(r.chatId, campaign.body)
-      await deps.repo.markRecipient(r.recipientId, campaign.id, true, undefined)
-    } catch (err) {
-      await deps.repo.markRecipient(r.recipientId, campaign.id, false, String(err))
+      try {
+        if (campaign.mediaUrl) await whapi.sendImage(r.chatId, campaign.mediaUrl, campaign.body)
+        else await whapi.sendText(r.chatId, campaign.body)
+        await deps.repo.markRecipient(r.recipientId, campaign.id, true, undefined)
+      } catch (err) {
+        await deps.repo.markRecipient(r.recipientId, campaign.id, false, String(err))
+      }
+      await deps.sleep(nextSendDelayMs(deps.sendDelayMinMs, deps.sendDelayMaxMs, deps.rng))
     }
-    await deps.sleep(nextSendDelayMs(deps.sendDelayMinMs, deps.sendDelayMaxMs, deps.rng))
+    // Cap journalier revérifié entre deux lots (même règle qu'à l'entrée) : on s'arrête net sans
+    // finaliser, la campagne reprendra plus tard.
+    if ((await deps.repo.sentTodayCount(campaign.restaurantId)) >= deps.dailyCap) return
   }
   await deps.repo.finalizeIfDone(campaign.id)
 }
@@ -60,9 +70,15 @@ export function startCampaignWorker(deps: WorkerDeps & { pollMs: number }): void
     try {
       const due = await deps.repo.claimScheduledDue(new Date().toISOString())
       for (const c of due) {
-        // snapshot exécuté une seule fois : audience figée au lancement de la campagne
-        await deps.repo.snapshotRecipients(c.id, c.restaurantId)
-        await processCampaignOnce(c, deps)
+        // Isolation par campagne (audit lot B — correctif 3) : une erreur sur une campagne ne
+        // doit pas abandonner les campagnes suivantes du même tick.
+        try {
+          // snapshot exécuté une seule fois : audience figée au lancement de la campagne
+          await deps.repo.snapshotRecipients(c.id, c.restaurantId)
+          await processCampaignOnce(c, deps)
+        } catch (err) {
+          console.error('[campaign-worker] campagne', c.id, err)
+        }
       }
     } catch (err) {
       console.error('[campaign-worker]', err)

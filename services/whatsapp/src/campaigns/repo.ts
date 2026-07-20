@@ -16,15 +16,47 @@ export interface CampaignRepo {
   isCanceled(campaignId: string): Promise<boolean>
 }
 
+/**
+ * Bail de reprise d'une campagne restée en 'sending' (audit fiabilité lot B — correctif 2) :
+ * une campagne n'est reprise par un tick que si son dernier claim remonte à plus de ce délai.
+ * Couvre le seul cas légitime de reprise — une instance morte au milieu de l'envoi (redéploiement
+ * Railway, crash) — sans jamais permettre à deux instances de traiter la même campagne en
+ * parallèle. En marche nominale la reprise ne sert pas : un tick draine toute la campagne (cf.
+ * worker.ts, boucle de lots) puis `finalizeIfDone` la sort de 'sending'.
+ */
+const RESUME_LEASE_MS = 10 * 60 * 1000
+
+const DUE_COLUMNS = 'id, restaurant_id, body, media_url'
+
+interface DueRow { id: string; restaurant_id: string; body: string; media_url: string | null }
+
+function toDue(rows: DueRow[]): DueCampaign[] {
+  return rows.map((c) => ({ id: c.id, restaurantId: c.restaurant_id, body: c.body, mediaUrl: c.media_url }))
+}
+
 export function createCampaignRepo(db: SupabaseClient, tokenKey: string): CampaignRepo {
   return {
     async claimScheduledDue(nowIso) {
-      // Passe les 'scheduled' échues en 'sending'
-      await db.from('campaigns').update({ status: 'sending', started_at: nowIso })
+      // Claim ATOMIQUE (pattern wheel/polls) : `update(...).eq('status', <ancien>).select()` ne
+      // renvoie QUE les lignes que CE process a réellement fait basculer — deux instances qui
+      // tournent en même temps (fenêtre de redéploiement Railway) ne peuvent donc pas envoyer la
+      // même campagne deux fois. L'ancien code faisait l'update puis un `select` de TOUT ce qui
+      // était en 'sending', y compris les campagnes déjà prises par l'autre instance.
+      const { data: started } = await db.from('campaigns')
+        .update({ status: 'sending', started_at: nowIso })
         .eq('status', 'scheduled').lte('scheduled_at', nowIso)
-      const { data } = await db.from('campaigns')
-        .select('id, restaurant_id, body, media_url').eq('status', 'sending')
-      return (data ?? []).map((c) => ({ id: c.id, restaurantId: c.restaurant_id, body: c.body, mediaUrl: c.media_url }))
+        .select(DUE_COLUMNS)
+
+      // Reprise des campagnes orphelines : 'sending' dont le claim (started_at) a expiré — donc
+      // l'instance qui les tenait est morte. Le re-claim est lui aussi un update conditionnel
+      // (`.lt('started_at', cutoff)`) : une seule instance peut le gagner.
+      const cutoff = new Date(new Date(nowIso).getTime() - RESUME_LEASE_MS).toISOString()
+      const { data: resumed } = await db.from('campaigns')
+        .update({ started_at: nowIso })
+        .eq('status', 'sending').lt('started_at', cutoff)
+        .select(DUE_COLUMNS)
+
+      return [...toDue((started ?? []) as DueRow[]), ...toDue((resumed ?? []) as DueRow[])]
     },
     async snapshotRecipients(campaignId, restaurantId) {
       // Audience figée au lancement : si déjà snapshoté, on ne recalcule plus jamais

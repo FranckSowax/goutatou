@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clientIp, orderRateKeys, wheelUnlockRateKeys, recoveryRateKeys, RATE_LIMITS } from '../src/lib/rate-limit'
+import { clientIp, orderRateKeys, wheelUnlockRateKeys, recoveryRateKeys, profileRateKeys, RATE_LIMITS } from '../src/lib/rate-limit'
 
 function h(init: Record<string, string>): Headers {
   return new Headers(init)
@@ -54,5 +54,17 @@ describe('recoveryRateKeys', () => {
       limit: RATE_LIMITS.recoveryIp.limit,
       windowSeconds: RATE_LIMITS.recoveryIp.windowSeconds,
     })
+  })
+})
+
+describe('profileRateKeys', () => {
+  it('produit 1 couche par IP scopée au restaurant', () => {
+    expect(profileRateKeys('resto-1', '41.1.2.3')).toEqual([
+      { key: 'f-profile:ip:resto-1:41.1.2.3', ...RATE_LIMITS.profileIp },
+    ])
+  })
+  it('reste généreux : le client peut corriger son profil plusieurs fois', () => {
+    // Un plafond bas gênerait un usage légitime (prénom puis date, Wi-Fi partagé du resto).
+    expect(RATE_LIMITS.profileIp.limit).toBeGreaterThanOrEqual(30)
   })
 })

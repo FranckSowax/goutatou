@@ -41,12 +41,22 @@ export interface StatusRepo {
 export function createStatusRepo(db: SupabaseClient, tokenKey: string): StatusRepo {
   return {
     async claimDue(nowIso) {
-      // Passe les 'scheduled' échus en 'posting'
-      await db.from('statuses').update({ state: 'posting' })
-        .eq('state', 'scheduled').lte('scheduled_at', nowIso)
+      // Claim ATOMIQUE at-most-once (audit fiabilité lot B — correctif 2), pattern wheel/polls :
+      // `update({state:'posting'}).eq('state','scheduled').select(...)` ne renvoie QUE les lignes
+      // que CE process a fait basculer. L'ancien code faisait l'update puis un `select` de TOUT
+      // ce qui était en 'posting' — deux conséquences corrigées ici :
+      //   1. deux instances (fenêtre de redéploiement Railway) publiaient le même statut ;
+      //   2. un statut dont `markPosted` avait échoué restait en 'posting' et était REPUBLIÉ à
+      //      chaque tick (boucle de reposts sur le WhatsApp du restaurant).
+      // Contrepartie assumée : une ligne 'posting' orpheline (publication réussie mais markPosted
+      // en échec, ou process tué entre les deux) n'est plus jamais reprise — elle reste visible en
+      // 'posting' côté dashboard. C'est le bon compromis : republier un statut est irréversible et
+      // visible par tous les clients du resto, alors qu'un statut bloqué en 'posting' est un
+      // simple bruit d'affichage rattrapable à la main.
       const { data } = await db.from('statuses')
+        .update({ state: 'posting' })
+        .eq('state', 'scheduled').lte('scheduled_at', nowIso)
         .select('id, restaurant_id, kind, content, media_url, bg_color, caption_color, font_type, audience, echo_to_channel, restaurants(wa_channel_id)')
-        .eq('state', 'posting')
       const rows = (data ?? []) as unknown as Array<{
         id: string; restaurant_id: string; kind: DueStatus['kind']; content: string; media_url: string | null
         bg_color?: string | null; caption_color?: string | null; font_type?: number | null; audience?: 'all' | 'optin'

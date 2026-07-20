@@ -107,3 +107,33 @@ describe('processCampaignOnce', () => {
     expect(sendText).toHaveBeenCalledTimes(2)
   })
 })
+
+/**
+ * Audit lot B — correctif 2 : la campagne étant désormais réservée par un claim atomique pour tout
+ * le tick (cf. campaigns/repo.ts claimScheduledDue), le worker draine les lots successifs au lieu
+ * d'en traiter un seul par tick — sinon les campagnes de plus de `batchSize` destinataires ne
+ * progresseraient qu'à l'expiration du bail de reprise.
+ */
+describe('processCampaignOnce — drain des lots successifs', () => {
+  it('enchaîne les lots jusqu\'à épuisement puis finalise', async () => {
+    const { deps, sendText, repo } = makeDeps()
+    repo.nextPendingBatch = vi.fn()
+      .mockResolvedValueOnce([{ recipientId: 'a', chatId: '1@s.whatsapp.net', phone: '24177000001' }])
+      .mockResolvedValueOnce([{ recipientId: 'b', chatId: '2@s.whatsapp.net', phone: '24177000002' }])
+      .mockResolvedValue([])
+    await processCampaignOnce(campaign, deps)
+    expect(sendText).toHaveBeenCalledTimes(2)
+    expect(repo.finalizeIfDone).toHaveBeenCalledWith('camp1')
+  })
+
+  it('cap journalier atteint entre deux lots → arrêt sans finaliser', async () => {
+    const { deps, sendText, repo } = makeDeps()
+    repo.nextPendingBatch = vi.fn()
+      .mockResolvedValueOnce([{ recipientId: 'a', chatId: '1@s.whatsapp.net', phone: '24177000001' }])
+      .mockResolvedValue([{ recipientId: 'b', chatId: '2@s.whatsapp.net', phone: '24177000002' }])
+    repo.sentTodayCount = vi.fn().mockResolvedValueOnce(0).mockResolvedValue(500)
+    await processCampaignOnce(campaign, deps)
+    expect(sendText).toHaveBeenCalledTimes(1)
+    expect(repo.finalizeIfDone).not.toHaveBeenCalled()
+  })
+})
