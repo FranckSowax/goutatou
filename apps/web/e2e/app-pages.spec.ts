@@ -21,6 +21,7 @@ const APP_PAGES: { path: string; heading: string }[] = [
   { path: '/app/marketing/qr', heading: 'QR' },
   { path: '/app/marketing/sondages', heading: 'Sondages' },
   { path: '/app/marketing/statuts', heading: 'Statuts' },
+  { path: '/app/caisse', heading: 'Caisse' },
   { path: '/app/fidelite', heading: 'fidélité' },
   { path: '/app/equipe', heading: 'Équipe' },
   { path: '/app/reglages', heading: 'Réglages' },

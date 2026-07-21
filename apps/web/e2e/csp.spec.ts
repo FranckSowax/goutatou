@@ -10,6 +10,7 @@ const PAGES = [
   '/app/menu',
   '/app/clients',
   '/app/fidelite', // export du QR de caisse en blob:
+  '/app/caisse', // Z de caisse : impression + saisie du comptage
   '/app/marketing/qr', // QR opt-in
   '/app/reglages',
 ]
