@@ -2,6 +2,7 @@
 import { revalidatePath } from 'next/cache'
 import type { OrderStatus } from '@goutatou/db'
 import { createSupabaseServer } from '@/lib/supabase/server'
+import { requireMember } from '@/lib/member'
 
 export async function updateOrderStatus(orderId: string, status: OrderStatus) {
   const supabase = await createSupabaseServer()
@@ -26,24 +27,17 @@ export async function cancelOrder(orderId: string) {
  */
 export async function confirmPayment(orderId: string) {
   const supabase = await createSupabaseServer()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Non authentifié.')
-  const { data: member } = await supabase
-    .from('restaurant_members')
-    .select('restaurant_id')
-    .limit(1)
-    .maybeSingle()
-  if (!member) throw new Error('Aucun restaurant associé à ce compte.')
+  const { restaurantId, userId } = await requireMember(supabase)
 
   const { error } = await supabase
     .from('orders')
     .update({
       payment_status: 'paye',
       paid_at: new Date().toISOString(),
-      paid_confirmed_by: user.id,
+      paid_confirmed_by: userId,
     })
     .eq('id', orderId)
-    .eq('restaurant_id', member.restaurant_id)
+    .eq('restaurant_id', restaurantId)
     .eq('payment_status', 'a_verifier')
   if (error) throw new Error(`Confirmation impossible : ${error.message}`)
   revalidatePath('/app/commandes')

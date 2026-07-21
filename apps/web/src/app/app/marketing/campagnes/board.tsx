@@ -1,25 +1,19 @@
 'use client'
-import { useEffect } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { badgeVariantForCampaign } from '@/lib/status-badge'
 import { statusLabel } from '@/lib/campaigns'
+import { useTableRefresh } from '@/lib/use-table-refresh'
 import type { CampaignStatus } from '@goutatou/db/types'
 
 interface Row { id: string; name: string; status: CampaignStatus; total_recipients: number; sent_count: number; failed_count: number }
 
 export function Board({ initial }: { initial: Row[] }) {
-  const router = useRouter()
-  useEffect(() => {
-    const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
-    const ch = supabase.channel('campaigns').on('postgres_changes',
-      { event: '*', schema: 'public', table: 'campaigns' }, () => router.refresh()).subscribe()
-    return () => { void supabase.removeChannel(ch) }
-  }, [router])
+  // L'envoi d'une campagne incrémente `sent_count` destinataire par destinataire : sans debounce,
+  // c'était un rendu serveur complet par message envoyé.
+  useTableRefresh({ channelName: 'campaigns', tables: ['campaigns'] })
   return (
     <div className="mx-auto max-w-3xl p-6">
       <div className="mb-6 flex items-center justify-between">

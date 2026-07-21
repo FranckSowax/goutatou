@@ -1,13 +1,11 @@
 'use client'
-import { useEffect, useMemo, useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { useMemo, useState, useTransition } from 'react'
 import { Check, Globe, MessageCircle, Phone, Printer, Search } from 'lucide-react'
 import { formatFcfa } from '@goutatou/db/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import {
@@ -16,6 +14,7 @@ import {
 import { cn } from '@/lib/utils'
 import { badgeVariantForOrder } from '@/lib/status-badge'
 import { paymentBadge, type PaymentBadgeInfo } from '@/lib/payment'
+import { useTableRefresh } from '@/lib/use-table-refresh'
 import {
   ADVANCE_LABELS, driveBadge, groupByStatus, nextStatus, orderItemsSummary, ORDER_STATUS_LABELS,
   type OrderCard,
@@ -96,8 +95,7 @@ function PaymentKanbanBadge({ order }: { order: OrderCard }) {
   return <Badge variant={PAYMENT_BADGE_VARIANT[badge.tone]}>{badge.label}</Badge>
 }
 
-export function Board({ initialOrders, initialQuery = '', isTodayView = true }: { initialOrders: OrderCard[]; initialQuery?: string; isTodayView?: boolean }) {
-  const router = useRouter()
+export function Board({ initialOrders, initialQuery = '', isTodayView = true, restaurantId }: { initialOrders: OrderCard[]; initialQuery?: string; isTodayView?: boolean; restaurantId?: string }) {
   // Pas de useState ici : `initialOrders` change à chaque nouveau rendu du Server Component
   // (déclenché par router.refresh() ci-dessous, sur Realtime) — useState(initialOrders) ignorerait
   // cette prop après le montage initial (même type/position → pas de remontage), et le board ne
@@ -111,18 +109,10 @@ export function Board({ initialOrders, initialQuery = '', isTodayView = true }: 
   // Erreur de la dernière mutation (réseau/RLS) — remise à zéro au lancement de la suivante,
   // donc effacée dès le prochain succès. Affichée en bandeau discret près des boutons.
   const [actionError, setActionError] = useState<string | null>(null)
+  // Commande dont l'annulation est en attente de confirmation (Dialog FR, jamais window.confirm).
+  const [toCancel, setToCancel] = useState<OrderCard | null>(null)
 
-  useEffect(() => {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    )
-    const channel = supabase
-      .channel('orders-board')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => router.refresh())
-      .subscribe()
-    return () => { void supabase.removeChannel(channel) }
-  }, [router])
+  useTableRefresh({ channelName: 'orders-board', tables: ['orders'], restaurantId })
 
   const grouped = groupByStatus(orders)
   const visible = useMemo(() => {
@@ -155,11 +145,13 @@ export function Board({ initialOrders, initialQuery = '', isTodayView = true }: 
     })
   }
 
+  /** Annulation confirmée (depuis le Dialog de confirmation) — action définitive côté serveur. */
   function cancel(o: OrderCard) {
     setActionError(null)
     startTransition(async () => {
       try {
         await cancelOrder(o.id)
+        setToCancel(null)
         setSelected(null)
       } catch {
         setActionError(ACTION_ERROR)
@@ -195,11 +187,11 @@ export function Board({ initialOrders, initialQuery = '', isTodayView = true }: 
     })
   }
 
-  /** Dropdown de statut (colonne Action) : route n'importe quel statut via updateOrderStatus,
-   *  avec confirmation FR avant d'annuler (cancelOrder = même appel, zéro effet de bord). */
+  /** Dropdown de statut (colonne Action) : route n'importe quel statut via updateOrderStatus.
+   *  « Annulée » passe par le Dialog de confirmation (cancelOrder = même appel, zéro effet de bord). */
   function changeStatus(o: OrderCard, status: OrderCard['status']) {
     if (status === o.status) return
-    if (status === 'annulee' && !window.confirm(`Annuler la commande n°${o.order_number} ?`)) return
+    if (status === 'annulee') { setToCancel(o); return }
     setActionError(null)
     startTransition(async () => {
       try {
@@ -509,7 +501,11 @@ export function Board({ initialOrders, initialQuery = '', isTodayView = true }: 
               {(next || selected.status === 'recue') && (
                 <DialogFooter className="gap-2 sm:gap-2">
                   {selected.status === 'recue' && (
-                    <Button variant="destructive" disabled={pending} onClick={() => cancel(selected)}>
+                    <Button
+                      variant="destructive"
+                      disabled={pending}
+                      onClick={() => { setToCancel(selected); setSelected(null) }}
+                    >
                       Annuler la commande
                     </Button>
                   )}
@@ -520,6 +516,38 @@ export function Board({ initialOrders, initialQuery = '', isTodayView = true }: 
                   )}
                 </DialogFooter>
               )}
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmation d'annulation — même patron que la suppression de catégorie du Menu
+          (Dialog FR aux tokens du thème), plus de window.confirm natif hors charte. */}
+      <Dialog open={toCancel !== null} onOpenChange={(open) => { if (!open) setToCancel(null) }}>
+        <DialogContent className="sm:max-w-md">
+          {toCancel && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Annuler la commande n°{toCancel.order_number} ?</DialogTitle>
+                <DialogDescription>
+                  Cette action est définitive. La commande passera au statut « Annulée » et ne
+                  pourra plus être préparée.
+                </DialogDescription>
+              </DialogHeader>
+              {actionError && <p className="text-sm text-destructive">{actionError}</p>}
+              <DialogFooter className="gap-2 sm:gap-2">
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">Revenir</Button>
+                </DialogClose>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={pending}
+                  onClick={() => cancel(toCancel)}
+                >
+                  Annuler la commande
+                </Button>
+              </DialogFooter>
             </>
           )}
         </DialogContent>

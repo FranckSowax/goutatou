@@ -5,12 +5,13 @@ import { createSupabaseServer } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { assertPlan } from '@/lib/premium'
 import { normalizeGabonPhone } from '@/lib/lp/wa'
+import { requireMember } from '@/lib/member'
 
+/** Garde membre (employé compris) — résolution unifiée via `lib/member.ts`. */
 async function myRestaurantId() {
   const supabase = await createSupabaseServer()
-  const { data, error } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).single()
-  if (error || !data) throw new Error('Aucun restaurant associé à ce compte')
-  return { supabase, restaurantId: data.restaurant_id as string }
+  const { restaurantId } = await requireMember(supabase)
+  return { supabase, restaurantId }
 }
 
 // Un champ stock vide/absent signifie "illimité" (-1), pas 0 (lot immédiatement épuisé).

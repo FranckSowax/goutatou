@@ -89,9 +89,13 @@ describe('processor', () => {
     expect(repo.saveConversation).toHaveBeenCalledWith('resto-1', 'cust-1', 'MENU', expect.anything())
   })
 
-  it('ignore from_me et les types non-text/non-location', async () => {
+  // Lot C3 (correctif 1) : les MÉDIAS (image, vocal…) ne sont plus ignorés en silence — ils
+  // reçoivent une réponse dédiée (cf. test/processor-media.test.ts). Restent silencieux : les
+  // messages du restaurant lui-même (from_me) et les événements techniques (allowlist,
+  // cf. src/bot/media.ts).
+  it('ignore from_me et les types techniques (system…)', async () => {
     await process()('chan-uuid', webhookPayload('menu', { from_me: true }))
-    await process()('chan-uuid', webhookPayload('menu', { type: 'image' }))
+    await process()('chan-uuid', webhookPayload('menu', { type: 'system' }))
     expect(sendText).not.toHaveBeenCalled()
   })
 

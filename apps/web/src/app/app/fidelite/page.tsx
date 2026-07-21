@@ -26,8 +26,18 @@ export default async function FidelitePage({
   const tab = parseTab(tabParam)
 
   const supabase = await createSupabaseServer()
-  const { data: member } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).single()
-  const pro = member ? await isPro(supabase, member.restaurant_id) : false
+  // `maybeSingle()` comme les autres pages : `single()` levait sur un compte sans restaurant, et
+  // la page retombait sur « Fonctionnalité Pro » — message trompeur pour un problème de compte.
+  const { data: member } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).maybeSingle()
+  if (!member) {
+    return (
+      <div className="mx-auto max-w-xl p-8 text-center text-muted-foreground">
+        Aucun restaurant associé à votre compte pour le moment.
+      </div>
+    )
+  }
+
+  const pro = await isPro(supabase, member.restaurant_id)
   if (!pro) {
     return (
       <div className="mx-auto max-w-xl p-8 text-center">
@@ -41,7 +51,7 @@ export default async function FidelitePage({
       </div>
     )
   }
-  const restaurantId = member!.restaurant_id
+  const restaurantId = member.restaurant_id
 
   const [{ data: restaurant }, { data: rewardsRaw }] = await Promise.all([
     supabase.from('restaurants')

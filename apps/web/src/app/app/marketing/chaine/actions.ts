@@ -26,10 +26,8 @@ const ATTACH_ERROR = 'Rattachez d’abord votre chaîne.'
  */
 async function myRestaurant() {
   const supabase = await createSupabaseServer()
-  await assertOwner(supabase)
-  const { data, error } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).single()
-  if (error || !data) throw new Error('Aucun restaurant associé à ce compte')
-  const restaurantId = data.restaurant_id as string
+  // `assertOwner` renvoie déjà le membre → plus de seconde requête `restaurant_members`.
+  const { restaurantId } = await assertOwner(supabase)
   await assertPlan(supabase, restaurantId, ['pro', 'premium'])
   return { supabase, restaurantId }
 }

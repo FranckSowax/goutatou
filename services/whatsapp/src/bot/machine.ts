@@ -9,6 +9,7 @@ import {
   formatFcfa,
 } from '@goutatou/db'
 import { copy, type BotProfile } from './copy.js'
+import { isOrderStatusKeyword, type ActiveOrderInfo } from './order-status.js'
 
 export interface BotContext {
   restaurantName: string
@@ -31,6 +32,13 @@ export interface BotContext {
    * `cardLink` est le lien perso `/f/<token>`. Absente si aucun de ces mots-clés n'est traité.
    */
   loyalty?: { enabled: boolean; cardLink: string }
+  /**
+   * Dernière commande ACTIVE (ni `recuperee` ni `annulee`) de CE client, injectée par le processor
+   * (repo.getActiveOrder) sur le seul mot-clé de suivi — jamais chargée sur chaque message.
+   * `null` = le repo a répondu « aucune commande en cours » ; `undefined` = mot-clé non concerné
+   * (ou repo historique sans `getActiveOrder`) → même copie douce, la machine reste pure.
+   */
+  activeOrder?: ActiveOrderInfo | null
   /**
    * Réglages paiement du restaurant (migration 0038, spec paiement-commande), chargés par
    * `getBotContext`. Absent (tests/fixtures historiques) OU `airtelEnabled=false` OU numéro
@@ -215,6 +223,11 @@ export function transition(state: BotState, cart: Cart, input: string, ctx: BotC
     return result(state, cart, [copy.roue(ctx.wheel)])
   }
   if (text === 'promos') return result(state, cart, [copy.promos])
+  // « où en est ma commande » (lot C3 — correctif 2) : formulations naturelles reconnues par
+  // isOrderStatusKeyword (accents/casse/ponctuation tolérés, match STRICT sur la phrase entière
+  // pour ne jamais avaler un texte libre). `ctx.activeOrder` est injecté par le processor sur ce
+  // seul mot-clé (mirror ctx.wheel sur « roue ») — absent = aucune commande à annoncer.
+  if (isOrderStatusKeyword(input)) return result(state, cart, [copy.orderStatus(ctx.activeOrder)])
   if (text === 'panier') {
     return result(state === 'ACCUEIL' ? 'MENU' : state, cart,
       [cart.items.length ? copy.cartRecap(cart) : copy.emptyCart])

@@ -1,11 +1,10 @@
 'use client'
-import { useEffect, useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { useState, useTransition } from 'react'
 import { formatFcfa } from '@goutatou/db/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { orderItemsSummary } from '@/lib/orders'
+import { useTableRefresh } from '@/lib/use-table-refresh'
 import { assignDelivery, markDelivered } from './actions'
 
 export type ActiveLivreur = { id: string; name: string }
@@ -124,22 +123,12 @@ function DeliveryCard({
 }
 
 export function DeliveryBoard({ rows, livreurs }: { rows: DeliveryRow[]; livreurs: ActiveLivreur[] }) {
-  const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    )
-    const channel = supabase
-      .channel('deliveries-board')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'deliveries' }, () => router.refresh())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => router.refresh())
-      .subscribe()
-    return () => { void supabase.removeChannel(channel) }
-  }, [router])
+  // Une même livraison touche `deliveries` PUIS `orders` : deux abonnements séparés donnaient
+  // deux `router.refresh()` pour un seul fait métier. Canal unique + refresh debouncé.
+  useTableRefresh({ channelName: 'deliveries-board', tables: ['deliveries', 'orders'] })
 
   function onAssign(deliveryId: string, livreurId: string) {
     setError(null)
@@ -171,7 +160,8 @@ export function DeliveryBoard({ rows, livreurs }: { rows: DeliveryRow[]; livreur
   const columns: { title: string; rows: DeliveryRow[]; empty: string }[] = [
     { title: '📥 À attribuer', rows: pendingRows, empty: 'Aucune livraison en attente.' },
     { title: '🛵 En course', rows: assignedRows, empty: 'Aucune course en cours.' },
-    { title: '✅ Livrées', rows: deliveredRows, empty: 'Aucune livraison terminée.' },
+    // La page ne charge que la journée en cours (+ les courses encore actives) → libellé explicite.
+    { title: '✅ Livrées aujourd’hui', rows: deliveredRows, empty: 'Aucune livraison terminée aujourd’hui.' },
   ]
 
   return (

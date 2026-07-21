@@ -18,12 +18,11 @@ import {
   type StatusPublishMode,
 } from './shared'
 
+/** Garde PATRON — `assertOwner` renvoie déjà le membre, plus de seconde requête `restaurant_members`. */
 async function myRestaurantId() {
   const supabase = await createSupabaseServer()
-  await assertOwner(supabase)
-  const { data, error } = await supabase.from('restaurant_members').select('restaurant_id').limit(1).single()
-  if (error || !data) throw new Error('Aucun restaurant associé à ce compte')
-  return { supabase, restaurantId: data.restaurant_id as string }
+  const { restaurantId } = await assertOwner(supabase)
+  return { supabase, restaurantId }
 }
 
 function readRawCard(formData: FormData): RawStatusCard {

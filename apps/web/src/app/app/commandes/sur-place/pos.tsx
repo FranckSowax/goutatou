@@ -207,21 +207,23 @@ export function Pos({ menu }: { restaurantId: string; menu: PosMenuCategory[] })
                       <Button
                         type="button"
                         variant="outline"
-                        size="icon-sm"
+                        size="icon"
+                        className="min-h-11 min-w-11"
                         aria-label="Retirer un"
                         onClick={() => setCart((c) => setQty(c, line.key, line.qty - 1))}
                       >
-                        <Minus className="size-3.5" />
+                        <Minus className="size-4" />
                       </Button>
                       <span className="w-6 text-center tabular-nums">{line.qty}</span>
                       <Button
                         type="button"
                         variant="outline"
-                        size="icon-sm"
+                        size="icon"
+                        className="min-h-11 min-w-11"
                         aria-label="Ajouter un"
                         onClick={() => setCart((c) => setQty(c, line.key, line.qty + 1))}
                       >
-                        <Plus className="size-3.5" />
+                        <Plus className="size-4" />
                       </Button>
                       <Button
                         type="button"

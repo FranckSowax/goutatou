@@ -1,5 +1,25 @@
-import { type Cart, type SupplementLine, cartTotal, formatFcfa } from '@goutatou/db'
+import { type Cart, type OrderMode, type OrderStatus, type SupplementLine, cartTotal, formatFcfa } from '@goutatou/db'
 import { cardMessage } from '../loyalty/card-trigger.js'
+import type { ActiveOrderInfo } from './order-status.js'
+
+/**
+ * Statuts de commande en clair pour le CLIENT (lot C3 — correctif 2). `recuperee`/`annulee` ne
+ * sont jamais renvoyés par `getActiveOrder` (commandes terminées) mais restent mappés en défense
+ * en profondeur — le type `OrderStatus` est exhaustif, aucun `undefined` possible dans la copie.
+ */
+const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  recue: '📥 Reçue — le restaurant l’a bien reçue',
+  en_preparation: '👩‍🍳 En préparation',
+  prete: '✅ Prête !',
+  recuperee: '🎉 Récupérée',
+  annulee: '❌ Annulée',
+}
+
+const ORDER_MODE_LABELS: Record<OrderMode, string> = {
+  drive: '🚗 Drive (retrait sur créneau)',
+  livraison: '🛵 Livraison',
+  sur_place: '🥡 À emporter',
+}
 
 function supplementsList(supplements: SupplementLine[]): string {
   return supplements.map((s, i) => `${i + 1}. ${s.name} +${formatFcfa(s.price)}`).join('\n')
@@ -124,4 +144,20 @@ export const copy = {
     return cardMessage(loyalty.cardLink)
   },
   promos: `✅ C'est noté ! Vous recevrez nos offres et promotions ici. Envoyez STOP à tout moment pour vous désinscrire.`,
+  /**
+   * Statut de la dernière commande ACTIVE du client (lot C3 — correctif 2). `activeOrder` est
+   * injecté par le processor (repo.getActiveOrder) sur le seul mot-clé de suivi, la machine reste
+   * pure. Absent/null → message doux : le client n'a rien en cours, on le renvoie vers *menu*.
+   */
+  orderStatus: (activeOrder?: ActiveOrderInfo | null) => {
+    if (!activeOrder) {
+      return `Vous n'avez pas de commande en cours. Tapez *menu* pour commander 🍽️`
+    }
+    return (
+      `🧾 *Commande n°${activeOrder.orderNumber}*\n` +
+      `${ORDER_STATUS_LABELS[activeOrder.status]}\n` +
+      `${ORDER_MODE_LABELS[activeOrder.mode]}\n` +
+      `Total : *${formatFcfa(activeOrder.total)}*`
+    )
+  },
 }
