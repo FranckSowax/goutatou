@@ -17,6 +17,7 @@ const NAV = [
   { href: '/app/conversations', label: 'Conversations', icon: 'MessagesSquare' },
   { href: '/app/clients', label: 'Clients', icon: 'Users', match: '/app/clients', separatorAfter: true },
   { href: '/app/stats', label: 'Statistiques', icon: 'ChartColumn', ownerOnly: true },
+  { href: '/app/caisse', label: 'Caisse', icon: 'Wallet', match: '/app/caisse', ownerOnly: true },
   { href: '/app/analyses', label: 'Analyses', icon: 'Sparkles', match: '/app/analyses', ownerOnly: true },
   { href: '/app/marketing', label: 'Marketing', icon: 'Megaphone', match: '/app/marketing', ownerOnly: true },
   { href: '/app/fidelite', label: 'Fidélité', icon: 'Gift' },
